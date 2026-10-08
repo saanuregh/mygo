@@ -846,6 +846,8 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	if s.clips {
 		s.clipRect, s.clipRadii = e.clipRect()
 	}
+	s.pinEdge, s.pins = pinnedEdge(e)
+	s.pinned = e.pinX != nil
 	s.x, s.y, s.w, s.h = e.x, e.y, e.w, e.h
 	if e.parent != nil {
 		s.parent = e.parent.id
@@ -942,8 +944,14 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 		clip = intersect(clip, e.visualRect(r))
 	}
 	// Children in flow first, absolute ones above them: the paint order.
+	// Those scrolling sideways go no further left than the pinned ones.
+	edge, pinned := s.pinEdge, s.pins
 	for ch := e.first; ch != nil; ch = ch.next {
 		if ch.flags&flagAbsolute == 0 {
+			if pinned && ch.pinX == nil {
+				rt.commitElement(ch, intersect(clip, Rect{edge, clip.Y, clip.X + clip.W - edge, clip.H}), invisible)
+				continue
+			}
 			rt.commitElement(ch, clip, invisible)
 		}
 	}
