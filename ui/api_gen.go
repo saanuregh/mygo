@@ -1682,8 +1682,8 @@ func SwitchBase(c *Context, on *bool) Element {
 // moves them by dragging the headers, which s.Columns keeps; columns wider
 // than the table scroll sideways, the header with them, but for Frozen
 // columns, which stay at the left. With s.Sort, a click on the header of a
-// Sortable column sorts the rows by it; with s.HeaderMenu, the headers
-// have a context menu.
+// Sortable column sorts the rows by it, and a Cmd-click by it as well;
+// with s.HeaderMenu, the headers have a context menu.
 //
 //	cols := []ui.TableColumn{{Title: "Name", Sortable: true}, {Title: "Size", Width: 90, Align: ui.End, Sortable: true}}
 //	app.files.Selected, app.files.Sort = &app.file, &app.sort

@@ -39,11 +39,11 @@ func TestTableSort(t *testing.T) {
 		t.Errorf("the column sorted by: %+v", n)
 	}
 	tt.Click("Name")
-	if sort != (SortOrder{Column: "Name"}) {
+	if !sort.Equal(SortOrder{Column: "Name"}) {
 		t.Fatalf("a click on Name: %+v", sort)
 	}
 	tt.Click("Name")
-	if sort != (SortOrder{Column: "Name", Descending: true}) {
+	if !sort.Equal(SortOrder{Column: "Name", Descending: true}) {
 		t.Fatalf("a second click on Name: %+v", sort)
 	}
 	tree := tt.h.access
@@ -55,7 +55,7 @@ func TestTableSort(t *testing.T) {
 	}
 	// A column that does not sort.
 	tt.Click("Kind")
-	if sort != (SortOrder{Column: "Name", Descending: true}) || sel != -1 {
+	if !sort.Equal(SortOrder{Column: "Name", Descending: true}) || sel != -1 {
 		t.Errorf("a click on Kind: %+v, chose %d", sort, sel)
 	}
 }
@@ -428,4 +428,42 @@ func TestTableFrozenColumnHidesScrolledCells(t *testing.T) {
 	if under > 0 || after == 0 {
 		t.Errorf("red pixels under the frozen column %d, after it %d", under, after)
 	}
+}
+
+func TestTableMultiSort(t *testing.T) {
+	sort := SortOrder{}
+	s := ListState{Sort: &sort}
+	cols := []TableColumn{{Title: "Name", Sortable: true}, {Title: "Kind", Width: 100, Sortable: true}, {Title: "Size", Width: 80, Sortable: true}}
+	tt := coreNewTester(tableView(&s, cols, []string{"a.txt", "b.txt"}), 500, 300)
+	check := func(step string, want SortOrder) {
+		t.Helper()
+		if !sort.Equal(want) {
+			t.Fatalf("%s: %+v, want %+v", step, sort, want)
+		}
+	}
+	tt.Click("Name")
+	check("a click on Name", SortOrder{Column: "Name"})
+	tt.ClickWith(Cmd, "Kind")
+	check("a Cmd-click on Kind", SortOrder{Column: "Name", Then: []SortKey{{Column: "Kind"}}})
+	tt.ClickWith(Cmd, "Size")
+	check("a Cmd-click on Size", SortOrder{Column: "Name", Then: []SortKey{{Column: "Kind"}, {Column: "Size"}}})
+	tt.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+	if n := accessNode(t, tt.h.access, platform.RoleColumnHeader, "Size"); n.States&platform.AccessSortAscending == 0 || n.Label != "Size" {
+		t.Errorf("Size, sorted by after Name and Kind: %+v", n)
+	}
+	tt.ClickWith(Cmd, "Kind")
+	check("a second Cmd-click on Kind", SortOrder{Column: "Name", Then: []SortKey{{Column: "Kind", Descending: true}, {Column: "Size"}}})
+	tt.ClickWith(Cmd, "Kind")
+	check("a third Cmd-click on Kind", SortOrder{Column: "Name", Then: []SortKey{{Column: "Size"}}})
+	// The first column goes the same way, the next taking its place.
+	tt.ClickWith(Cmd, "Name")
+	check("a Cmd-click on Name", SortOrder{Column: "Name", Descending: true, Then: []SortKey{{Column: "Size"}}})
+	tt.ClickWith(Cmd, "Name")
+	check("a second Cmd-click on Name", SortOrder{Column: "Size"})
+	// A click sorts by one column again.
+	tt.ClickWith(Cmd, "Kind")
+	tt.Click("Kind")
+	check("a click on Kind", SortOrder{Column: "Kind"})
+	tt.Click("Name")
+	check("a click on Name", SortOrder{Column: "Name"})
 }

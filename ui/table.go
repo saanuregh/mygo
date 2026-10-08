@@ -3,6 +3,7 @@ package ui
 import (
 	"maps"
 	"slices"
+	"strconv"
 )
 
 // TableColumn describes a column of a Table.
@@ -40,10 +41,68 @@ func (col *TableColumn) id() string {
 }
 
 // SortOrder is how a table's rows are sorted: by the column whose ID is
-// Column, in ascending order unless Descending.
+// Column, in ascending order unless Descending, then, among rows equal in
+// that column, by each column of Then in turn.
 type SortOrder struct {
 	Column     string
 	Descending bool
+	Then       []SortKey
+}
+
+// SortKey is a column the rows are sorted by after SortOrder.Column: the
+// column whose ID is Column, in ascending order unless Descending.
+type SortKey struct {
+	Column     string
+	Descending bool
+}
+
+// Equal reports whether o sorts as other does: by the same columns, in the
+// same order and directions.
+func (o SortOrder) Equal(other SortOrder) bool {
+	return o.Column == other.Column && o.Descending == other.Descending && slices.Equal(o.Then, other.Then)
+}
+
+// key returns the place among the columns the rows are sorted by of the
+// column whose ID is id, from 0, and its direction, or -1.
+func (o *SortOrder) key(id string) (int, bool) {
+	if o.Column == "" {
+		return -1, false
+	}
+	if o.Column == id {
+		return 0, o.Descending
+	}
+	for i, k := range o.Then {
+		if k.Column == id {
+			return i + 1, k.Descending
+		}
+	}
+	return -1, false
+}
+
+// add sorts by the column whose ID is id after the others, as a Cmd-click
+// on its header does: a column not sorted by yet goes last, ascending; one
+// ascending turns descending; one descending is taken out, the next
+// taking its place.
+func (o *SortOrder) add(id string) {
+	keys := append([]SortKey{{o.Column, o.Descending}}, o.Then...)
+	if o.Column == "" {
+		keys = keys[:0]
+	}
+	switch i := slices.IndexFunc(keys, func(k SortKey) bool { return k.Column == id }); {
+	case i < 0:
+		keys = append(keys, SortKey{Column: id})
+	case !keys[i].Descending:
+		keys[i].Descending = true
+	default:
+		keys = slices.Delete(keys, i, i+1)
+	}
+	*o = SortOrder{}
+	if len(keys) > 0 {
+		o.Column, o.Descending = keys[0].Column, keys[0].Descending
+	}
+	if len(keys) > 1 {
+		o.Then = keys[1:]
+	}
 }
 
 // TableLayout is the order and the widths the user gave the columns of a
@@ -140,8 +199,8 @@ type tableDrag struct {
 // moves them by dragging the headers, which s.Columns keeps; columns wider
 // than the table scroll sideways, the header with them, but for Frozen
 // columns, which stay at the left. With s.Sort, a click on the header of a
-// Sortable column sorts the rows by it; with s.HeaderMenu, the headers
-// have a context menu.
+// Sortable column sorts the rows by it, and a Cmd-click by it as well;
+// with s.HeaderMenu, the headers have a context menu.
 //
 //	cols := []ui.TableColumn{{Title: "Name", Sortable: true}, {Title: "Size", Width: 90, Align: ui.End, Sortable: true}}
 //	app.files.Selected, app.files.Sort = &app.file, &app.sort
@@ -229,8 +288,14 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			heads := cells(RoleColumnHeader, func(j int) {
 				col := &columns[j]
 				coreText(c, col.Title).SingleLine().FontWeight(600).TextColor(t.TextMuted)
-				if s.Sort != nil && col.Sortable && s.Sort.Column == col.id() {
-					sortArrow(c, s.Sort.Descending)
+				if s.Sort != nil && col.Sortable {
+					if at, descending := s.Sort.key(col.id()); at >= 0 {
+						place := 0
+						if len(s.Sort.Then) > 0 {
+							place = at + 1
+						}
+						sortArrow(c, descending, place)
+					}
 				}
 			})
 			for k, j := range order {
@@ -292,12 +357,14 @@ func tableHeader(c *context, table, h *node, j int, s *ListState, drag *tableDra
 		h.ContextMenu(func(m *Menu) { menu(m, j) })
 	}
 	if s.Sort != nil && col.Sortable {
-		h.sort = 1
-		if s.Sort.Column == id && s.Sort.Descending {
-			h.sort = 2
-		}
-		if s.Sort.Column != id {
-			h.sort = 0
+		// Named by the title alone, not the place the arrow shows.
+		h.Label(col.Title)
+		h.sort = 0
+		if at, descending := s.Sort.key(id); at >= 0 {
+			h.sort = 1
+			if descending {
+				h.sort = 2
+			}
 		}
 		h.flags |= flagClickable | flagHover
 		h.styleFn = func(h *node) {
@@ -329,9 +396,13 @@ func tableHeader(c *context, table, h *node, j int, s *ListState, drag *tableDra
 	}
 	h.afterInput(func() {
 		if s.Sort != nil && col.Sortable && h.Clicked() {
-			if s.Sort.Column == id {
+			switch {
+			case h.ClickModifiers()&Cmd != 0:
+				s.Sort.add(id)
+			case s.Sort.Column == id:
 				s.Sort.Descending = !s.Sort.Descending
-			} else {
+				s.Sort.Then = nil
+			default:
 				*s.Sort = SortOrder{Column: id}
 			}
 			table.st.markChanged()
@@ -479,9 +550,13 @@ func pinnedEdge(e *node) (float32, bool) {
 	return edge, ok
 }
 
-// sortArrow draws the arrow of the column the rows are sorted by.
-func sortArrow(c *context, descending bool) {
+// sortArrow draws the arrow of a column the rows are sorted by, and its
+// place among them from 1, or none for 0.
+func sortArrow(c *context, descending bool, place int) {
 	t := c.theme
+	if place > 0 {
+		coreText(c, strconv.Itoa(place)).FontSize(t.FontSize*0.75).TextColor(t.TextMuted).Shrink(0).Margin(0, 0, 0, t.Space(1)).Role(RoleNone)
+	}
 	coreBox(c).Size(t.Space(2.5), t.Space(2.5)).Shrink(0).Margin(0, 0, 0, t.Space(1)).Draw(func(p *Painter, r Rect) {
 		var path Path
 		if descending {
