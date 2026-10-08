@@ -89,6 +89,11 @@ type ListState struct {
 	// columns, by ID: restore it from saved settings, and save it as it
 	// changes.
 	Columns TableLayout
+	// HeaderMenu, when set, gives the headers of a Table's columns a
+	// context menu, which it builds as ContextMenu's build does: col is the
+	// column whose header was clicked with the secondary button, its index
+	// in the columns given to Table, whatever the order the user gave them.
+	HeaderMenu func(m *Menu, col int)
 
 	// The place: the first row in view, and how far the list is scrolled
 	// past its top: the row's top is that far above where the content

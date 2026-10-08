@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"fmt"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -272,5 +274,158 @@ func TestEditableText(t *testing.T) {
 	tt.Key(0, KeyEnter)
 	if title != "Plan" || !tt.Focused("Plan") {
 		t.Errorf("after Enter: %q, focused %v", title, tt.Focused("Plan"))
+	}
+}
+
+func TestTableHeaderMenu(t *testing.T) {
+	built, chosen := -1, -1
+	s := ListState{Columns: TableLayout{Order: []string{"Size", "Name", "Kind"}}}
+	cols := []TableColumn{{Title: "Name"}, {Title: "Kind", Width: 100}, {Title: "Size", Width: 80}}
+	tt := coreNewTester(tableView(&s, cols, []string{"a.txt"}), 500, 300)
+	// Without HeaderMenu, a header has no menu.
+	tt.RightClick("Kind")
+	if m := tt.Menu(); m != nil {
+		t.Fatalf("a menu without HeaderMenu: %q", m)
+	}
+	s.HeaderMenu = func(m *Menu, col int) {
+		built = col
+		if m.Item("Hide Column").Chosen() {
+			chosen = col
+		}
+	}
+	tt.Frame()
+	// Kind shows third, and is the second of the columns.
+	tt.RightClick("Kind")
+	if m := tt.Menu(); len(m) != 1 || m[0] != "Hide Column" || built != 1 {
+		t.Fatalf("the menu %q, built for column %d", m, built)
+	}
+	if err := tt.ChooseMenuItem("Hide Column"); err != nil {
+		t.Fatal(err)
+	}
+	if chosen != 1 {
+		t.Errorf("chose the item for column %d", chosen)
+	}
+}
+
+func TestTableFrozenColumn(t *testing.T) {
+	sort := SortOrder{}
+	s := ListState{Sort: &sort}
+	// Name is frozen: it shows first though it is not.
+	cols := []TableColumn{{Title: "Kind", Width: 200, Sortable: true}, {Title: "Name", Width: 150, Frozen: true, Sortable: true}, {Title: "Size", Width: 200}}
+	names := make([]string, 20)
+	for i := range names {
+		names[i] = "file"
+	}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Padding(10).Children(func() {
+			coreTable(c, &s, cols, len(names), func(row, col int) {
+				switch col {
+				case 0:
+					coreText(c, "Document")
+				case 1:
+					coreTextf(c, "file %d", row)
+				case 2:
+					coreTextf(c, "%d KB", row+1)
+				}
+			}).Grow(1)
+		})
+	}, 400, 300)
+	name, kind := header(t, tt, "Name"), header(t, tt, "Kind")
+	cell, _ := tt.Find("file 0")
+	if !(name.X < kind.X) {
+		t.Fatalf("Name at %v, Kind at %v", name.X, kind.X)
+	}
+	tt.Scroll(200, 150, 300, 0)
+	size := header(t, tt, "Size")
+	if size.X > 300 {
+		t.Fatalf("did not scroll: Size at %v", size.X)
+	}
+	if n := header(t, tt, "Name"); n.X != name.X {
+		t.Errorf("the frozen header scrolled from %v to %v", name.X, n.X)
+	}
+	if c, _ := tt.Find("file 0"); c.X != cell.X {
+		t.Errorf("the frozen cell scrolled from %v to %v", cell.X, c.X)
+	}
+	if k := header(t, tt, "Kind"); k.X >= name.X {
+		t.Errorf("Kind did not scroll under Name: at %v", k.X)
+	}
+	// Kind is under Name there: a click on Name's header sorts by Name.
+	tt.ClickAt(float32(name.X+name.W)-20, float32(name.Y+name.H/2))
+	if sort.Column != "Name" {
+		t.Errorf("a click on the frozen header sorted by %q", sort.Column)
+	}
+	// Kind does not move into the frozen columns, nor Name out of them.
+	drag := func(title string, dx float32) {
+		h := header(t, tt, title)
+		x, y := float32(h.X+h.W)-30, float32(h.Y+h.H/2)
+		tt.Press(x, y)
+		for _, d := range []float32{dx / 40, dx / 5, dx / 2, dx} {
+			tt.Move(x+d, y)
+		}
+		tt.Release(x+dx, y)
+	}
+	drag("Kind", -200)
+	drag("Name", 300)
+	if s.Columns.Order != nil {
+		t.Errorf("dragging moved the columns: %v", s.Columns.Order)
+	}
+}
+
+func TestTableFrozenFocusOrder(t *testing.T) {
+	// B is frozen: it shows first, and Tab goes to it first in each row.
+	cols := []TableColumn{{Title: "A", Width: 100}, {Title: "B", Width: 100, Frozen: true}}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Children(func() {
+			coreTable(c, nil, cols, 2, func(row, col int) {
+				coreButton(c, fmt.Sprintf("%c%d", 'a'+col, row))
+			}).Grow(1)
+		})
+	}, 400, 300)
+	// The table takes the focus first, then its buttons.
+	tt.Key(0, KeyTab)
+	var order []string
+	for range 4 {
+		tt.Key(0, KeyTab)
+		for _, b := range []string{"a0", "b0", "a1", "b1"} {
+			if tt.Focused(b) {
+				order = append(order, b)
+			}
+		}
+	}
+	if got := strings.Join(order, " "); got != "b0 a0 b1 a1" {
+		t.Errorf("Tab went to %q", got)
+	}
+}
+
+// The cells scrolling under a frozen column do not show through it, even
+// in a translucent table.
+func TestTableFrozenColumnHidesScrolledCells(t *testing.T) {
+	cols := []TableColumn{{Title: "Name", Width: 150, Frozen: true}, {Title: "Kind", Width: 300}}
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Opacity(0.5).Children(func() {
+			coreTable(c, nil, cols, 3, func(row, col int) {
+				if col == 1 {
+					coreBox(c).Width(280).Height(20).Background(RGB(255, 0, 0))
+				}
+			}).Grow(1)
+		})
+	}, 300, 200)
+	tt.Scroll(250, 80, 100, 0)
+	img := tt.Image()
+	scale := float32(img.Bounds().Dx()) / 300
+	under, after := 0, 0
+	for y := range img.Bounds().Dy() {
+		for x := range img.Bounds().Dx() {
+			if c := img.RGBAAt(x, y); int(c.R) > int(c.G)+40 {
+				if float32(x) < 149*scale {
+					under++
+				} else {
+					after++
+				}
+			}
+		}
+	}
+	if under > 0 || after == 0 {
+		t.Errorf("red pixels under the frozen column %d, after it %d", under, after)
 	}
 }

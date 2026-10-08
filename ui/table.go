@@ -24,6 +24,12 @@ type TableColumn struct {
 	// Fixed keeps the column where it is and as wide as it is: the user
 	// neither moves nor resizes it.
 	Fixed bool
+	// Frozen keeps the column at the left of the table, before the others,
+	// in view while they scroll sideways under it, as a spreadsheet's
+	// frozen columns: frozen columns show in their order, a line after the
+	// last of them. The user resizes a frozen column but does not move it,
+	// nor other columns among the frozen ones.
+	Frozen bool
 }
 
 func (col *TableColumn) id() string {
@@ -49,13 +55,20 @@ type TableLayout struct {
 }
 
 // arrange returns the indexes of columns in the order the layout gives
-// them: those it names in its order, the others after them in theirs, and
-// fixed columns where they are.
+// them: frozen columns first, in their order, then the others: those it
+// names in its order, the others after them in theirs, and fixed columns
+// where they are among them.
 func (l *TableLayout) arrange(columns []TableColumn) []int {
 	order := make([]int, 0, len(columns))
+	for j := range columns {
+		if columns[j].Frozen {
+			order = append(order, j)
+		}
+	}
+	moves := func(j int) bool { return !columns[j].Fixed && !columns[j].Frozen }
 	var named []int
 	for _, id := range l.Order {
-		if j := slices.IndexFunc(columns, func(col TableColumn) bool { return col.id() == id }); j >= 0 && !columns[j].Fixed && !slices.Contains(named, j) {
+		if j := slices.IndexFunc(columns, func(col TableColumn) bool { return col.id() == id }); j >= 0 && moves(j) && !slices.Contains(named, j) {
 			named = append(named, j)
 		}
 	}
@@ -63,14 +76,16 @@ func (l *TableLayout) arrange(columns []TableColumn) []int {
 	// in theirs.
 	movable := append([]int(nil), named...)
 	for j := range columns {
-		if !columns[j].Fixed && !slices.Contains(named, j) {
+		if moves(j) && !slices.Contains(named, j) {
 			movable = append(movable, j)
 		}
 	}
 	for j := range columns {
-		if columns[j].Fixed {
+		switch {
+		case columns[j].Frozen:
+		case columns[j].Fixed:
 			order = append(order, j)
-		} else {
+		default:
 			order = append(order, movable[0])
 			movable = movable[1:]
 		}
@@ -123,8 +138,10 @@ type tableDrag struct {
 //
 // The user resizes columns by dragging the edges of their headers, and
 // moves them by dragging the headers, which s.Columns keeps; columns wider
-// than the table scroll sideways, the header with them. With s.Sort, a
-// click on the header of a Sortable column sorts the rows by it.
+// than the table scroll sideways, the header with them, but for Frozen
+// columns, which stay at the left. With s.Sort, a click on the header of a
+// Sortable column sorts the rows by it; with s.HeaderMenu, the headers
+// have a context menu.
 //
 //	cols := []ui.TableColumn{{Title: "Name", Sortable: true}, {Title: "Size", Width: 90, Align: ui.End, Sortable: true}}
 //	app.files.Selected, app.files.Sort = &app.file, &app.sort
@@ -173,6 +190,13 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	}
 	// fitting are the cells of the column fitting its cells.
 	var fitting []*node
+	// lastFrozen is the place of the last frozen column in order, or -1.
+	lastFrozen := -1
+	for k, j := range order {
+		if columns[j].Frozen {
+			lastFrozen = k
+		}
+	}
 	// cells builds a row's cells, with fill building the content of each.
 	cells := func(role Role, fill func(col int)) []*node {
 		boxes := make([]*node, 0, len(order))
@@ -198,7 +222,6 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 		}
 		return boxes
 	}
-	var list *node
 	table.Children(func() {
 		// The header, which scrolls sideways with the rows.
 		head := coreRow(c).Height(tableRow).Shrink(0).AlignItems(Stretch).Role(RoleRow).Clip()
@@ -211,13 +234,14 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 				}
 			})
 			for k, j := range order {
-				tableHeader(c, table, heads[k], &columns[j], s, drag, heads, order, columns)
+				tableHeader(c, table, heads[k], j, s, drag, heads, order, columns)
 			}
 		})
 		coreDivider(c)
 		// The rows are a List's, whose choice the table takes the focus
 		// and the keys for.
-		list = coreScroll(c).Grow(1).Role(RoleNone)
+		list := coreScroll(c).Grow(1).Role(RoleNone)
+		pinFrozen(head, lastFrozen, list)
 		list.widget = "List"
 		list.flags |= flagScrollX
 		list.rowMinW = least
@@ -242,6 +266,7 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 			}
 			row.Children(func() {
 				cells(RoleCell, func(j int) { cell(i, j) })
+				pinFrozen(row, lastFrozen, list)
 			})
 		}, kind)
 	})
@@ -256,11 +281,16 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
 	return table
 }
 
-// tableHeader makes a column's header sort the rows when clicked, move the
-// column when dragged, and resize it from its right edge.
-func tableHeader(c *context, table, h *node, col *TableColumn, s *ListState, drag *tableDrag, heads []*node, order []int, columns []TableColumn) {
+// tableHeader makes the header of columns[j] sort the rows when clicked,
+// move the column when dragged, resize it from its right edge, and open
+// s.HeaderMenu.
+func tableHeader(c *context, table, h *node, j int, s *ListState, drag *tableDrag, heads []*node, order []int, columns []TableColumn) {
 	t := c.theme
+	col := &columns[j]
 	id := col.id()
+	if menu := s.HeaderMenu; menu != nil {
+		h.ContextMenu(func(m *Menu) { menu(m, j) })
+	}
 	if s.Sort != nil && col.Sortable {
 		h.sort = 1
 		if s.Sort.Column == id && s.Sort.Descending {
@@ -277,7 +307,7 @@ func tableHeader(c *context, table, h *node, col *TableColumn, s *ListState, dra
 		}
 	}
 	// Moving the column, once the pointer went a few DIPs.
-	if dx, _, held := h.Dragged(); held && !col.Fixed {
+	if dx, _, held := h.Dragged(); held && !col.Fixed && !col.Frozen {
 		if drag.id != id {
 			*drag = tableDrag{id: id}
 		}
@@ -379,7 +409,7 @@ func moveColumn(c *context, s *ListState, drag *tableDrag, heads []*node, order 
 			to = at - 1
 		}
 	}
-	if to == at || columns[order[to]].Fixed {
+	if to == at || columns[order[to]].Fixed || columns[order[to]].Frozen {
 		return
 	}
 	// Under the pointer still: the column's place moved by the other's
@@ -429,6 +459,24 @@ func (tf *tableFit) apply() {
 		tf.layout.Widths = maps.Clone(tf.layout.Widths)
 	}
 	tf.layout.Widths[tf.id] = w
+}
+
+// pinFrozen keeps the cells of a row's frozen columns, its first last+1
+// children, in view of the rows' scroll container as it scrolls sideways.
+func pinFrozen(row *node, last int, list *node) {
+	for ch, k := row.first, 0; ch != nil && k <= last; ch, k = ch.next, k+1 {
+		ch.pinX = list
+	}
+}
+
+// pinnedEdge returns the right edge of the pinned children of e, which
+// come first, and whether it has any.
+func pinnedEdge(e *node) (float32, bool) {
+	edge, ok := float32(0), false
+	for ch := e.first; ch != nil && ch.pinX != nil; ch = ch.next {
+		edge, ok = ch.x+ch.w, true
+	}
+	return edge, ok
 }
 
 // sortArrow draws the arrow of the column the rows are sorted by.
