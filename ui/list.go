@@ -84,6 +84,14 @@ type ListState struct {
 	// on the header of a Sortable column sorts by it, ascending, and
 	// another reverses the order, which the header shows. Sort the rows as
 	// it says, when it changes.
+	//
+	// Cmd-click (Ctrl-click on Linux and Windows) on the header of a
+	// Sortable column sorts by several: it adds the column after those
+	// sorted by, ascending; another Cmd-click makes it descending, and a
+	// third takes it out, the columns after it moving up; taking out the
+	// first makes the next one first. A click sorts by one column again.
+	// The headers of the columns sorted by show their direction, and their
+	// place when there are several.
 	Sort *SortOrder
 	// Columns keeps the order and the widths the user gave a Table's
 	// columns, by ID: restore it from saved settings, and save it as it
