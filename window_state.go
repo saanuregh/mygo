@@ -40,12 +40,36 @@ var windowStates struct {
 	dirty  bool
 }
 
+// SetWindowStateStore keeps the states that WindowOptions.StateKey
+// remembers with load and save, in place of window-state.json in
+// PathUserData, for an app that keeps its own state: load returns what
+// save was last given, nil when nothing was. Both run on the main thread.
+// Set it before the first window with a StateKey; nil goes back to the
+// file.
+func (a *Application) SetWindowStateStore(load func() ([]byte, error), save func([]byte) error) {
+	a.mu.Lock()
+	a.stateLoad, a.stateSave = load, save
+	a.mu.Unlock()
+}
+
+func (a *Application) windowStateStore() (func() ([]byte, error), func([]byte) error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.stateLoad, a.stateSave
+}
+
 func loadWindowStates() {
 	if windowStates.loaded {
 		return
 	}
 	windowStates.loaded = true
 	windowStates.byKey = map[string]savedWindow{}
+	if load, _ := App.windowStateStore(); load != nil {
+		if data, err := load(); err == nil && len(data) > 0 {
+			_ = json.Unmarshal(data, &windowStates.byKey) // damaged states are ignored
+		}
+		return
+	}
 	dir, err := App.Path(PathUserData)
 	if err != nil {
 		return
@@ -60,11 +84,15 @@ func saveWindowStates() {
 	if !windowStates.dirty {
 		return
 	}
-	dir, err := App.Path(PathUserData)
+	data, err := json.MarshalIndent(windowStates.byKey, "", "  ")
 	if err != nil {
 		return
 	}
-	data, err := json.MarshalIndent(windowStates.byKey, "", "  ")
+	if _, save := App.windowStateStore(); save != nil {
+		windowStates.dirty = save(data) != nil // tried again by the next save
+		return
+	}
+	dir, err := App.Path(PathUserData)
 	if err != nil {
 		return
 	}

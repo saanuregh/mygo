@@ -40,6 +40,10 @@ type Application struct {
 	menu      *Menu
 	menuSet   bool
 	paths     map[PathName]string
+	// stateLoad and stateSave keep the window states in place of
+	// window-state.json (SetWindowStateStore).
+	stateLoad func() ([]byte, error)
+	stateSave func([]byte) error
 	finished  sync.Once
 
 	// quitting is only touched on the main thread.

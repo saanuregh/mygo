@@ -88,6 +88,10 @@ as long as it would show on a connected display. They override `X`, `Y`,
 stay the defaults of the first launch. Give each kind of window its own key:
 `"main"`, `"preferences"`.
 
+An app that keeps its own state, in a database say, keeps them there with
+`App.SetWindowStateStore(load, save)` before its first window: `load`
+returns what `save` was last given, and `window-state.json` is not written.
+
 ## Size, position and state
 
 ```go

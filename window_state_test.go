@@ -219,3 +219,43 @@ func TestPrintToPDFOptions(t *testing.T) {
 		t.Errorf("options = %+v, want %+v", got, want)
 	}
 }
+
+// An app that keeps its own state gives the window states a store of its
+// own: they are read from it and written to it, and window-state.json is
+// neither.
+func TestWindowStateStore(t *testing.T) {
+	dir := t.TempDir()
+	App.SetPath(PathUserData, dir)
+	forget := func() { windowStates.loaded, windowStates.byKey, windowStates.dirty = false, nil, false }
+	onMain(forget)
+	kept := []byte(`{"main":{"x":40,"y":50,"width":800,"height":600}}`)
+	App.SetWindowStateStore(func() ([]byte, error) { return kept, nil }, func(data []byte) error {
+		kept = data
+		return nil
+	})
+	// Runs once the test's windows closed and wrote their states.
+	t.Cleanup(func() {
+		onMain(forget)
+		App.SetWindowStateStore(nil, nil)
+		App.SetPath(PathUserData, "")
+	})
+
+	_, fw := testWindow(t, WindowOptions{StateKey: "main", Width: 700, Height: 500})
+	if o := fw.Opts; o.X != 40 || o.Y != 50 || o.Width != 800 || o.Height != 600 {
+		t.Fatalf("restored options = %+v, want the store's", o)
+	}
+	want := savedWindow{X: 1, Y: 2, Width: 300, Height: 200}
+	data := onMainValue(func() []byte {
+		windowStates.byKey["main"] = want
+		windowStates.dirty = true
+		saveWindowStates()
+		return kept
+	})
+	var got map[string]savedWindow
+	if err := json.Unmarshal(data, &got); err != nil || got["main"] != want {
+		t.Fatalf("the store kept %s, want main %+v", data, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, windowStateFile)); !os.IsNotExist(err) {
+		t.Errorf("%s written beside the store: %v", windowStateFile, err)
+	}
+}
