@@ -280,6 +280,9 @@ func (ed *editor) acceptCompletion() bool {
 	n := p.head - cc.at
 	typed := ed.slice(cc.at, p.head)
 	cc.close()
+	if f := ed.o.onAcceptCompletion; f != nil && f(it, p.head-n, p.head) {
+		return true
+	}
 	// The word typed goes where the other carets have it before them too,
 	// as Zed's; elsewhere the completion goes in at the caret.
 	var edits []Edit
