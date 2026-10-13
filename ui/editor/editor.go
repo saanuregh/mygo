@@ -61,6 +61,9 @@ type options struct {
 	renderCompletions  func(*ui.Context, ui.Element, *CompletionMenu)
 	renderHover        func(*ui.Context, ui.Element, *HoverCard)
 	renderGutterButton func(*ui.Context, ui.Element, int)
+	// onAcceptCompletion is told of a completion accepted, before it is
+	// inserted.
+	onAcceptCompletion func(Completion, int, int) bool
 	// decor shows a diff in the editor.
 	decor decor
 	// noVScroll leaves vertical scrolling to the owner, as the sides of a
