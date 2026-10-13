@@ -1733,7 +1733,8 @@ func SwitchBase(c *Context, on *bool) Element {
 // moves them by dragging the headers, which s.Columns keeps; columns wider
 // than the table scroll sideways, the header with them. With s.Sort, a
 // click on the header of a Sortable column sorts the rows by it; with
-// s.HeaderMenu, the headers have a context menu.
+// s.SortBy, a Cmd-click sorts by it after the others; with s.HeaderMenu,
+// the headers have a context menu.
 //
 //	cols := []ui.TableColumn{{Title: "Name", Sortable: true}, {Title: "Size", Width: 90, Align: ui.End, Sortable: true}}
 //	app.files.Selected, app.files.Sort = &app.file, &app.sort
@@ -4690,10 +4691,10 @@ func (_handle Element) TextColor(c Color) Element {
 }
 
 // TextRanges styles runs of a text input's text, in the frames that call
-// it, with ranges that do not overlap. They follow the text as it is: an
-// app that finds them in the text finds them again as it changes. A
-// password shows none; an input method's composition shows unstyled
-// between them.
+// it. Where ranges overlap, the one starting first shows, or given first
+// when they start together. They follow the text as it is: an app that
+// finds them in the text finds them again as it changes. A password shows
+// none; an input method's composition shows unstyled between them.
 func (_handle Element) TextRanges(ranges ...TextRange) Element {
 	_node := _handle.node()
 	if _node == nil {
