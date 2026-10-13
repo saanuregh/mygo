@@ -95,6 +95,14 @@ type State struct {
 	// text and the selections, as the statement a key runs: not the
 	// gutter, nor the lines folds hide.
 	LineBackgrounds []LineBackground
+	// GutterButtons are lines with a button at the gutter's left edge,
+	// as to run the statement starting there, which RenderGutterButton
+	// styles and fills, as with an icon, a label and its click. The
+	// gutter keeps room for them while the list is not nil, empty too, so
+	// that the text stays put as buttons come and go; lines a fold hides
+	// have none.
+	GutterButtons      []int
+	RenderGutterButton func(c *ui.Context, button ui.Element, line int)
 	// OnInput sees each input event before the editor, as keys for a
 	// mode of the app's such as Vim's: returning true takes it, and the
 	// editor leaves it. Text typed comes as InputText, outside an input
@@ -168,6 +176,7 @@ func (st *State) options() options {
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, gutterMarks: st.GutterMarks,
 		backgrounds: st.LineBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, onInput: st.OnInput, minDigits: 3,
+		gutterButtons: st.GutterButtons, renderGutterButton: st.RenderGutterButton,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover,
 	}

@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -139,4 +140,51 @@ func TestLineBackgrounds(t *testing.T) {
 			t.Fatalf("wrapped, row %d filled %v, want %v", row, !want, want)
 		}
 	}
+}
+
+// Gutter buttons show on the lines in view that no fold hides, built by
+// the app, and take their clicks from the gutter; the gutter keeps room
+// for them while the list is set, empty or not.
+func TestGutterButtons(t *testing.T) {
+	ct := newEditorTest(t, "go", "|func a() {\n\tx()\n\ty()\n}\n"+strings.Repeat("z\n", 100))
+	ed := &ct.st.ed
+	plain := ed.gutterW
+	ct.st.GutterButtons = []int{}
+	ct.tt.Frame()
+	empty := ed.gutterW
+	if empty <= plain {
+		t.Fatalf("gutter %v wide with an empty list of buttons, %v without", empty, plain)
+	}
+	var built, clicked []int
+	ct.st.RenderGutterButton = func(c *ui.Context, button ui.Element, line int) {
+		built = append(built, line)
+		button.Label(fmt.Sprint("Run ", line))
+		if button.Clicked() {
+			clicked = append(clicked, line)
+		}
+	}
+	ct.st.GutterButtons = []int{0, 1, 4, 90}
+	ct.st.Fold(0)
+	ct.tt.Frame()
+	if ed.gutterW != empty {
+		t.Fatalf("gutter %v wide with buttons, %v with none", ed.gutterW, empty)
+	}
+	built = nil
+	ct.tt.Frame()
+	if fmt.Sprint(built) != "[0 4]" {
+		t.Fatalf("built buttons of lines %v, want [0 4]", built)
+	}
+	// Line 4 shows third, below line 0 and the fold's closing line.
+	lh := ed.view.lineHeight
+	r, ok := ct.tt.Find("Run 4")
+	if !ok || r.X != 0 || r.Y != 2*lh || r.H != lh || r.W <= 0 || r.W >= empty {
+		t.Fatalf("button of line 4 at %+v (found %v), rows %v high", r, ok, lh)
+	}
+	if err := ct.tt.Click("Run 4"); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(clicked) != "[4]" {
+		t.Fatalf("clicked %v, want [4]", clicked)
+	}
+	ct.want("|func a() {\n\tx()\n\ty()\n}\n" + strings.Repeat("z\n", 100))
 }
