@@ -44,6 +44,7 @@ type options struct {
 	gutterButtons []int
 	contextMenu   func(m *ui.Menu)
 	onInput       func(ui.InputEvent) bool
+	noInputMethod bool
 	// The parts' render functions, nil for the editor's own.
 	renderFindBar      func(*ui.Context, ui.Element, *FindBar)
 	renderGoToLine     func(*ui.Context, ui.Element, *GoToLineBar)

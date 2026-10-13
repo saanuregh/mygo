@@ -113,6 +113,10 @@ type State struct {
 	// editor leaves it. Text typed comes as InputText, outside an input
 	// method's composition.
 	OnInput func(ev ui.InputEvent) bool
+	// NoInputMethod keeps input methods from composing in the editor:
+	// text typed, and what an input method commits, comes whole as
+	// InputText, as keys for Vim's normal mode do.
+	NoInputMethod bool
 
 	// RenderFindBar, RenderGoToLine, RenderCompletions and RenderHover
 	// build the editor's find bar, go to line bar, completions and hovers
@@ -180,7 +184,7 @@ func (st *State) options() options {
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, blockCaret: st.BlockCaret, fitContent: st.FitContent,
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, gutterMarks: st.GutterMarks,
 		backgrounds: st.LineBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
-		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, onInput: st.OnInput, minDigits: 3,
+		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, onInput: st.OnInput, noInputMethod: st.NoInputMethod, minDigits: 3,
 		gutterButtons: st.GutterButtons, renderGutterButton: st.RenderGutterButton,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover,

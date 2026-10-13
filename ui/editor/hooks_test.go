@@ -238,3 +238,33 @@ func TestOnAcceptCompletion(t *testing.T) {
 		t.Fatalf("accepted %q", got)
 	}
 }
+
+// With NoInputMethod, no input method composes in the editor: typed text,
+// composed text too once committed, comes as InputText for OnInput, as
+// keys do in Vim's normal mode.
+func TestNoInputMethod(t *testing.T) {
+	ct := newEditorTest(t, "", "ab|")
+	ct.st.NoInputMethod = true
+	var typed []string
+	ct.st.OnInput = func(ev ui.InputEvent) bool {
+		if ev.Kind == ui.InputText {
+			typed = append(typed, ev.Text)
+			return true
+		}
+		return false
+	}
+	ct.tt.Frame()
+	ct.tt.Compose("に", 1)
+	ct.tt.Frame()
+	ct.want("ab|")
+	ct.tt.Type("に")
+	ct.tt.Frame()
+	ct.want("ab|")
+	if fmt.Sprint(typed) != "[に]" {
+		t.Fatalf("OnInput saw %q", typed)
+	}
+	// The host's text input stays on, else keys would type no text.
+	if _, ok := ct.tt.TextCaret(); !ok {
+		t.Fatal("the host's text input is off: keys type no text")
+	}
+}
