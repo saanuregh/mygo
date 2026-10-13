@@ -41,14 +41,16 @@ type options struct {
 	onHover       func(HoverRequest)
 	onDefinition  func(int)
 	onGutterClick func(int)
+	gutterButtons []int
 	contextMenu   func(m *ui.Menu)
 	onInput       func(ui.InputEvent) bool
 	noInputMethod bool
 	// The parts' render functions, nil for the editor's own.
-	renderFindBar     func(*ui.Context, ui.Element, *FindBar)
-	renderGoToLine    func(*ui.Context, ui.Element, *GoToLineBar)
-	renderCompletions func(*ui.Context, ui.Element, *CompletionMenu)
-	renderHover       func(*ui.Context, ui.Element, *HoverCard)
+	renderFindBar      func(*ui.Context, ui.Element, *FindBar)
+	renderGoToLine     func(*ui.Context, ui.Element, *GoToLineBar)
+	renderCompletions  func(*ui.Context, ui.Element, *CompletionMenu)
+	renderHover        func(*ui.Context, ui.Element, *HoverCard)
+	renderGutterButton func(*ui.Context, ui.Element, int)
 	// decor shows a diff in the editor.
 	decor decor
 	// noVScroll leaves vertical scrolling to the owner, as the sides of a
@@ -608,6 +610,9 @@ func (ed *editor) gutterWidth() float32 {
 	if len(ed.o.gutterMarks) > 0 && !ed.numbersOn() {
 		w += v.lineHeight * 0.7
 	}
+	if ed.o.gutterButtons != nil {
+		w += ed.buttonWidth()
+	}
 	if w > 0 {
 		w += 4
 	}
@@ -617,6 +622,10 @@ func (ed *editor) gutterWidth() float32 {
 	}
 	return float32(math.Ceil(float64(w)))
 }
+
+// buttonWidth returns the width of the gutter's buttons, that of its
+// fold markers.
+func (ed *editor) buttonWidth() float32 { return ed.view.lineHeight * 0.8 }
 
 // visibleLines returns the lines that show in the frame's view, through
 // a clip in the content's coordinates.
