@@ -351,6 +351,11 @@ app.code.SetDiagnostics(buf.Version(), app.lsp.Diagnostics())
   pressed. `ShowCompletions` lists them below the caret, filtered and
   ranked as typing goes on by the word typed, with their kinds, details
   and documentation; Enter or Tab inserts the one chosen.
+  `OnAcceptCompletion` is told of the one accepted first, with the start
+  of the word typed and the caret: returning true says the app inserted
+  it, as a function's parentheses or a snippet's fields, and the editor
+  only closes the list. `CompletionsOpen` reports whether the list shows,
+  as for keys of the app's that the list would take.
 - `OnHover` asks what to show as the pointer rests on the text
   (`HoverDelay`, 600 ms by default), or for Cmd+K Cmd+I at the caret.
   `NoPointerHover` turns hovers from the resting pointer off, diagnostics'
