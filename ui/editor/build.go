@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"fmt"
 	"slices"
 	"time"
 	"unicode/utf8"
@@ -157,9 +158,14 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 			hoverAnchor, hasHover = anchor("code hover anchor", h.start)
 		}
 		ed.buildReplacements(c)
-		if ds, ok := ed.o.decor.(*diffSide); ok {
+		ds, isDiff := ed.o.decor.(*diffSide)
+		if isDiff {
 			ds.buildBlocks(c, ed)
-		} else {
+		}
+		if ed.o.renderGutterButton != nil && len(ed.o.gutterButtons) > 0 {
+			ed.buildGutterButtons(c)
+		}
+		if !isDiff {
 			// A diff's viewer builds a side's bars over its separators.
 			ed.buildBars(c)
 		}
@@ -199,6 +205,37 @@ func (ed *editor) buildBars(c *ui.Context) {
 	}
 	if ed.goTo.open {
 		ed.buildGoToLine(c)
+	}
+}
+
+// buildGutterButtons places the app's buttons on the gutter of the lines
+// in view that no fold hides, a row high, and has RenderGutterButton
+// build them.
+func (ed *editor) buildGutterButtons(c *ui.Context) {
+	if ed.r.W <= 0 && !ed.o.fitContent {
+		// Laid out by the first frame's painting.
+		c.Invalidate()
+		return
+	}
+	h := &ed.view.heights
+	n := ed.view.text.LineCount()
+	y0, y1 := ed.scrollY, ed.scrollY+float64(ed.viewH)
+	if ed.o.fitContent {
+		y0, y1 = 0, h.total()
+	}
+	var built []int
+	for _, line := range ed.o.gutterButtons {
+		if line < 0 || line >= n || slices.Contains(built, line) {
+			continue
+		}
+		g := h.geometry(line)
+		if g.hidden || g.below <= y0 || g.rows >= y1 {
+			continue
+		}
+		built = append(built, line)
+		btn := ui.Box(c).Key(fmt.Sprint("gutter button ", line)).Absolute().Left(0).Top(float32(g.rows-ed.scrollY)).
+			Size(ed.buttonWidth(), ed.view.lineHeight).Role(ui.RoleButton).Cursor(ui.CursorPointer).KeepFocus().HandleInput(shield)
+		ed.o.renderGutterButton(c, btn, line)
 	}
 }
 
