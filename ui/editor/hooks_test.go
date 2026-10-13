@@ -188,3 +188,53 @@ func TestGutterButtons(t *testing.T) {
 	}
 	ct.want("|func a() {\n\tx()\n\ty()\n}\n" + strings.Repeat("z\n", 100))
 }
+
+// CompletionsOpen tells whether the completions show.
+func TestCompletionsOpen(t *testing.T) {
+	ct := newEditorTest(t, "", "fo|")
+	ct.st.OnCompletion = func(r CompletionRequest) {
+		ct.st.ShowCompletions(r.Offset-len(r.Prefix), []Completion{{Label: "foo"}})
+	}
+	ct.tt.Frame()
+	if ct.st.CompletionsOpen() {
+		t.Fatal("completions open before any showed")
+	}
+	ct.run(ShowCompletions)
+	if !ct.st.CompletionsOpen() {
+		t.Fatal("completions shown are not open")
+	}
+	ct.key(0, ui.KeyEscape)
+	if ct.st.CompletionsOpen() {
+		t.Fatal("completions open after Escape")
+	}
+}
+
+// OnAcceptCompletion is told of the completion accepted, with the word's
+// start and the caret: returning true leaves the text to the app, false
+// inserts it as without the hook.
+func TestOnAcceptCompletion(t *testing.T) {
+	ct := newEditorTest(t, "", "x fo|")
+	ct.st.OnCompletion = func(r CompletionRequest) {
+		ct.st.ShowCompletions(r.Offset-len(r.Prefix), []Completion{{Label: "foo", Insert: "foo()"}})
+	}
+	var got []string
+	take := true
+	ct.st.OnAcceptCompletion = func(item Completion, start, end int) bool {
+		got = append(got, fmt.Sprint(item.Label, " ", start, " ", end))
+		return take
+	}
+	ct.tt.Frame()
+	ct.run(ShowCompletions)
+	ct.key(0, ui.KeyEnter)
+	ct.want("x fo|")
+	if fmt.Sprint(got) != "[foo 2 4]" || ct.st.CompletionsOpen() {
+		t.Fatalf("accepted %q, completions open %v", got, ct.st.CompletionsOpen())
+	}
+	take = false
+	ct.run(ShowCompletions)
+	ct.key(0, ui.KeyEnter)
+	ct.want("x foo()|")
+	if len(got) != 2 {
+		t.Fatalf("accepted %q", got)
+	}
+}
