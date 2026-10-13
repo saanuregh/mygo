@@ -170,6 +170,23 @@ app.code.OnInput = func(ev ui.InputEvent) bool {
 - `LineNumbers` shows the gutter's numbers, absolute, relative to the
   caret's line, or not at all; `GutterMarks` put dots of a color by lines,
   as breakpoints, and `OnGutterClick` reports clicks on numbers.
+- `GutterButtons` puts a button at the gutter's left edge on each of these
+  lines, a row high, which `RenderGutterButton` styles and fills: its
+  icon, label, tooltip and what a click does. Only lines in view that no
+  fold hides have one, and a click on it is the button's, not a selection
+  of the line. The gutter keeps room for them while the list is not nil,
+  even empty, so that the text does not move as buttons come and go.
+
+  ```go
+  app.code.GutterButtons = app.statementLines()
+  app.code.RenderGutterButton = func(c *ui.Context, button ui.Element, line int) {
+  	button.Label("Run").Tooltip("Run the statement").Center()
+  	button.Children(func() { ui.Text(c, "▶").TextColor(c.Theme().Accent) })
+  	if button.Clicked() {
+  		app.run(line)
+  	}
+  }
+  ```
 - `LineBackgrounds` fill lines, from `First` to `Last`, with a color under
   the text and the selections, as the statement a key would run; the
   gutter keeps its own, and lines a fold hides take no room to fill. They
