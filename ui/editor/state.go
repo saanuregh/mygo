@@ -77,6 +77,11 @@ type State struct {
 	// a word is typed or Ctrl+Space pressed: answer with ShowCompletions,
 	// at once or later.
 	OnCompletion func(CompletionRequest)
+	// OnAcceptCompletion is called as a completion is accepted, with the
+	// start of the word typed and the newest caret: returning true says
+	// the app inserted it, as with a snippet's fields, and the editor
+	// only closes the list.
+	OnAcceptCompletion func(item Completion, start, end int) bool
 	// OnHover asks the app what to show for the text under the pointer
 	// once it rests there: answer with ShowHover.
 	OnHover func(HoverRequest)
@@ -209,6 +214,7 @@ func (st *State) options() options {
 		gutterButtons: st.GutterButtons, renderGutterButton: st.RenderGutterButton,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover,
+		onAcceptCompletion: st.OnAcceptCompletion,
 	}
 }
 
@@ -379,6 +385,9 @@ func (st *State) ShowCompletions(start int, items []Completion) {
 	st.ed.sync()
 	st.ed.showCompletions(start, items)
 }
+
+// CompletionsOpen reports whether the completions show.
+func (st *State) CompletionsOpen() bool { return st.ed.complete.open() }
 
 // ShowHover shows what the text from start to end is: text in the
 // editor's font, and what build adds, as a hover of a language server.
