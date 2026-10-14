@@ -183,6 +183,9 @@ type engine struct {
 	chain       []uint64
 	pressed     *state
 	pressButton int
+	// pressClicks is the press's count of clicks, which its release
+	// carries.
+	pressClicks int
 	// pressDragger is the element around the one pressed that drags a
 	// value, which takes the press as it moves (dragMove), or 0.
 	pressDragger uint64
@@ -288,6 +291,7 @@ type engine struct {
 		at     time.Time
 		x, y   float32
 		id     uint64
+		button int
 		clicks int
 	}
 }
