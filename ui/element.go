@@ -450,10 +450,14 @@ type node struct {
 	// rowMinW is the least width of the rows of a list scrolling sideways,
 	// as a table's; followX is the scroll container whose horizontal
 	// offset the element's content follows, as a table's header follows
-	// its rows; sort is the order a table's column header shows: 1
-	// ascending, 2 descending.
+	// its rows; pinX is the scroll container whose horizontal offset the
+	// element ignores, staying in view as the rest scrolls, as a table's
+	// frozen columns do: pinned elements come first among their siblings,
+	// which are clipped at their right edge; sort is the order a table's
+	// column header shows: 1 ascending, 2 descending.
 	rowMinW float32
 	followX *node
+	pinX    *node
 	sort    int8
 	// colFit fits a column of a table to its cells as it lays out.
 	colFit *tableFit
