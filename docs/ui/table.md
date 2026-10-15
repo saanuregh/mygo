@@ -101,6 +101,13 @@ The user arranges the columns, as in Finder:
 - **Scrolling sideways.** Columns wider than the table scroll sideways, the
   header with them.
 - **Fixed columns.** A `Fixed` column stays where it is, as wide as it is.
+- **Frozen columns.** `Frozen` columns show first, at the left, and stay in
+  view while the others scroll sideways under them, as a spreadsheet's
+  frozen columns do. A line follows the last of them. The user resizes a
+  frozen column, but does not move it, nor move another column among them.
+  A cell scrolled under them can still take the focus, and is not
+  scrolled out from under them; frozen columns wider than the table cannot
+  be scrolled to their end; `Header` rows scroll sideways as before.
 
 `ListState.Columns` keeps the order and the widths, by the columns' `ID`s
 (their titles by default): set it from saved settings to restore them, and
