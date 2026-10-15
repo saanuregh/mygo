@@ -303,7 +303,8 @@ func (s *state) vector(x, y, dx, dy float32) (float32, float32) {
 }
 
 // contains tests the actual transformed box and every ancestor's clip,
-// rather than the conservative rectangles used for accessibility and culling.
+// and the pinned children a child of an ancestor scrolls under, rather
+// than the conservative rectangles used for accessibility and culling.
 func (rt *engine) contains(s *state, r Rect, x, y float32) bool {
 	m, ok := s.world.Inverse()
 	if !ok {
@@ -313,14 +314,18 @@ func (rt *engine) contains(s *state, r Rect, x, y float32) bool {
 	if !r.Contains(lx, ly) {
 		return false
 	}
-	for p := rt.states[s.parent]; p != nil; p = rt.states[p.parent] {
-		if p.clips {
+	for p, ch := rt.states[s.parent], s; p != nil; p, ch = rt.states[p.parent], p {
+		under := p.pins && !ch.pinned
+		if p.clips || under {
 			m, ok := p.world.Inverse()
 			if !ok {
 				return false
 			}
 			px, py := m.Point(x, y)
-			if !roundedContains(p.clipRect, p.clipRadii, px, py) {
+			if p.clips && !roundedContains(p.clipRect, p.clipRadii, px, py) {
+				return false
+			}
+			if under && px < p.pinEdge {
 				return false
 			}
 		}

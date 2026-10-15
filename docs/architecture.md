@@ -2914,7 +2914,11 @@ either.
 - **Tables** (`ui/table.go`, `ui/editable.go`). A table's rows are a
   `List`'s that scrolls both ways: the list lays its rows out at least as
   wide as the columns ask (`rowMinW`), and the header, outside the list,
-  follows its horizontal offset as it is placed (`followX`). The order
+  follows its horizontal offset as it is placed (`followX`). Frozen
+  columns come first, and their cells, header included, take the offset
+  back (`pinX`), staying where the scroll leaves them; the cells after
+  them are clipped at their right edge, as they are painted and as they
+  take the pointer. The order
   and the widths the user gives the columns live in the `ListState`
   (`TableLayout`), by column ID. Dragging a header moves its column once
   the pointer went a few DIPs, past a neighbor whose middle it passes; a

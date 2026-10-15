@@ -125,6 +125,9 @@ func (rt *engine) lateInput() {
 func place(e *node, x, y float32) {
 	e.x += x
 	e.y += y
+	if f := e.pinX; f != nil {
+		e.x += float32(f.st.scrollX)
+	}
 	if e.hidden {
 		// Not laid out: nor is what is inside it placed, whose scroll
 		// offsets stay as they were for when it shows again.
@@ -1332,6 +1335,9 @@ func alongTarget(t0, tsize, at, self, size, off, limit float32) float32 {
 func laidOutOrigin(e *node) (x, y float32) {
 	x, y = e.x, e.y
 	for ch, p := e, e.parent; p != nil; ch, p = p, p.parent {
+		if f := ch.pinX; f != nil {
+			x += float32(f.st.scrollX)
+		}
 		if ch.flags&flagAbsolute == 0 || ch.leaving == 1 {
 			if f := p.followX; f != nil {
 				x -= float32(f.followShift())
