@@ -335,6 +335,33 @@ func TestCellSelectLeftRightCollapseRows(t *testing.T) {
 	wantBlock(t, s, sel, "Right", []int{3}, ColumnRange{Cursor: "C", Anchor: "C"}, []string{"C"})
 }
 
+// Cells of a frozen column are chosen where they show, over the columns
+// scrolled under them.
+func TestCellSelectWithFrozenColumns(t *testing.T) {
+	s := &ListState{CellSelect: true}
+	sel := &Selection[int]{}
+	s.Selection = sel
+	cols := []TableColumn{{Title: "#", RowHeader: true, Width: 40, Fixed: true, Frozen: true}, {Title: "A", Width: 120, Frozen: true}}
+	for k := range 5 {
+		cols = append(cols, TableColumn{Title: string(rune('B' + k)), Width: 120})
+	}
+	tt := NewTester(func(c *Context) {
+		Table(c, s, cols, 6, func(row, col int) { Textf(c, "r%dc%d", row, col) }).Grow(1)
+	}, 400, 300)
+	tt.Frame()
+	tt.Click("r1c2")
+	for range 6 {
+		tt.Key(0, KeyRight) // to F, scrolling sideways
+	}
+	wantBlock(t, s, sel, "Right to F", []int{1}, ColumnRange{Cursor: "F", Anchor: "F"}, []string{"F"})
+	if err := tt.Click("r2c1"); err != nil {
+		t.Fatal(err)
+	}
+	wantBlock(t, s, sel, "click the frozen A while scrolled", []int{2}, ColumnRange{Cursor: "A", Anchor: "A"}, []string{"A"})
+	tt.ClickWith(Shift, "r3c6")
+	wantBlock(t, s, sel, "Shift-click F", []int{2, 3}, ColumnRange{Cursor: "F", Anchor: "A"}, []string{"A", "B", "C", "D", "E", "F"})
+}
+
 // CellSelected is false before the first build and out of range; in a
 // table not choosing cells, every cell of a chosen row is chosen, and in a
 // table with no selection none is. TestCellSelectedMatchesDrawing covers

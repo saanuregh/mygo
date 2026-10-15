@@ -600,6 +600,11 @@ type state struct {
 	// pointer and the keyboard (IgnoreInput).
 	ignoreInput bool
 	cursor      Cursor
+	// pins marks an element with pinned children, as a table row with
+	// frozen columns, which end at pinEdge: the children scrolling under
+	// them take no pointer left of it. pinned marks one of those children.
+	pinEdge      float32
+	pins, pinned bool
 	// tip marks an element with a tooltip (TooltipBase).
 	tip bool
 	// effectLayer is what the element and its children render into for
