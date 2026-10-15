@@ -2024,10 +2024,11 @@ func SwitchBase(c *Context, on *bool) Element {
 //
 // The user resizes columns by dragging the edges of their headers, and
 // moves them by dragging the headers, which s.Columns keeps; columns wider
-// than the table scroll sideways, the header with them. With s.Sort, a
-// click on the header of a Sortable column sorts the rows by it; with
-// s.SortBy, a Cmd-click or a Shift-click sorts by it after the others;
-// with s.HeaderMenu, the header has a context menu.
+// than the table scroll sideways, the header with them, but for Frozen
+// columns, which stay at the left. With s.Sort, a click on the header of a
+// Sortable column sorts the rows by it; with s.SortBy, a Cmd-click or a
+// Shift-click sorts by it after the others; with s.HeaderMenu, the header
+// has a context menu.
 //
 //	cols := []ui.TableColumn{{Title: "Name", Sortable: true}, {Title: "Size", Width: 90, Align: ui.End, Sortable: true}}
 //	app.files.Selected, app.files.Sort = &app.file, &app.sort
@@ -3524,8 +3525,8 @@ func (_handle Element) DroppedFiles() []string {
 // What the element renders, with its children, shadows and what its Draw
 // callbacks paint, renders into a bitmap of the GPU, the size of its box
 // and the effect's margin (Effect.EffectMargin) around it, every frame
-// the element paints, which the effect then draws over the box,
-// transformed, clipped and faded as the element would be. Web views
+// the element paints, which the effect then draws over the box and the
+// margin, transformed, clipped and faded as the element would be. Web views
 // inside the element do not show through an effect.
 func (_handle Element) Effect(fx Effect) Element {
 	_node := _handle.node()
