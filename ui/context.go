@@ -751,6 +751,11 @@ type state struct {
 	// this one does (ActiveDescendant), 0 for none.
 	activeDescendant uint64
 	cursor           Cursor
+	// pins marks an element with pinned children, as a table row with
+	// frozen columns, which end at pinEdge: the children scrolling under
+	// them take no pointer left of it. pinned marks one of those children.
+	pinEdge      float32
+	pins, pinned bool
 	// tip marks an element with a tooltip (TooltipBase), which shows once
 	// the pointer has rested on it for tipDelay, or at once within tipWarm
 	// of another going: its theme's TooltipDelay.
