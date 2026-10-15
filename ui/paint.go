@@ -251,10 +251,24 @@ func (p *Painter) element(e *node) {
 				}
 			}
 		}
+		// The children scrolling sideways go no further left than the
+		// pinned ones, a line after the last of them.
+		edge, pinned := pinnedEdge(e)
+		pinClip, clipped := p.clip, false
 		for c := e.first; c != nil; c = c.next {
-			if c.flags&flagAbsolute == 0 {
-				p.element(c)
+			if c.flags&flagAbsolute != 0 {
+				continue
 			}
+			if pinned && !clipped && c.pinX == nil {
+				clipped = true
+				p.Fill(Rect{edge - 1, e.y, 1, e.h}, e.c.theme.Border, 0)
+				p.pushClip(Rect{edge, pinClip.Y, pinClip.X + pinClip.W - edge, pinClip.H}, [4]float32{})
+			}
+			p.element(c)
+		}
+		if clipped {
+			p.popClip()
+			p.clip = pinClip
 		}
 		if e.flags&flagDividers != 0 && !e.grid {
 			p.dividers(e)
