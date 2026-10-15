@@ -1368,6 +1368,8 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	if lifting {
 		clip = rt.lift()
 	}
+	s.pinEdge, s.pins = pinnedEdge(e)
+	s.pinned = e.pinX != nil
 	s.x, s.y, s.w, s.h = e.x, e.y, e.w, e.h
 	if e.parent != nil {
 		s.parent = e.parent.id
@@ -1496,12 +1498,18 @@ func (rt *engine) commitElement(e *node, clip Rect, hidden bool) {
 	if e.zOrder && e != e.c.overlay && zCommit != nil {
 		zCommit(rt, e, clip, invisible)
 	} else {
+		// Those scrolling sideways go no further left than the pinned
+		// ones.
 		var stuckBuf [4][2]int
 		stuck := stuckBuf[:0]
 		for ch := e.first; ch != nil; ch = ch.next {
 			if ch.flags&flagAbsolute == 0 {
+				flowClip := clip
+				if s.pins && ch.pinX == nil {
+					flowClip = intersect(clip, Rect{s.pinEdge, clip.Y, clip.X + clip.W - s.pinEdge, clip.H})
+				}
 				from := len(rt.hits)
-				rt.commitElement(ch, clip, invisible)
+				rt.commitElement(ch, flowClip, invisible)
 				if ch.sticky {
 					stuck = append(stuck, [2]int{from, len(rt.hits)})
 				}

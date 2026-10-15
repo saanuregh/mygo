@@ -389,8 +389,9 @@ func (s *state) vector(x, y, dx, dy float32) (float32, float32) {
 }
 
 // contains tests the actual transformed box, where it takes the pointer
-// (HitTest) and every ancestor's clip, rather than the conservative
-// rectangles used for accessibility and culling.
+// (HitTest), every ancestor's clip, and the pinned children a child of an
+// ancestor scrolls under, rather than the conservative rectangles used for
+// accessibility and culling.
 func (rt *engine) contains(s *state, r Rect, x, y float32) bool {
 	m, ok := s.world.Inverse()
 	if !ok {
@@ -403,15 +404,17 @@ func (rt *engine) contains(s *state, r Rect, x, y float32) bool {
 	}
 	// The clips around an element flying stop at it, as it paints out of
 	// them.
-	for p := rt.states[s.parent]; p != nil && !s.lifted; p = rt.states[p.parent] {
-		if p.clips || p.selfClips {
+	for p, ch := rt.states[s.parent], s; p != nil && !s.lifted; p, ch = rt.states[p.parent], p {
+		under := p.pins && !ch.pinned
+		if p.clips || p.selfClips || under {
 			m, ok := p.world.Inverse()
 			if !ok {
 				return false
 			}
 			px, py := m.Point(x, y)
 			if p.clips && !roundedContains(p.clipRect, p.clipRadii, px, py) ||
-				p.selfClips && !roundedContains(p.selfClip, uniformRadii(p.selfRadius), px, py) {
+				p.selfClips && !roundedContains(p.selfClip, uniformRadii(p.selfRadius), px, py) ||
+				under && px < p.pinEdge {
 				return false
 			}
 		}

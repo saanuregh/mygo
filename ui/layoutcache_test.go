@@ -459,7 +459,7 @@ func TestLayoutInputs(t *testing.T) {
 		"checked expanded busy current autoComplete orient tip highlighted focusHighlights keepOpen accValue accRange hasRange accFill accStep barInset scrollBase hideScrollbars keepScrollbars barsFrom snap snapAlign " +
 		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin labelledBy focusTo " +
 		"keyShortcuts accGrid " +
-		"setPos setSize choosesItems search description invalid describedBy errorMessage followX sort level expandable " +
+		"setPos setSize choosesItems search description invalid describedBy errorMessage followX pinX sort level expandable " +
 		"chooseMany serial ignoreInput accessHidden accessDisabled themed lift ringOffset ringColor ringSet clipping zIndex zOrder " +
 		"roleDescription controls hasPopup"
 	known := map[string]bool{}
