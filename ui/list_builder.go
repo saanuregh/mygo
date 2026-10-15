@@ -28,7 +28,12 @@ func List(c *Context, s *ListState, n int, row ...func(int)) Element {
 		panic("ui: List accepts one row builder")
 	}
 	if len(row) == 1 {
-		return wrapElement(coreList(raw, s, n, row[0]))
+		// A constructor, as the generated ones: the list's input applies
+		// as it returns, not when another constructor around it does.
+		raw.rt.beginBuild()
+		e := coreList(raw, s, n, row[0])
+		raw.rt.endBuild()
+		return wrapElement(e)
 	}
 	e := coreScroll(raw)
 	e.widget, e.role = "List", RoleList
@@ -67,6 +72,8 @@ func (e Element) Rows(row func(ListRow)) Element {
 		panic("ui: List.Rows called twice in one pass")
 	}
 	s.built = true
+	n.c.rt.beginBuild()
+	defer n.c.rt.endBuild()
 	buildList(n.c, n, n, s.state, s.count, func(i int) {
 		if row == nil {
 			return
