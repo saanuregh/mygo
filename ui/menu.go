@@ -292,6 +292,7 @@ type menuState struct {
 	release, releaseText uint64
 	pending              *shownMenu
 	chosen               uint64
+	chosenLate           bool
 	choice               int
 	label                string
 	// later is the menu button whose menu the view asked for, as a
