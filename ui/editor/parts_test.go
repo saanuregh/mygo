@@ -324,3 +324,68 @@ func TestDiffSplitSidesWrapAlike(t *testing.T) {
 		}
 	}
 }
+
+// With Cmd (Ctrl elsewhere) held, the range LinkAt gives under the
+// pointer is a link: the pointer is a hand over it, and a click runs
+// OnLink; without, the editor's own text cursor and click.
+func TestCodeEditorLink(t *testing.T) {
+	text := "SELECT * FROM orders"
+	st := &State{Buffer: NewBuffer(text)}
+	start := strings.Index(text, "orders")
+	st.LinkAt = func(off int) (int, int, bool) {
+		return start, start + len("orders"), off >= start && off <= start+len("orders")
+	}
+	linked := -1
+	st.OnLink = func(off int) { linked = off }
+	tt := ui.NewTester(func(c *ui.Context) { View(c, st).Fill().AutoFocus() }, 600, 300)
+	tt.Frame()
+	ed := &st.ed
+	y := float32(-ed.scrollY) + ed.view.lineHeight/2
+	x := ed.textX + ed.view.charWidth*float32(start+2)
+	tt.Move(x, y)
+	tt.Frame()
+	if tt.Cursor() != ui.CursorText {
+		t.Fatalf("without Cmd: cursor %v", tt.Cursor())
+	}
+	// Cmd pressed with the pointer resting on the name.
+	tt.HoldModifiers(ui.Cmd)
+	tt.Frame()
+	if tt.Cursor() != ui.CursorPointer {
+		t.Fatalf("with Cmd over the link: cursor %v", tt.Cursor())
+	}
+	tt.Move(ed.textX+2, y) // over SELECT, no link
+	tt.HoldModifiers(ui.Cmd)
+	tt.Frame()
+	if tt.Cursor() == ui.CursorPointer {
+		t.Fatal("a hand off the link")
+	}
+	tt.ClickAtWith(ui.Cmd, x, y)
+	tt.Frame()
+	if linked < start || linked > start+len("orders") {
+		t.Fatalf("OnLink got %d", linked)
+	}
+}
+
+// Pressing and letting go of Cmd with the pointer resting on a link
+// shows and hides it, without a move.
+func TestCodeEditorLinkModifierOnly(t *testing.T) {
+	text := "SELECT * FROM orders"
+	st := &State{Buffer: NewBuffer(text)}
+	start := strings.Index(text, "orders")
+	st.LinkAt = func(off int) (int, int, bool) { return start, start + 6, off >= start && off <= start+6 }
+	tt := ui.NewTester(func(c *ui.Context) { View(c, st).Fill() }, 600, 300)
+	tt.Frame()
+	ed := &st.ed
+	tt.Move(ed.textX+ed.view.charWidth*float32(start+2), float32(-ed.scrollY)+ed.view.lineHeight/2)
+	tt.Frame()
+	tt.HoldModifiers(ui.Cmd)
+	tt.Frame()
+	if !ed.linkOn {
+		t.Fatal("no link with Cmd pressed")
+	}
+	tt.HoldModifiers(0)
+	tt.Frame()
+	if ed.linkOn || tt.Cursor() == ui.CursorPointer {
+		t.Fatal("the link stays after Cmd is let go")
+	}
+}

@@ -341,6 +341,12 @@ app.code.SetDiagnostics(buf.Version(), app.lsp.Diagnostics())
   the types of variables; `SetSuggestion` shows text after the caret as a
   suggestion, which Tab accepts, as an AI's.
 - `OnDefinition` is called for Cmd+click and F12 on a word.
+- `LinkAt` makes names links while Cmd (Ctrl elsewhere) is held: it gives
+  the range of the link holding an offset, as a table's name the app can
+  open, or false. The link under the pointer shows underlined, the pointer
+  a hand over it, and a click on it puts the caret there and calls
+  `OnLink`, rather than starting a selection. Names without a link stay
+  text, which tells what has one.
 
 ## Styling
 
