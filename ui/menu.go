@@ -450,6 +450,10 @@ func (rt *engine) showMenu() {
 		return
 	}
 	rt.menu.pending = nil
+	if rt.drawsMenus {
+		handOverMenu(rt, p)
+		return
+	}
 	z := rt.zoomFactor()
 	rt.host.popupMenu(p.menu, p.x*z, p.y*z, func(id int) { rt.menuChosen(p, id) })
 }
