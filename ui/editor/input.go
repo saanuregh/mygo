@@ -205,6 +205,7 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 	}
 	off := ed.offsetAt(cx, cy)
 	mods := ev.Mods
+	ed.linkUnder(mods) // where the press is, which may come with no move before
 	ed.endGroup()
 	ed.wholeWord = false
 	ed.gesture = gesture{active: true, origin: ed.newSel(off, off)}
@@ -213,6 +214,11 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		ed.gesture.mode = 3
 		ed.gesture.colStart = ui.Point{X: cx, Y: float32(cy)}
 		ed.columnSelect(cx, cy)
+		return true
+	case mods == ui.Cmd && ed.o.onLink != nil && ev.Clicks == 1 && ed.linkOn && off >= ed.link[0] && off <= ed.link[1]:
+		ed.gesture.active = false
+		ed.setSels([]sel{ed.newSel(off, off)}, revealNone)
+		ed.o.onLink(off)
 		return true
 	case mods == ui.Cmd && ed.o.onDefinition != nil && ev.Clicks == 1:
 		ed.gesture.active = false
@@ -389,7 +395,26 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 		h.restOff, h.restAt, h.pending = off, ed.frameNow, true
 		changed = true
 	}
+	if ed.o.linkAt != nil && (ev.Mods == ui.Cmd || ed.linkOn) {
+		changed = true // the build finds the link under the pointer
+	}
 	return changed
+}
+
+// linkUnder sets the link under the pointer: the range LinkAt gives
+// while Cmd alone is held over text, none else.
+func (ed *editor) linkUnder(mods ui.Modifiers) {
+	ed.linkOn = false
+	if ed.o.linkAt != nil && mods == ui.Cmd && ed.pointerIn && ed.regionAt(ed.pointer.X, ed.pointer.Y) == regionText &&
+		!ed.gesture.active {
+		cx, cy := ed.toContent(ed.pointer.X, ed.pointer.Y)
+		off := ed.offsetAt(cx, cy)
+		if cr, ok := ed.caretRect(off); ok && float64(cy) <= float64(cr.Y+cr.H) {
+			if start, end, ok := ed.o.linkAt(off); ok && start < end {
+				ed.link, ed.linkOn = [2]int{start, end}, true
+			}
+		}
+	}
 }
 
 func (ed *editor) wheel(ev ui.InputEvent) bool {
