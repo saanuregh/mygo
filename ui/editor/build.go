@@ -87,7 +87,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 	e.HandleInput(ed.input)
 	// Cmd held or let go with the pointer still draws a frame, which
 	// shows the link or takes it away.
-	ed.link = ed.linkAt(c.Modifiers())
+	ed.link, ed.appLink = ed.linkAt(c.Modifiers())
 	switch {
 	case ed.link[1] > ed.link[0]:
 		e.Cursor(ui.CursorPointer)

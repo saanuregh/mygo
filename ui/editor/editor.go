@@ -53,6 +53,8 @@ type options struct {
 	onCompletion  func(CompletionRequest)
 	onHover       func(HoverRequest)
 	onDefinition  func(int)
+	linkAt        func(int) (int, int, bool)
+	onLink        func(int)
 	onGutterClick func(int)
 	gutterButtons []int
 	contextMenu   func(m *ui.Menu)
@@ -210,10 +212,12 @@ type editor struct {
 	// region is the part of the editor under the pointer, which its
 	// cursor and the scroll bars' highlight show.
 	region region
-	// link is the word under the pointer that Cmd+click would go to the
-	// definition of, which shows as a link while Cmd is held; none when
-	// its ends are equal.
+	// link is what Cmd+click under the pointer would follow, which shows
+	// as a link while Cmd is held: the range LinkAt gives there (appLink),
+	// else the word it would go to the definition of; none when its ends
+	// are equal.
 	link       [2]int
+	appLink    bool
 	scrollbar  scrollbarDrag
 	frameNow   time.Time
 	needsBuild bool

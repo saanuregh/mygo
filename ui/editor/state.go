@@ -129,6 +129,14 @@ type State struct {
 	// NoDefinitionLink shows no link under the pointer with Cmd held,
 	// though Cmd+click still goes to the definition.
 	NoDefinitionLink bool
+	// LinkAt, when set, makes a name a link while Cmd (Ctrl elsewhere) is
+	// held with the pointer over it: it returns the range of the link
+	// holding offset, as a table's name the app can open, or false for
+	// none. The link shows as OnDefinition's does, in its place, the
+	// pointer a hand over it, and a click on it puts the caret there and
+	// calls OnLink, rather than OnDefinition or starting a selection.
+	LinkAt func(offset int) (start, end int, ok bool)
+	OnLink func(offset int)
 	// OnGutterClick is called for a click on a line's number, as to set a
 	// breakpoint.
 	OnGutterClick func(line int)
@@ -277,6 +285,7 @@ func (st *State) options() options {
 		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
+		linkAt: st.LinkAt, onLink: st.OnLink,
 		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, onInput: st.OnInput, noInputMethod: st.NoInputMethod, minDigits: 3,
 		gutterButtons: st.GutterButtons, renderGutterButton: st.RenderGutterButton,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
