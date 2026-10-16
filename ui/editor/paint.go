@@ -438,6 +438,14 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				squiggle(p, ox+rc.X, y+lh-2.5, rc.W, ct.SeverityColor(d.Severity))
 			}
 		}
+		// The link under the pointer while Cmd is held, underlined.
+		if ed.linkOn && ed.link[1] >= l.start && ed.link[0] <= l.start+len(l.text) {
+			a, b := max(ed.link[0]-l.start, 0), min(ed.link[1]-l.start, len(l.text))
+			f.rects = v.rangeRects(l, row, l.toDisp(a, false), l.toDisp(b, false), f.rects[:0])
+			for _, rc := range f.rects {
+				p.Fill(ui.Rect{X: ox + rc.X, Y: y + lh - 3, W: rc.W, H: 1}, ct.Cursor, 0)
+			}
+		}
 		if ri == len(l.rows)-1 && ed.isFolded(line) {
 			x := ox + row.indent + row.width + 4
 			w := v.charWidth*3 + 8

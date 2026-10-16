@@ -51,6 +51,8 @@ type options struct {
 	onCompletion  func(CompletionRequest)
 	onHover       func(HoverRequest)
 	onDefinition  func(int)
+	linkAt        func(int) (int, int, bool)
+	onLink        func(int)
 	onGutterClick func(int)
 	gutterButtons []int
 	contextMenu   func(m *ui.Menu)
@@ -166,6 +168,10 @@ type editor struct {
 	pointer    ui.Point
 	pointerIn  bool
 	hoverLine  int
+	// link is the range LinkAt gave under the pointer while Cmd is held,
+	// linkOn whether there is one.
+	link   [2]int
+	linkOn bool
 	// region is the part of the editor under the pointer, which its
 	// cursor and the scroll bars' highlight show.
 	region     region
