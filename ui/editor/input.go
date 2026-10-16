@@ -206,6 +206,7 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 	}
 	off := ed.offsetAt(cx, cy)
 	mods := ev.Mods
+	link, app := ed.linkAt(mods) // where the press is, which may come with no move before
 	ed.endGroup()
 	ed.wholeWord = false
 	ed.gesture = gesture{active: true, origin: ed.newSel(off, off)}
@@ -214,6 +215,11 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		ed.gesture.mode = 3
 		ed.gesture.colStart = ui.Point{X: cx, Y: float32(cy)}
 		ed.columnSelect(cx, cy)
+		return true
+	case mods == ui.Cmd && ed.o.onLink != nil && ev.Clicks == 1 && app && off >= link[0] && off <= link[1]:
+		ed.gesture.active = false
+		ed.setSels([]sel{ed.newSel(off, off)}, revealNone)
+		ed.o.onLink(off)
 		return true
 	case ed.clickGoesToDefinition(mods) && ev.Clicks == 1:
 		ed.gesture.active = false
@@ -281,22 +287,33 @@ func (ed *editor) clickGoesToDefinition(mods ui.Modifiers) bool {
 	return mods == ui.Cmd && ed.o.onDefinition != nil && !ed.o.noDefinitionClick
 }
 
-// linkAt returns the word under the pointer that a click with mods would
-// go to the definition of, as the editor's link holds it.
-func (ed *editor) linkAt(mods ui.Modifiers) [2]int {
-	if !ed.clickGoesToDefinition(mods) || ed.o.noDefinitionLink || !ed.pointerIn || ed.gesture.active || ed.scrollbar.active {
-		return [2]int{}
+// linkAt returns the link under the pointer that a click with mods would
+// follow, as the editor's link holds it, and whether it is the app's: the
+// range LinkAt gives there, which wins over the word the click would go to
+// the definition of.
+func (ed *editor) linkAt(mods ui.Modifiers) ([2]int, bool) {
+	definition := ed.clickGoesToDefinition(mods) && !ed.o.noDefinitionLink
+	if mods != ui.Cmd || ed.o.linkAt == nil && !definition || !ed.pointerIn || ed.gesture.active || ed.scrollbar.active {
+		return [2]int{}, false
 	}
 	off := ed.textAt(ed.pointer.X, ed.pointer.Y)
 	if off < 0 {
-		return [2]int{}
+		return [2]int{}, false
+	}
+	if ed.o.linkAt != nil {
+		if a, z, ok := ed.o.linkAt(off); ok && a < z {
+			return [2]int{a, z}, true
+		}
+	}
+	if !definition {
+		return [2]int{}, false
 	}
 	extra := ed.wordChars()
 	a, z := wordAt(ed.view.text, off, extra)
 	if z <= a || classOf(firstRune(ed.view.text.Slice(a, z)), extra) != classWord {
-		return [2]int{}
+		return [2]int{}, false
 	}
-	return [2]int{a, z}
+	return [2]int{a, z}, false
 }
 
 // extendGesture extends the selection being dragged to off.
@@ -400,8 +417,8 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 		ed.hoverLine = line
 		changed = true
 	}
-	if l := ed.linkAt(ev.Mods); l != ed.link {
-		ed.link = l
+	if l, app := ed.linkAt(ev.Mods); l != ed.link || app != ed.appLink {
+		ed.link, ed.appLink = l, app
 		changed = true
 	}
 	h := &ed.hover

@@ -436,6 +436,13 @@ app.code.SetDiagnostics(buf.Version(), app.lsp.Diagnostics())
   `NoDefinitionClick` leaves Cmd+click to the editor's other clicks, link
   and all, and F12 and the context menu still go to the definition;
   `NoDefinitionLink` keeps Cmd+click but shows no link.
+- `LinkAt` makes names links while Cmd (Ctrl elsewhere) is held: it gives
+  the range of the link holding an offset, as a table's name the app can
+  open, or false. The link under the pointer shows as the definition's
+  does, the pointer a hand over it, and a click on it puts the caret there
+  and calls `OnLink`, rather than starting a selection. Where it gives a
+  link, it takes the place of `OnDefinition`'s, whose word shows only off
+  the app's links; `NoDefinitionClick` and `NoDefinitionLink` leave it be.
 
 ## Replacing ranges
 

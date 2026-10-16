@@ -486,9 +486,11 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				ds.paintSign(p, ed, style.sign, r.X+ed.textX-v.charWidth*1.5, y, style.number)
 			}
 		}
-		// The word Cmd+click goes from, as a link.
+		// What Cmd+click follows, as a link: the word it goes to the
+		// definition of, or the app's range (LinkAt), whose part on this
+		// line shows when it spans lines.
 		var link func(int, ui.Color) ui.Color
-		if a, z := ed.link[0], ed.link[1]; z > a && a >= l.start && z <= l.start+len(l.text) {
+		if a, z := max(ed.link[0], l.start), min(ed.link[1], l.start+len(l.text)); z > a {
 			da, dz := l.toDisp(a-l.start, false), l.toDisp(z-l.start, false)
 			c := ct.TokenColor(TokenLink)
 			link = func(d int, cc ui.Color) ui.Color {
