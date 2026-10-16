@@ -72,8 +72,11 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		}
 	}
 	e.HandleInput(ed.input)
-	switch ed.region {
-	case regionText:
+	ed.linkUnder(c.Modifiers())
+	switch {
+	case ed.linkOn:
+		e.Cursor(ui.CursorPointer)
+	case ed.region == regionText:
 		e.Cursor(ui.CursorText)
 	default:
 		e.Cursor(ui.CursorDefault)
