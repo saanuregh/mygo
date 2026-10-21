@@ -789,6 +789,7 @@ func (rt *engine) forgetInput() {
 		s.released = false
 		s.dropped = nil
 		s.droppedValue, s.hasDropped = nil, false
+		s.dragMissed = false
 		s.dataDropped = nil
 	}
 }
