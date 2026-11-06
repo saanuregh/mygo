@@ -722,7 +722,10 @@ type state struct {
 	// accessDisabled, that assistive technology reads it as unavailable
 	// (AccessDisabled).
 	ignoreInput, accessHidden, accessDisabled bool
-	cursor                                    Cursor
+	// activeDescendant is the element that has the keyboard focus while
+	// this one does (ActiveDescendant), 0 for none.
+	activeDescendant uint64
+	cursor           Cursor
 	// pins marks an element with pinned children, as a table row with
 	// frozen columns, which end at pinEdge: the children scrolling under
 	// them take no pointer left of it. pinned marks one of those children.
