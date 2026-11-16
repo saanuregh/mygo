@@ -25,3 +25,27 @@ func TestAdvanceToMovesTheClockOnToALaterTimeOnly(t *testing.T) {
 		t.Fatalf("an earlier time moved the clock back to %v after the start", tt.Now().Sub(start))
 	}
 }
+
+// Frames show the Tester's time of day (Context.Wall), which Advance moves
+// until AdvanceTo sets it: from then on Advance moves what animates and
+// waits, not the ages a snapshot shows.
+func TestAdvanceToSetsTheWallClockApart(t *testing.T) {
+	var wall time.Time
+	tt := NewTester(func(c *Context) { wall = c.Wall() }, 100, 50)
+	start := tt.Now()
+	tt.Advance(time.Minute)
+	tt.Frame()
+	if !wall.Equal(start.Add(time.Minute)) {
+		t.Fatalf("before AdvanceTo the wall clock is %v after the start, want the Tester's minute", wall.Sub(start))
+	}
+	at := start.Add(2 * time.Minute)
+	tt.AdvanceTo(at)
+	tt.Advance(10 * time.Minute)
+	tt.Frame()
+	if !wall.Equal(at) || !tt.Wall().Equal(at) {
+		t.Fatalf("after AdvanceTo and Advance the wall clock is %v after the start, want 2m", wall.Sub(start))
+	}
+	if !tt.Now().Equal(at.Add(10 * time.Minute)) {
+		t.Fatalf("the animation clock is %v after the start, want 12m", tt.Now().Sub(start))
+	}
+}

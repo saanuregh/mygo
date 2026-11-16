@@ -277,6 +277,10 @@ type Tester struct {
 	// that of the last frame.
 	now     time.Time
 	frameAt time.Time
+	// wall is the time of day frames show (Context.Wall) once AdvanceTo
+	// set it (wallSet); now until then.
+	wall    time.Time
+	wallSet bool
 	// pointer and pressure are the device of the pointer's events, and
 	// how hard it presses (UsePointer).
 	pointer  PointerType
@@ -311,6 +315,7 @@ func coreNewTesterWith(view func(c *context), width, height int, o TesterOptions
 	h := &headless{w: float32(width), h: float32(height), scale: 1, prefs: platformPreferences(o.Preferences), dark: o.Dark}
 	t := &Tester{rt: newRuntime(view, h), h: h, now: time.Now()}
 	t.rt.clock = t.Now
+	t.rt.wallClock = t.Wall
 	h.clock = t.Now
 	t.rt.collect = true
 	// Duplicate keys panic, so that the test fails where the key was given.
@@ -350,6 +355,17 @@ func (t *Tester) runLater() {
 // still until Advance moves it.
 func (t *Tester) Now() time.Time { return t.now }
 
+// Wall is the time of day the Tester's frames show (Context.Wall): its
+// time (Now), which Advance moves, until AdvanceTo sets the wall clock
+// apart; from then on only AdvanceTo moves it, and Advance only what
+// animates and waits.
+func (t *Tester) Wall() time.Time {
+	if t.wallSet {
+		return t.wall
+	}
+	return t.now
+}
+
 // Advance moves the Tester's clock on by d, running the frames due
 // meanwhile at their times: one each refresh while something moves, and
 // those of After and Painter.After when they come due. An animation of
@@ -385,13 +401,15 @@ func (t *Tester) Advance(d time.Duration) {
 	t.now = end
 }
 
-// AdvanceTo moves the Tester's clock on to at, as Advance does, when at
-// is later than its time; an earlier at leaves it. A tester driven by a
-// real program (an app's headless snapshot, running against live
-// servers) passes time.Now() to keep its clock with the wall clock's,
-// which ages and timestamps read, where steps of Advance between
-// sleeps drift from it.
+// AdvanceTo sets the Tester's wall clock (Wall) to at, and moves its
+// clock on to at, as Advance does, when at is later than its time. A
+// tester driven by a real program (an app's headless snapshot, running
+// against live servers) passes time.Now(): the ages and timestamps its
+// frames show (Context.Wall) keep with the wall clock's, while the time
+// Advance gives animations and waits between (settling, a script's
+// waits) runs ahead of it apart.
 func (t *Tester) AdvanceTo(at time.Time) {
+	t.wall, t.wallSet = at, true
 	if d := at.Sub(t.now); d > 0 {
 		t.Advance(d)
 	}

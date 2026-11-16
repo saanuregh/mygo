@@ -748,6 +748,19 @@ func (_handle *Context) Vibrancy() bool {
 	return _ctx.Vibrancy()
 }
 
+// Wall returns the time of day the frame shows, for what reads the
+// calendar (ages, timestamps) rather than moves: a window's is Now; a
+// Tester's is its wall clock, which Advance moves until AdvanceTo sets it
+// (a snapshot run against live servers), while animations keep their own
+// time.
+func (_handle *Context) Wall() time.Time {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return *new(time.Time)
+	}
+	return _ctx.Wall()
+}
+
 // WindowActive reports whether the window is drawn as active: the window
 // the user's input goes to, as native apps draw it, while it or one of its
 // flyouts has the keyboard (and always as Window.SetActiveAppearance keeps

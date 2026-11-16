@@ -343,8 +343,10 @@ type engine struct {
 	// strict makes mistakes found while building panic, as duplicate keys
 	// do in a Tester.
 	strict bool
-	// clock is a Tester's time, time.Now when nil.
-	clock func() time.Time
+	// clock is a Tester's time, time.Now when nil; wallClock its wall
+	// clock (Context.Wall), clock's time when nil.
+	clock     func() time.Time
+	wallClock func() time.Time
 	// frameAt is the time of the next frame, when the display asked for it
 	// earlier than it draws (windowHost.waitDisplay).
 	frameAt time.Time
