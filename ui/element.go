@@ -473,6 +473,9 @@ type node struct {
 	ignoreInput bool
 	// clearsFocus: a press on it focuses nothing (ClearsFocus).
 	clearsFocus bool
+	// passesWindowShortcuts: the window's shortcuts run while it, a
+	// dialog's backdrop, shows (PassesWindowShortcuts).
+	passesWindowShortcuts bool
 	// handleDoubleClick marks a DragWindow handle whose double click the
 	// view takes (WindowDoubleClicked) rather than the window.
 	handleDoubleClick bool

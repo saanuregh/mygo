@@ -66,9 +66,10 @@ func (c *Context) OnShortcut(mods Modifiers, key Key, fn func()) {
 // anywhere else, or nowhere, as one built at the root does. Elements
 // around the focus that take the key, and overlays, still come first;
 // one built in a dialog fires while the dialog shows, and one built
-// behind it waits, as Shortcut does.
+// behind it waits, as Shortcut does, unless the dialog's backdrop
+// PassesWindowShortcuts.
 func (c *Context) OnWindowShortcut(mods Modifiers, key Key, fn func()) {
-	if raw := c.build(); raw != nil && fn != nil && raw.insideModal() && !raw.inert {
+	if raw := c.build(); raw != nil && fn != nil && (raw.insideModal() || raw.rt.modalPassesShortcuts) && !raw.inert {
 		raw.rt.actions = append(raw.rt.actions, action{window: c, kind: actionWindowShortcut, mods: mods, key: key, fn: fn})
 	}
 }

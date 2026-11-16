@@ -6982,6 +6982,21 @@ func (_handle Element) PassThrough() Element {
 	return wrapElement(_node.PassThrough())
 }
 
+// PassesWindowShortcuts has the window's shortcuts (Context.OnShortcut
+// built outside any element) run while the element, a dialog's backdrop
+// (Modal), shows on top: a dialog that leaves the app's keys working, as
+// a settings sheet whose app still takes its menu keys. The focused
+// element inside it takes the keys it handles first.
+func (_handle Element) PassesWindowShortcuts() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.PassesWindowShortcuts())
+}
+
 // Password hides what a text input holds, in the frames that call it: an
 // input that stops calling it shows its text again, as a field's eye
 // button does. It does nothing to a text area: as on every platform, only
