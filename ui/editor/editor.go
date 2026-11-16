@@ -120,6 +120,14 @@ type options struct {
 	fontCarets bool
 	// hintsFollowText is State's HintsFollowText.
 	hintsFollowText bool
+	// guidesUnderRanges, bandsInset, pageMovesCarets, blockCaretWhenEmpty
+	// and plainClicks are State's GuidesUnderRanges, BandsInset,
+	// PageMovesCarets, BlockCaretWhenEmpty and PlainClicks.
+	guidesUnderRanges   bool
+	bandsInset          float32
+	pageMovesCarets     bool
+	blockCaretWhenEmpty bool
+	plainClicks         bool
 }
 
 // sharedScroll is the vertical scroll several editors share.
@@ -178,6 +186,9 @@ type editor struct {
 	// gutterMenuLine, with a GutterMenu: the menu is the gutter's.
 	onGutterMenu   bool
 	gutterMenuLine int
+	// onFoldStrip: the secondary press was on GutterLayout's fold strip
+	// (FoldStripClicksText), which has no menu.
+	onFoldStrip bool
 	// barStyle is how the editor's scroll bars look, its Scrollbar with
 	// the theme's zero fields filled in.
 	barStyle ui.ScrollbarStyle

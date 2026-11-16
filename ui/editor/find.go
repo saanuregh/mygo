@@ -51,6 +51,9 @@ type finder struct {
 	// seeded: show put the selection in the query; selectQuery: the
 	// query is selected as it takes the focus, had it or not (FocusQuery).
 	seeded, selectQuery bool
+	// none: no match is the current one, as the bar opened again on the
+	// matches it had (FindFromOrigin).
+	none bool
 }
 
 // findKey is what FindFromOrigin's choice of a match follows.
@@ -64,10 +67,23 @@ func (f *finder) key(ed *editor) findKey {
 	return findKey{f.query, [4]bool{f.caseSens, f.wholeWord, f.regex, f.inSelection}, ed.view.version}
 }
 
-// maxMatches bounds the matches a search finds.
-const maxMatches = 100000
+// maxMatches bounds the matches a search finds; zigMaxMatches those of
+// FindFromOrigin's, as zode's find bar.
+const (
+	maxMatches    = 100000
+	zigMaxMatches = 20000
+)
+
+// limit is the matches a search of ed finds at most.
+func (f *finder) limit(ed *editor) int {
+	if ed.o.findFromOrigin {
+		return zigMaxMatches
+	}
+	return maxMatches
+}
 
 func (f *finder) show(ed *editor, replace bool) {
+	wasOpen := f.open
 	f.open = true
 	f.replacing = f.replacing || replace
 	if replace {
@@ -102,7 +118,11 @@ func (f *finder) show(ed *editor, replace bool) {
 			f.focusQuery, f.focusReplace = false, true
 		}
 		// A match is chosen again as the query, options or text change
-		// (update).
+		// (update); the bar opened again after it closed has none chosen,
+		// and counts the matches; opened while open, it keeps its own.
+		if !wasOpen {
+			f.none = true
+		}
 		return
 	}
 	f.stale = true
@@ -130,6 +150,7 @@ func (f *finder) update(ed *editor) {
 		return
 	}
 	f.scrollTo = false
+	f.none = false
 	from := ed.primary().start()
 	if ed.o.findFromOrigin {
 		from = f.origin
@@ -183,7 +204,7 @@ func (f *finder) search(ed *editor) {
 		if sub != nil {
 			f.subs = append(f.subs, sub)
 		}
-		return len(f.matches) < maxMatches
+		return len(f.matches) < f.limit(ed)
 	})
 	f.current = min(f.current, max(0, len(f.matches)-1))
 }
@@ -306,8 +327,8 @@ func (f *finder) searchLines(ed *editor) {
 		})
 		f.matches = slices.Insert(f.matches, i, found...)
 	}
-	if len(f.matches) > maxMatches {
-		f.matches = f.matches[:maxMatches]
+	if n := f.limit(ed); len(f.matches) > n {
+		f.matches = f.matches[:n]
 	}
 	f.current = min(f.current, max(0, len(f.matches)-1))
 }
@@ -352,7 +373,7 @@ func (f *finder) step(ed *editor, dir int) bool {
 			i = len(f.matches) - 1
 		}
 	}
-	f.current = i
+	f.current, f.none = i, false
 	m := f.matches[i]
 	ed.setSels([]sel{ed.newSel(m.start, m.end)}, revealCenter)
 	return true
@@ -362,6 +383,11 @@ func (f *finder) step(ed *editor, dir int) bool {
 // next.
 func (f *finder) replaceOne(ed *editor) {
 	f.search(ed)
+	if f.none {
+		// None is the current one: the next is, as zode's find bar.
+		f.step(ed, 1)
+		return
+	}
 	p := ed.primary()
 	text := f.textForReplacing(ed)
 	for i, m := range f.matches {

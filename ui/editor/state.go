@@ -284,8 +284,29 @@ type State struct {
 	// suggestions move as without it.
 	HintsFollowText bool
 	// StraightUnderlines underlines diagnostics with a straight rounded
-	// line, 2 DIPs thick, rather than a wavy one.
+	// line, 2 DIPs thick, rather than a wavy one; a diagnostic of no
+	// width at a line's end with a mark 2 DIPs wide.
 	StraightUnderlines bool
+	// GuidesUnderRanges paints the indent guides under the app's text
+	// ranges, the find bar's matches, the brackets and the selections,
+	// and the brackets under the selections, as zode's editor did.
+	GuidesUnderRanges bool
+	// BandsInset, when set, has the caret line's band and LineBackgrounds
+	// span from the gutter's edge to BandsInset DIPs short of the
+	// editor's right edge, as zode's editor drew its rows' bands.
+	BandsInset float32
+	// PageMovesCarets has Page Up and Page Down move the carets a page of
+	// the text less two rows, scrolling only as far as keeps the caret in
+	// view, rather than scrolling a page.
+	PageMovesCarets bool
+	// BlockCaretWhenEmpty draws CursorBlock's block only for a caret
+	// with nothing selected, a bar for a selection's, as zode's Vim.
+	BlockCaretWhenEmpty bool
+	// PlainClicks leaves out Alt+Shift dragging a column selection,
+	// Alt+click taking a caret away and a click on a fold's placeholder
+	// unfolding it: Alt+Shift+click extends the selection as Shift+click,
+	// Alt+click adds a caret.
+	PlainClicks bool
 
 	ed editor
 }
@@ -294,10 +315,19 @@ type State struct {
 // right-aligned in MinDigits digits at least, then Right DIPs, the text
 // starting TextGap DIPs after the gutter. The change bars against
 // DiffBase are 3 DIPs wide, BarRight DIPs left of the gutter's right edge,
-// and fold markers sit at the gutter's left edge.
+// and fold markers sit at the gutter's left edge: Folded and Unfolded
+// drawn as a symbol FoldIconSize DIPs big (in a box 1.2 times that, its
+// top where the size centred in the row would start), 4 DIPs from it,
+// in the Theme's FoldedIcon and FoldIcon, when set, else chevrons
+// stroked. With FoldStripClicksText a press left of Left on a line that
+// does not fold is the text's, at the line's start, not OnGutterClick's,
+// and a right press there has no menu.
 type GutterLayout struct {
 	Left, Right, TextGap, BarRight float32
 	MinDigits                      int
+	Folded, Unfolded               *ui.SVG
+	FoldIconSize                   float32
+	FoldStripClicksText            bool
 }
 
 // LineNote is a note drawn after line Line's text (State.LineNotes), in
@@ -403,6 +433,7 @@ func (st *State) options() options {
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift,
 		gutter: st.Gutter, lineNotes: st.LineNotes, noteFont: st.NoteFont, straightUnderlines: st.StraightUnderlines, marginRight: st.MarginRight, findFromOrigin: st.FindFromOrigin, noOccurrences: st.NoOccurrences, filledBrackets: st.FilledBrackets, caretBeforeInlays: st.CaretBeforeInlays,
 		roundRanges: st.RoundRanges, caretRowOnly: st.CaretRowOnly, guidesFromBelow: st.GuidesFromBelow, caretSolidFor: st.CaretSolidFor, fontCarets: st.FontCarets, hintsFollowText: st.HintsFollowText,
+		guidesUnderRanges: st.GuidesUnderRanges, bandsInset: st.BandsInset, pageMovesCarets: st.PageMovesCarets, blockCaretWhenEmpty: st.BlockCaretWhenEmpty, plainClicks: st.PlainClicks,
 	}
 }
 

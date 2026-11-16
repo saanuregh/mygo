@@ -45,12 +45,16 @@ func (f *FindBar) SetReplacing(on bool) { f.ed.find.replacing = on }
 func (f *FindBar) CanReplace() bool     { return !f.ed.o.readOnly }
 
 // Matches returns how many matches there are, and the index of the one
-// selected, -1 without matches.
+// selected, -1 without matches or, as FindFromOrigin's bar opened again
+// on the matches it had, while none is.
 func (f *FindBar) Matches() (count, current int) {
 	fd := &f.ed.find
 	fd.search(f.ed)
 	if len(fd.matches) == 0 {
 		return 0, -1
+	}
+	if fd.none {
+		return len(fd.matches), -1
 	}
 	return len(fd.matches), fd.current
 }
