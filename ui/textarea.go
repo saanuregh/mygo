@@ -435,7 +435,8 @@ func (a *area) paint(e *node, p *Painter, ox, oy float32) {
 	b := &ed.buf
 	t := p.Theme()
 	ts := e.resolvedText()
-	focused := e.Focused()
+	// A drawn menu another element opened over it leaves its caret.
+	focused := e.Focused() || e.c.rt.caretUnderMenu(e.id)
 	last := len(b.paras) - 1
 	if len(ed.blocks) > 0 {
 		a.paintBlocks(ed, p, ox, oy)

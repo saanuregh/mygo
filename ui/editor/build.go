@@ -44,8 +44,9 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 	// Code reads left to right in a right-to-left interface too, as in
 	// editors: its gutter on the left, its lines from the left.
 	e := ui.Box(c).Direction(ui.LeftToRight).Focusable().FocusRing(false).Clip()
-	// Focused is false while the window has not the keyboard.
-	focused := e.Focused()
+	// Focused is false while the window has not the keyboard; a menu over
+	// it leaves its caret, as nanoui's menus did.
+	focused := e.Focused() || e.FocusedUnderMenu()
 	if focused != ed.focused {
 		ed.focused = focused
 		ed.blinkStart = c.Now()
