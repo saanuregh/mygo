@@ -230,6 +230,9 @@ type editor struct {
 	diags    []Diagnostic
 	gitDiff  *gitDiff
 	brackets bracketCache
+	// excerpt is the lines the editor shows, when not all
+	// (State.SetExcerpt).
+	excerpt excerpt
 
 	// placed are the elements of replacements the last build placed, at
 	// the scroll of placedScroll, which a frame painting them elsewhere
@@ -378,6 +381,7 @@ func (ed *editor) sync() {
 		for i := range ed.autoclosed {
 			ed.autoclosed[i].at = mapOffset(ed.autoclosed[i].at, cs, biasRight)
 		}
+		ed.excerpt.moved(cs)
 		for i := range ed.diags {
 			d := &ed.diags[i]
 			d.Start, d.End = mapOffset(d.Start, cs, biasRight), mapOffset(d.End, cs, biasLeft)
@@ -401,6 +405,7 @@ func (ed *editor) sync() {
 		f.version = ed.view.version
 	}
 	ed.sels = mergeSels(ed.sels)
+	ed.keepInExcerpt()
 }
 
 // mapSel moves a selection through changes: a caret with the text
@@ -441,6 +446,7 @@ func (ed *editor) resetForBuffer() {
 	ed.goTo.open = false
 	ed.gesture.active = false
 	ed.brackets = bracketCache{}
+	ed.excerpt = excerpt{}
 	ed.scrollY, ed.scrollX, ed.anchorLine, ed.anchorOff = 0, 0, 0, 0
 }
 
@@ -458,6 +464,7 @@ func (ed *editor) setSels(sels []sel, reveal reveal) {
 		ed.selRedo = nil
 	}
 	ed.sels = mergeSels(sels)
+	ed.keepInExcerpt()
 	if reveal != revealNone {
 		ed.reveal = max(ed.reveal, reveal)
 	}
@@ -506,6 +513,9 @@ func (ed *editor) hiddenLines() []lineSpan {
 	}
 	if r := ed.view.replacedLines(); len(r) > 0 {
 		hidden = mergeSpans(append(hidden, r...))
+	}
+	if x := ed.excerptHidden(); len(x) > 0 {
+		hidden = mergeSpans(append(hidden, x...))
 	}
 	return hidden
 }

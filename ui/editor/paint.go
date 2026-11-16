@@ -66,6 +66,7 @@ func (ed *editor) layout(w, h, scale float32) {
 	}
 	v.heights.setHidden(ed.hiddenLines())
 	v.heights.setBlocks(blocks)
+	ed.keepInExcerpt()
 }
 
 func mergeSpans(spans []lineSpan) []lineSpan {
