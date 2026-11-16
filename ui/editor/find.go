@@ -3,10 +3,12 @@ package editor
 import (
 	"github.com/egoist/mygo/internal/l10n"
 	"regexp"
+	"regexp/syntax"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // finder is an editor's find bar and its matches, as Zed's buffer
@@ -240,7 +242,11 @@ func (f *finder) scan(ed *editor, text, lower string, base int, found func(m dif
 			f.err = err
 			return
 		}
-		for _, m := range re.FindAllStringSubmatchIndex(text, maxMatches) {
+		all := re.FindAllStringSubmatchIndex(text, maxMatches)
+		if ed.o.findFromOrigin {
+			all = withAbuttingEmpty("(?m)"+pat, text, all)
+		}
+		for _, m := range all {
 			// Empty matches count as FindFromOrigin's (zode's rure) do.
 			if m[1] == m[0] && !ed.o.findFromOrigin || !keep(m[0], m[1]) {
 				continue
@@ -538,4 +544,74 @@ func (g *goToLine) target(ed *editor) (int, int, bool) {
 	line = max(0, min(line, ed.view.text.LineCount()-1))
 	// The column counts characters, the position bytes.
 	return line, byteOfRuneIn(ed.view.text.Line(line), col), true
+}
+
+// withAbuttingEmpty adds to all, pat's matches in text, the empty match
+// right after a match that Go's FindAll leaves out and zode's rure keeps
+// (it searches again from a match's end): where the next match does not
+// start there and the pattern matches empty there, in the text's context.
+func withAbuttingEmpty(pat, text string, all [][]int) [][]int {
+	parsed, err := syntax.Parse(pat, syntax.Perl)
+	if err != nil {
+		return all
+	}
+	prog, err := syntax.Compile(parsed.Simplify())
+	if err != nil {
+		return all
+	}
+	out := make([][]int, 0, len(all))
+	for k, m := range all {
+		out = append(out, m)
+		e := m[1]
+		if m[1] == m[0] || k+1 < len(all) && all[k+1][0] == e {
+			continue
+		}
+		if emptyMatchAt(prog, text, e) {
+			empty := make([]int, len(m))
+			for i := range empty {
+				empty[i] = -1
+			}
+			empty[0], empty[1] = e, e
+			out = append(out, empty)
+		}
+	}
+	return out
+}
+
+// emptyMatchAt reports whether prog matches the empty text at byte pos of
+// text: a path to its match taking no character, its assertions (^, $, \b)
+// true there.
+func emptyMatchAt(prog *syntax.Prog, text string, pos int) bool {
+	r1, r2 := rune(-1), rune(-1)
+	if pos > 0 {
+		r1, _ = utf8.DecodeLastRuneInString(text[:pos])
+	}
+	if pos < len(text) {
+		r2, _ = utf8.DecodeRuneInString(text[pos:])
+	}
+	ctx := syntax.EmptyOpContext(r1, r2)
+	seen := make([]bool, len(prog.Inst))
+	stack := []uint32{uint32(prog.Start)}
+	for len(stack) > 0 {
+		pc := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if seen[pc] {
+			continue
+		}
+		seen[pc] = true
+		in := &prog.Inst[pc]
+		switch in.Op {
+		case syntax.InstMatch:
+			return true
+		case syntax.InstAlt, syntax.InstAltMatch:
+			stack = append(stack, in.Out, in.Arg)
+		case syntax.InstNop, syntax.InstCapture:
+			stack = append(stack, in.Out)
+		case syntax.InstEmptyWidth:
+			if syntax.EmptyOp(in.Arg)&^ctx == 0 {
+				stack = append(stack, in.Out)
+			}
+		}
+	}
+	return false
 }
