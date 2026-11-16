@@ -34,6 +34,9 @@ type MenuStyle struct {
 	// (Width, Menu.MaxWidth), back into the window where it would pass the
 	// window's end, rather than opening it before the point.
 	ShiftIntoWindow bool
+	// CutLabels cuts a label too long for the menu at the menu's edge,
+	// with no "…", as nanoui's kit.menu did.
+	CutLabels bool
 	// ItemHeight is each item's height; 0 is its text's, with Space(1.5)
 	// above and below.
 	ItemHeight  float32

@@ -1442,7 +1442,12 @@ func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem,
 				mi.drawn = false
 				return
 			}
-			name := coreText(c, it.Label).SingleLine()
+			name := coreText(c, it.Label)
+			if st.CutLabels {
+				name.NoWrap().MinWidth(0)
+			} else {
+				name.SingleLine()
+			}
 			if st.FontSize > 0 {
 				name.FontSize(st.FontSize)
 			}
