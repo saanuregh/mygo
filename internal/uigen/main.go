@@ -298,6 +298,12 @@ func zero(fs *token.FileSet, e ast.Expr) string {
 	}
 	return "*new(" + t + ")"
 }
+
+// contextFallbacks are what a Context method returns outside a build
+// when its type's zero value would be wrong: a scale of 0 would divide
+// by zero or snap everything to nothing.
+var contextFallbacks = map[string]string{"PixelScale": "1"}
+
 func zeroReturn(fs *token.FileSet, r *ast.FieldList) string {
 	if r == nil || len(r.List) == 0 {
 		return "return"
@@ -456,7 +462,11 @@ func generate(out *bytes.Buffer, fs *token.FileSet, fn *ast.FuncDecl) {
 		rawRecv = "_node."
 	}
 	if r == "context" {
-		fmt.Fprintln(out, "_ctx := _handle.build(); if _ctx == nil {", zeroReturn(fs, fn.Type.Results), "}")
+		fallback := zeroReturn(fs, fn.Type.Results)
+		if v, ok := contextFallbacks[name]; ok {
+			fallback = "return " + v
+		}
+		fmt.Fprintln(out, "_ctx := _handle.build(); if _ctx == nil {", fallback, "}")
 		rawRecv = "_ctx."
 	}
 	if publicPart(r) != "" {
