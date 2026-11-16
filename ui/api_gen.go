@@ -5374,6 +5374,20 @@ func (_handle Element) Focused() bool {
 	return _node.Focused()
 }
 
+// FollowEnd starts a scroll container (Scroll) at the end of its content,
+// and keeps the end in view as the content grows while it shows it, as a
+// log does: scrolling away from the end stops following it, and scrolling
+// back to it follows again, as ListState.FollowEnd and nanoui's follow_end.
+func (_handle Element) FollowEnd() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.FollowEnd())
+}
+
 // Font sets the font family, a comma-separated list: the first family the
 // system or the app has draws the text, and the others, in order, what it
 // lacks, before the system's choice. "monospace" and "system-ui" are the

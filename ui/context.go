@@ -863,6 +863,11 @@ type state struct {
 	// track is the ScrollState of the last frame's element, which events
 	// that scroll it update (scrollTo).
 	track *ScrollState
+	// endFollowing is whether a FollowEnd container follows its end, as
+	// from its first frame (endStarted); endSeenY and endMaxY are its
+	// offset and its end as the last frame left them.
+	endStarted, endFollowing bool
+	endSeenY, endMaxY        float64
 	// wheel is the notches of a mouse wheel on their way through the
 	// content (wheelScroll).
 	wheel *wheelGlide
