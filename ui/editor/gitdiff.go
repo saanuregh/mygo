@@ -54,6 +54,11 @@ func (g *gitDiff) status(line int) int {
 	case h.B0 == h.B1:
 		return 3
 	case h.A0 == h.A1:
+		if g.d.oldText.Len() == 0 && line > 0 && line == g.d.newText.LineCount()-1 && g.d.newText.LineStart(line) == g.d.newText.Len() {
+			// An added file's line after its final newline is no line
+			// of git's: unmarked (zode's review's own hunks).
+			return 0
+		}
 		return 1
 	}
 	return 2
