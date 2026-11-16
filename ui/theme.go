@@ -97,6 +97,11 @@ type Theme struct {
 	// another tip goes, as the pointer moves along a toolbar, the next one
 	// shows at once: 0.4 seconds by default.
 	TooltipDelay time.Duration
+	// Menu is the look of the menus MyGo draws in the window: those of
+	// PopoverMenu and PopoverMenuButton, and of ContextMenu and Menu in a
+	// window that draws its menus (SetMenuPresentation). Its zero value
+	// is MyGo's own look.
+	Menu MenuStyle
 
 	// followed is what WithPreferences changed, nil where it has not.
 	followed *followedTheme
