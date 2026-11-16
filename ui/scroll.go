@@ -78,6 +78,32 @@ func (e *node) TrackScroll(s *ScrollState) *node {
 	return e
 }
 
+// FollowEnd starts a scroll container (Scroll) at the end of its content,
+// and keeps the end in view as the content grows while it shows it, as a
+// log does: scrolling away from the end stops following it, and scrolling
+// back to it follows again, as ListState.FollowEnd and nanoui's follow_end.
+func (e *node) FollowEnd() *node {
+	e.followEnd = true
+	return e
+}
+
+// followTheEnd scrolls a FollowEnd container to my, its end, while it
+// follows it: from the first frame, and again once scrolled back there.
+func (e *node) followTheEnd(my float64) {
+	s := e.st
+	switch {
+	case !s.endStarted:
+		s.endStarted, s.endFollowing = true, true
+	case s.scrollY != s.endSeenY:
+		s.endFollowing = s.scrollY >= s.endMaxY-1
+	}
+	if s.endFollowing && s.scrollY != my {
+		s.beginMove(e.c.rt.frame)
+		s.scrollTo(s.scrollX, my)
+	}
+	s.endSeenY, s.endMaxY = s.scrollY, my
+}
+
 // ScrollIntoView scrolls the containers around the element as little as
 // shows it, once the frame is laid out: an element added in this frame
 // comes into view with it. Call it in the frame it should come into view,

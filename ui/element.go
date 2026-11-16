@@ -431,6 +431,8 @@ type node struct {
 	depth      int
 	// track is the ScrollState of a scroll container (TrackScroll).
 	track *ScrollState
+	// followEnd keeps a scroll container's end in view (FollowEnd).
+	followEnd bool
 	// cols and rows are the tracks of a grid.
 	cols, rows []Track
 

@@ -150,6 +150,9 @@ func place(e *node, x, y float32) {
 			s.beginMove(e.c.rt.frame)
 			s.scrollTo(sx, sy)
 		}
+		if e.followEnd {
+			e.followTheEnd(my)
+		}
 		if e.snap != SnapNone || s.snap != nil {
 			// Where it rests, if it snaps (ScrollSnap).
 			placeSnapper(e)
