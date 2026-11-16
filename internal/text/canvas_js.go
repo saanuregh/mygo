@@ -827,7 +827,8 @@ func (e *canvasEngine) register(data []byte, family string) error {
 	}
 	buf := js.Global().Get("Uint8Array").New(len(data))
 	js.CopyBytesToJS(buf, data)
-	face := js.Global().Get("FontFace").New(family, buf.Get("buffer"))
+	weight, style := faceCSS(data)
+	face := js.Global().Get("FontFace").New(family, buf.Get("buffer"), map[string]any{"weight": weight, "style": style})
 	fonts := js.Global().Get("document").Get("fonts")
 	fonts.Call("add", face)
 	face.Call("load").Call("catch", js.Global().Get("Function").New(""))
