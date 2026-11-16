@@ -31,6 +31,7 @@ type context struct {
 	theme    *Theme
 	window   *Theme
 	now      time.Time
+	wall     time.Time // the time of day the frame shows (Wall)
 	w, h     float32
 	titleBar TitleBar
 	vibrancy bool
@@ -128,6 +129,10 @@ func (c *context) reset(now time.Time, w, h float32) {
 	c.dirty = max(c.dirty, c.used)
 	c.used = 0
 	c.now = now
+	c.wall = now
+	if c.rt.wallClock != nil {
+		c.wall = c.rt.wallClock()
+	}
 	c.w, c.h = w, h
 	c.theme = c.rt.defaultTheme()
 	c.window = c.theme
@@ -513,6 +518,13 @@ func (c *context) accent(t *Theme) Color {
 
 // Now returns the time the frame started, for animations.
 func (c *context) Now() time.Time { return c.now }
+
+// Wall returns the time of day the frame shows, for what reads the
+// calendar (ages, timestamps) rather than moves: a window's is Now; a
+// Tester's is its wall clock, which Advance moves until AdvanceTo sets it
+// (a snapshot run against live servers), while animations keep their own
+// time.
+func (c *context) Wall() time.Time { return c.wall }
 
 // Root returns the element holding the window's content: a column the
 // size of the window.
