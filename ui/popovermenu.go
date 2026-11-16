@@ -1204,13 +1204,14 @@ func (rt *engine) drawnMenuBuilt(e *node, d *drawnMenu, m *Menu) *platform.MenuI
 	parts.Popup(func(panel *node) {
 		width := run.widths[pm]
 		style(panel, width)
+		offset := or(run.offsets[pm], st.Offset)
 		if d.menu.below {
 			// Apart from the menu button, on the side it shows.
 			at, self := d.menu.buttonAnchors()
-			menuGap(panel, at, self, or(st.Offset, t.Space(1)))
-		} else if st.Offset > 0 {
+			menuGap(panel, at, self, or(offset, t.Space(1)))
+		} else if offset > 0 {
 			// Below the point it opened at.
-			panel.Margin(st.Offset, 0, 0, 0)
+			panel.Margin(offset, 0, 0, 0)
 		}
 		items(pm, width)
 	})

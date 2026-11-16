@@ -179,6 +179,8 @@ type menuRun struct {
 	// widths are the widths MaxWidth gave the menu and its submenus, when
 	// collecting.
 	widths map[*platform.Menu]float32
+	// offsets are the offsets Offset gave the menu, when collecting.
+	offsets map[*platform.Menu]float32
 	// drawn is set for a menu drawn in the window, where NextMenu adds an
 	// item rather than a submenu; next is the menu the NextMenu item
 	// chosen opens, nil for none.
