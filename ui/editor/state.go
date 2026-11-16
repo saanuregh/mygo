@@ -252,6 +252,29 @@ type State struct {
 	// NoOccurrences stops highlighting the other occurrences of the
 	// selected text.
 	NoOccurrences bool
+	// RoundRanges rounds the selections' corners by 3 DIPs, and draws the
+	// find bar's matches and the app's text backgrounds a DIP short of a
+	// row's top and bottom, rounded alike.
+	RoundRanges bool
+	// CaretRowOnly highlights the caret's row (not every row of its
+	// wrapped line) and only while there is one caret and no selection.
+	CaretRowOnly bool
+	// GuidesFromBelow gives a blank line the indent guides of the next
+	// line with text (none after the last), not the deeper of the lines
+	// around it, and draws a line's guides beside its first row alone.
+	GuidesFromBelow bool
+	// CaretSolidFor keeps the caret shown this long after it moved or the
+	// text changed, before it blinks (shown first).
+	CaretSolidFor time.Duration
+	// FontCarets draws carets as tall as the font's line and 4 DIPs (the
+	// row at most), centered in the row and rounded by 1; a block at 55%
+	// of Theme.Cursor; and none while the editor has not the keyboard.
+	FontCarets bool
+	// HintsFollowText keeps an inlay hint before text inserted at it and
+	// drops one whose text is replaced around it, as zode's editor did;
+	// unset, a hint moves after text inserted at it. Trailing inlays and
+	// suggestions move as without it.
+	HintsFollowText bool
 	// StraightUnderlines underlines diagnostics with a straight rounded
 	// line, 2 DIPs thick, rather than a wavy one.
 	StraightUnderlines bool
@@ -371,6 +394,7 @@ func (st *State) options() options {
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift,
 		gutter: st.Gutter, lineNotes: st.LineNotes, noteFont: st.NoteFont, straightUnderlines: st.StraightUnderlines, marginRight: st.MarginRight, findFromOrigin: st.FindFromOrigin, noOccurrences: st.NoOccurrences, filledBrackets: st.FilledBrackets, caretBeforeInlays: st.CaretBeforeInlays,
+		roundRanges: st.RoundRanges, caretRowOnly: st.CaretRowOnly, guidesFromBelow: st.GuidesFromBelow, caretSolidFor: st.CaretSolidFor, fontCarets: st.FontCarets, hintsFollowText: st.HintsFollowText,
 	}
 }
 
@@ -510,6 +534,22 @@ func (st *State) ViewportHeight() float64 { return float64(st.ed.viewH) }
 func (st *State) LineTop(line int) float64 {
 	st.ensure()
 	return st.ed.view.heights.top(line)
+}
+
+// RowStarts appends to into the bytes of line where its rows after the
+// first start, as soft wrap breaks it (none when it does not wrap), as
+// the last frame laid the editor out.
+func (st *State) RowStarts(line int, into []int) []int {
+	st.ensure()
+	v := &st.ed.view
+	if !v.wrap || line < 0 || line >= v.text.LineCount() {
+		return into
+	}
+	l := v.line(line)
+	for _, r := range l.rows[min(1, len(l.rows)):] {
+		into = append(into, l.fromDisp(r.from))
+	}
+	return into
 }
 
 // Find opens the find bar with query, and selects its first match after

@@ -48,6 +48,11 @@ type Theme struct {
 	// Note colors the notes after lines (State.LineNotes) that have no
 	// color of their own: LineNumber when zero.
 	Note ui.Color
+	// FoldChip, when set, fills the chip after a folded line, a space
+	// after its text, as wide as " ⋯ " and 62% of the line high, its
+	// "⋯" half a space in, colored FoldText (LineNumber when zero);
+	// unset, the chip is Occurrence's with the "⋯" centered.
+	FoldChip, FoldText ui.Color
 	// Tokens styles the kinds of tokens; a zero color is Text.
 	Tokens [tokenKinds]TokenStyle
 }
