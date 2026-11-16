@@ -36,3 +36,24 @@ func TestCodeEditorCaretCard(t *testing.T) {
 		t.Error("the card stays")
 	}
 }
+
+// TestCodeEditorPopupsShown checks that CompletionsShown and HoverShown
+// follow the popups, which Escape closes one at a time.
+func TestCodeEditorPopupsShown(t *testing.T) {
+	ct := newEditorTest(t, "", "foo|")
+	st := ct.st
+	st.ShowCompletions(0, []Completion{{Label: "foobar"}})
+	st.ShowHover(0, 3, "foo", nil)
+	ct.tt.Frame()
+	if !st.CompletionsShown() || !st.HoverShown() {
+		t.Fatalf("completions %v, hover %v: want both", st.CompletionsShown(), st.HoverShown())
+	}
+	st.Run(Cancel)
+	if st.CompletionsShown() || !st.HoverShown() {
+		t.Fatalf("after one Escape: completions %v, hover %v", st.CompletionsShown(), st.HoverShown())
+	}
+	st.Run(Cancel)
+	if st.HoverShown() {
+		t.Fatal("the hover stays after a second Escape")
+	}
+}

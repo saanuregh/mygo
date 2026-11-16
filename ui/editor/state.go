@@ -522,6 +522,12 @@ func (st *State) ShowCompletions(start int, items []Completion) {
 	st.ed.showCompletions(start, items)
 }
 
+// CompletionsShown reports whether the completions show, and
+// HoverShown whether a hover does: the popups Escape closes first, one
+// at a time (Cancel), before the find bar or the selections.
+func (st *State) CompletionsShown() bool { st.ensure(); return st.ed.complete.open() }
+func (st *State) HoverShown() bool       { st.ensure(); return st.ed.hover.open() }
+
 // ShowHover shows what the text from start to end is: text in the
 // editor's font, and what build adds, as a hover of a language server.
 func (st *State) ShowHover(start, end int, text string, build func(c *ui.Context)) {
