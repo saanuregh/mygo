@@ -232,6 +232,9 @@ func (sb *spanBuilder) addSpan(text string, src, end int, exact bool, s spanStyl
 	if s.inLink && th.LinkWeight > s.weight {
 		sp.Weight = th.LinkWeight
 	}
+	if s.inLink && th.LinkUnderline {
+		sp.Underline = true
+	}
 	if s.sub {
 		sp.Size *= 0.75
 	}

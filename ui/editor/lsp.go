@@ -41,6 +41,8 @@ type Completion struct {
 	Documentation string
 	// FilterText is matched instead of Label when set.
 	FilterText string
+	// SortText orders completions that match the word typed equally well.
+	SortText string
 }
 
 // CompletionKind is what a completion is, which its icon shows.
@@ -122,9 +124,13 @@ func (cc *completions) close() {
 	cc.request = false
 }
 
+// completionPage is how many rows PageUp and PageDown move the list's
+// choice by: the rows it shows.
+const completionPage = 9
+
 func (cc *completions) step(d int) {
 	if n := len(cc.filtered); n > 0 {
-		cc.selected = (cc.selected + d + n) % n
+		cc.selected = ((cc.selected+d)%n + n) % n
 		cc.scrollTo = true
 	}
 }
@@ -176,9 +182,10 @@ func (ed *editor) requestCompletions(explicit bool) bool {
 		// After a trigger character, as a dot: a new list.
 		ed.complete.close()
 	}
-	if ed.complete.shown && ed.complete.at == start && len(ed.complete.items) > 0 {
+	// Asked for, the list is asked for again; typing filters it.
+	if !explicit && ed.complete.shown && ed.complete.at == start && len(ed.complete.items) > 0 {
 		ed.complete.caret = p.head
-		ed.complete.filter(prefix)
+		ed.complete.filter(prefix, ed.o.completionScore)
 		if len(ed.complete.filtered) > 0 || !explicit {
 			if len(ed.complete.filtered) == 0 {
 				ed.complete.close()
@@ -206,7 +213,7 @@ func (ed *editor) showCompletions(at int, items []Completion) {
 		start = at
 	}
 	cc.shown, cc.at, cc.caret, cc.items, cc.request = true, start, p.head, items, false
-	cc.filter(ed.slice(start, p.head))
+	cc.filter(ed.slice(start, p.head), ed.o.completionScore)
 	if len(cc.filtered) == 0 {
 		cc.shown = false
 	}
@@ -216,8 +223,12 @@ func (ed *editor) showCompletions(at int, items []Completion) {
 // filter keeps the items matching prefix, best first, as Zed's fuzzy
 // matching: the prefix's characters in order, each match worth more at
 // the start of the label, of a word in it or right after the one
-// before, and less the later it comes.
-func (cc *completions) filter(prefix string) {
+// before, and less the later it comes. score, when set, scores them in
+// its place (State.CompletionScore); equal scores go by SortText.
+func (cc *completions) filter(prefix string, score func(query, text string) (int, bool)) {
+	if score == nil {
+		score = func(query, text string) (int, bool) { return fuzzyScore(text, query) }
+	}
 	cc.prefix = prefix
 	cc.filtered, cc.scores = cc.filtered[:0], cc.scores[:0]
 	for i, it := range cc.items {
@@ -225,7 +236,7 @@ func (cc *completions) filter(prefix string) {
 		if text == "" {
 			text = it.Label
 		}
-		if s, ok := fuzzyScore(text, prefix); ok {
+		if s, ok := score(prefix, text); ok {
 			cc.filtered = append(cc.filtered, i)
 			cc.scores = append(cc.scores, s)
 		}
@@ -234,7 +245,12 @@ func (cc *completions) filter(prefix string) {
 	for i := range idx {
 		idx[i] = i
 	}
-	sort.SliceStable(idx, func(a, b int) bool { return cc.scores[idx[a]] > cc.scores[idx[b]] })
+	sort.SliceStable(idx, func(a, b int) bool {
+		if sa, sb := cc.scores[idx[a]], cc.scores[idx[b]]; sa != sb {
+			return sa > sb
+		}
+		return cc.items[cc.filtered[idx[a]]].SortText < cc.items[cc.filtered[idx[b]]].SortText
+	})
 	filtered := make([]int, len(idx))
 	scores := make([]int, len(idx))
 	for i, j := range idx {
@@ -371,6 +387,15 @@ const hoverHideDelay = 300 * time.Millisecond
 
 func (h *hover) open() bool { return h.shown }
 
+// hoverHideDelay is how long the hover stays once the pointer left the
+// text hovered: none with HoverAppOnly.
+func (ed *editor) hoverHideDelay() time.Duration {
+	if ed.o.hoverAppOnly {
+		return 0
+	}
+	return hoverHideDelay
+}
+
 func (h *hover) close() {
 	h.shown, h.build, h.text, h.diags, h.byPointer = false, nil, "", nil, false
 	h.hideAt, h.focused = time.Time{}, false
@@ -389,7 +414,10 @@ func (ed *editor) closeHover() {
 
 // requestHover asks the app about the text at off.
 func (ed *editor) requestHover(off int) bool {
-	ed.hover.diags = ed.diagnosticsAt(off)
+	ed.hover.diags = nil
+	if !ed.o.hoverAppOnly {
+		ed.hover.diags = ed.diagnosticsAt(off)
+	}
 	if ed.o.onHover != nil && ed.hover.asked != off {
 		ed.hover.asked = off
 		ed.o.onHover(HoverRequest{Offset: off, Version: ed.view.version})

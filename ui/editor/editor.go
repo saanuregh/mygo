@@ -58,6 +58,10 @@ type options struct {
 	gutterMenu    func(m *ui.Menu, line int)
 	noContextMenu bool
 	hoverBelow    bool
+	// completionScore is State.CompletionScore, hoverAppOnly
+	// State.HoverAppOnly.
+	completionScore func(query, text string) (int, bool)
+	hoverAppOnly    bool
 	// gutterHoverMark is State.GutterHoverMark.
 	gutterHoverMark GutterMark
 	onInput         func(ui.InputEvent) bool

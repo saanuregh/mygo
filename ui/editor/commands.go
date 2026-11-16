@@ -37,6 +37,10 @@ func (ed *editor) run(cmd Command) bool {
 			ed.complete.step(direction(cmd == MoveUp))
 			return true
 		}
+		if ed.completing() && (cmd == MovePageUp || cmd == MovePageDown) {
+			ed.complete.step(completionPage * direction(cmd == MovePageUp))
+			return true
+		}
 		rows := 1
 		page := max(1, int(ed.viewH/ed.view.lineHeight)-2)
 		switch cmd {

@@ -390,6 +390,14 @@ func (s *ListState) ScrollIntoView(row int) {
 	s.scrolled = true
 }
 
+// ScrollToOffset scrolls the list so that y DIPs of its content are above
+// its top, as far as its rows reach, as the heights known (or estimated)
+// place them: rows of one height land exactly.
+func (s *ListState) ScrollToOffset(y float64) {
+	s.req = listRequest{set: true, offset: true, y: max(0, y)}
+	s.scrolled = true
+}
+
 // ScrollToEnd scrolls the list to its end, where FollowEnd follows it
 // again.
 func (s *ListState) ScrollToEnd() {

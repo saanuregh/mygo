@@ -590,7 +590,9 @@ func (ed *editor) buildHover(c *ui.Context, anchor ui.Element) {
 	ui.Overlay(c, func() {
 		// The hover takes the keyboard as it is pressed, for its text to
 		// be selected and copied; Escape gives it back to the editor.
-		panel := ui.Box(c).Key("code hover").Role(ui.RoleTooltip).HandleInput(shield)
+		// It scrolls, no taller than the window's room beside the text
+		// hovered.
+		panel := ui.Scroll(c).Key("code hover").Role(ui.RoleTooltip).HandleInput(shield)
 		if ed.o.hoverBelow {
 			panel.AttachTo(anchor, ui.AnchorBottomLeft, ui.AnchorTopLeft)
 		} else {
