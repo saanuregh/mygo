@@ -143,20 +143,20 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 	}
 	e.Children(func() {
 		// Popups attach to boxes at the caret, or at the text hovered.
-		anchor := func(key string, at int) (ui.Element, bool) {
+		anchor := func(key string, at int, shift float32) (ui.Element, bool) {
 			cr, ok := ed.caretRect(at)
 			if !ok {
 				return ui.Element{}, false
 			}
-			return ui.Box(c).Key(key).Absolute().Left(ed.textX+cr.X-ed.scrollX).Top(float32(float64(cr.Y)-ed.scrollY)).Size(1, cr.H).PassThrough(), true
+			return ui.Box(c).Key(key).Absolute().Left(ed.textX+cr.X-ed.scrollX+shift).Top(float32(float64(cr.Y)-ed.scrollY)).Size(1, cr.H).PassThrough(), true
 		}
 		var caretAnchor, hoverAnchor ui.Element
 		var hasCaret, hasHover bool
 		if ed.completing() {
-			caretAnchor, hasCaret = anchor("code caret", ed.complete.at)
+			caretAnchor, hasCaret = anchor("code caret", ed.complete.at, 0)
 		}
 		if h.shown {
-			hoverAnchor, hasHover = anchor("code hover anchor", h.start)
+			hoverAnchor, hasHover = anchor("code hover anchor", h.start, 0)
 			// Below the line, where the pointer was across it.
 			if hasHover && ed.o.hoverBelow && h.byPointer {
 				hoverAnchor.Left(h.pointerX)
@@ -176,7 +176,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 			ed.buildHover(c, hoverAnchor)
 		}
 		if ed.o.caretCard != nil {
-			if a, ok := anchor("code caret card anchor", ed.primary().head); ok {
+			if a, ok := anchor("code caret card anchor", ed.primary().head, ed.o.caretCardShift); ok {
 				ed.buildCaretCard(c, a)
 			}
 		}
