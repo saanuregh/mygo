@@ -48,3 +48,20 @@ func receivesTyping(s *state) bool {
 	editable := s != nil && s.editor != nil && s.flags&flagEditable != 0 && !s.editor.readOnly
 	return s != nil && (s.textClient != nil || editable || s.input != nil)
 }
+
+// FocusCleared reports whether no element has the keyboard focus, or only
+// read-only text inside an element that ClearsFocus, which holds it for
+// copying its selection alone: what had the focus let it go, as a press on
+// a control of nanoui's left the focus nowhere.
+func (c *Context) FocusCleared() bool {
+	rt := c.runtime()
+	if rt == nil {
+		return false
+	}
+	s := rt.states[rt.focused]
+	if s == nil {
+		return true
+	}
+	sc := rt.states[s.textScope]
+	return s.textScope != 0 && s.flags&flagEditable == 0 && sc != nil && sc.clearsFocus
+}
