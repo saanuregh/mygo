@@ -126,6 +126,11 @@ func DefaultTheme(t *ui.Theme) *Theme {
 		tok(TokenDeleted, "#82071e")
 		tok(TokenInvalid, "#d1242f")
 	}
+	// The kinds parsers tell apart and lexers do not take the colors of
+	// those they are nearest.
+	ct.Tokens[TokenBuiltin].Color = ct.Tokens[TokenConstant].Color
+	ct.Tokens[TokenLabel].Color = ct.Tokens[TokenMeta].Color
+	ct.Tokens[TokenNamespace].Color = ct.Tokens[TokenType].Color
 	ct.Tokens[TokenHeading].Bold = true
 	ct.Tokens[TokenStrong].Bold = true
 	ct.Tokens[TokenEmphasis].Italic = true

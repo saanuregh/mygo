@@ -36,6 +36,10 @@ const (
 	TokenInserted
 	TokenDeleted
 	TokenInvalid
+	TokenBuiltin   // built-in variables and constants, as self and nil
+	TokenParameter // a function's parameters
+	TokenLabel     // labels of loops and gotos
+	TokenNamespace // packages, modules and namespaces
 	tokenKinds
 )
 
