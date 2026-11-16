@@ -15,12 +15,21 @@ var inf = float32(math.Inf(1))
 
 func finite(v float32) bool { return v < inf }
 
-func (e *node) padX() float32 { return e.pad[1] + e.pad[3] + e.border[1] + e.border[3] }
-func (e *node) padY() float32 { return e.pad[0] + e.pad[2] + e.border[0] + e.border[2] }
+// room is what the border takes of the element's edges for the padding
+// and the children: none where it draws over them (Theme.BordersTakeNoRoom).
+func (e *node) room() [4]float32 {
+	if e.borderOver {
+		return [4]float32{}
+	}
+	return e.border
+}
+
+func (e *node) padX() float32 { return e.pad[1] + e.pad[3] + e.room()[1] + e.room()[3] }
+func (e *node) padY() float32 { return e.pad[0] + e.pad[2] + e.room()[0] + e.room()[2] }
 
 // contentX and contentY place the content box in the border box.
-func (e *node) contentX() float32 { return e.pad[3] + e.border[3] }
-func (e *node) contentY() float32 { return e.pad[0] + e.border[0] }
+func (e *node) contentX() float32 { return e.pad[3] + e.room()[3] }
+func (e *node) contentY() float32 { return e.pad[0] + e.room()[0] }
 
 // m returns margin i, with automatic margins as 0.
 func (e *node) m(i int) float32 {
@@ -1532,7 +1541,7 @@ func layoutAbsolute(e *node) {
 	if !e.absoluteChild {
 		return // no child out of the flow to place
 	}
-	pw, ph := e.w-e.border[1]-e.border[3], e.h-e.border[0]-e.border[2]
+	pw, ph := e.w-e.room()[1]-e.room()[3], e.h-e.room()[0]-e.room()[2]
 	for c := e.first; c != nil; c = c.next {
 		if c.flags&flagAbsolute == 0 || c.leaving != 0 || c.hidden {
 			// Copies of elements leaving are placed by their transitions.
@@ -1556,7 +1565,7 @@ func layoutAbsolute(e *node) {
 		var ox, oy float32
 		if s := c.placeOn; s != nil {
 			pw, ph = s.w, s.h
-			ox, oy = s.x-e.border[3], s.y-e.border[0]
+			ox, oy = s.x-e.room()[3], s.y-e.room()[0]
 		}
 		top, tok := c.inset[0].resolve(ph)
 		right, rok := c.inset[1].resolve(pw)
@@ -1606,7 +1615,7 @@ func layoutAbsolute(e *node) {
 				y += max(free, 0)
 			}
 		}
-		c.x, c.y = e.border[3]+ox+x, e.border[0]+oy+y
+		c.x, c.y = e.room()[3]+ox+x, e.room()[0]+oy+y
 		layoutBox(c, w, h)
 	}
 }
@@ -1641,7 +1650,7 @@ func attachTo(c, e *node, pw, ph float32) {
 // and the distance their own transition has them from their place, as an
 // Enter's X and Y.
 func reattach(ov *node) {
-	pw, ph := ov.w-ov.border[1]-ov.border[3], ov.h-ov.border[0]-ov.border[2]
+	pw, ph := ov.w-ov.room()[1]-ov.room()[3], ov.h-ov.room()[0]-ov.room()[2]
 	for c := ov.first; c != nil; c = c.next {
 		if c.popover == nil || c.attach == 0 || c.flags&flagAbsolute == 0 || c.leaving != 0 || c.hidden {
 			continue
@@ -1842,7 +1851,7 @@ func attach(c, e *node, pw, ph float32) {
 	ax, ay := at.fractions()
 	sx, sy := self.fractions()
 	dx, dy := c.relative(pw, ph)
-	c.x = e.border[3] + ax*pw - sx*w + dx
-	c.y = e.border[0] + ay*ph - sy*h + dy
+	c.x = e.room()[3] + ax*pw - sx*w + dx
+	c.y = e.room()[0] + ay*ph - sy*h + dy
 	layoutBox(c, w, h)
 }

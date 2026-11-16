@@ -382,8 +382,9 @@ func (p *Painter) element(e *node) {
 	clips := e.flags&(flagClipX|flagClipY|flagScrollX|flagScrollY) != 0
 	// What an element clips meets its border where both are smoothed, on
 	// rounded corners: painted over it there, it would thin the border. The
-	// border goes over them instead.
-	borderOver := clips && e.first != nil && e.hasBorder()
+	// border goes over them instead, unless it takes no room: then, as
+	// nanoui's, it is under them.
+	borderOver := clips && e.first != nil && e.hasBorder() && !e.borderOver
 	own := p.visible(box, margin+4)
 	if !own && e.kind == kindText && e.first != nil {
 		own = p.inlineVisible(e)
@@ -560,15 +561,15 @@ func (p *Painter) holds(r Rect, opaque bool) bool {
 }
 
 // clipRect returns the box an element clips its children to, inside its
-// border, and its radii: as far as the clip reaches along an axis it does
-// not clip.
+// border (at its edge where the border takes no room), and its radii: as
+// far as the clip reaches along an axis it does not clip.
 func (e *node) clipRect() (Rect, [4]float32) {
-	r := Rect{e.x + e.border[3], e.y + e.border[0], e.w - e.border[1] - e.border[3], e.h - e.border[0] - e.border[2]}
+	r := Rect{e.x + e.room()[3], e.y + e.room()[0], e.w - e.room()[1] - e.room()[3], e.h - e.room()[0] - e.room()[2]}
 	var rad [4]float32
 	all := e.flags&(flagScrollX|flagScrollY) != 0 || e.flags&flagClip == flagClip
 	if all {
 		for i, side := range [4][2]int{{0, 3}, {0, 1}, {2, 1}, {2, 3}} {
-			rad[i] = max(e.radius[i]-max(e.border[side[0]], e.border[side[1]]), 0)
+			rad[i] = max(e.radius[i]-max(e.room()[side[0]], e.room()[side[1]]), 0)
 		}
 		return r, rad
 	}
@@ -824,9 +825,9 @@ func (p *Painter) dividers(e *node) {
 	}
 	// Across the element inside its border, or as far as children reach
 	// beyond it, as the rows of a table scrolling sideways.
-	lo, hi := e.y+e.border[0], e.y+e.h-e.border[2]
+	lo, hi := e.y+e.room()[0], e.y+e.h-e.room()[2]
 	if !row {
-		lo, hi = e.x+e.border[3], e.x+e.w-e.border[1]
+		lo, hi = e.x+e.room()[3], e.x+e.w-e.room()[1]
 	}
 	var prev *node
 	for c := e.first; c != nil; c = c.next {

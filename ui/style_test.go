@@ -1149,3 +1149,42 @@ func TestOverlaysKeepAlignment(t *testing.T) {
 		}
 	}
 }
+
+// Under BordersTakeNoRoom a Border draws over the element's edges: the
+// padding counts from the edge, and the children are clipped there and
+// paint over the border. A line on one side still takes room.
+func TestBordersTakeNoRoom(t *testing.T) {
+	red, blue := RGB(220, 0, 0), RGB(0, 0, 220)
+	tt := coreNewTester(func(c *context) {
+		th := *c.Theme()
+		th.BordersTakeNoRoom = true
+		c.SetTheme(&th)
+		coreColumn(c).Width(100).Background(RGB(255, 255, 255)).Border(2, red).Padding(4).Children(func() {
+			coreBox(c).FillWidth().Height(10).Label("inner")
+		})
+		coreBox(c).Size(40, 40).Border(2, red).Clip().Children(func() {
+			coreBox(c).Size(40, 10).Background(blue).Label("over")
+		})
+		// A line on one side still takes its room.
+		coreBox(c).Size(40, 20).BorderWidth(3, 0, 0, 0).BorderColor(red).Children(func() {
+			coreBox(c).Size(10, 10).Label("below")
+		})
+	}, 120, 200)
+	inner, _ := tt.Find("inner")
+	if !nearRect(inner, Rect{4, 4, 92, 10}) {
+		t.Errorf("the content is at %v, want 4 from the edges", inner)
+	}
+	over, _ := tt.Find("over")
+	if !nearRect(over, Rect{0, 18, 40, 10}) {
+		t.Errorf("the clipped child is at %v, want at the edge", over)
+	}
+	below, _ := tt.Find("below")
+	if !nearRect(below, Rect{0, 61, 10, 10}) {
+		t.Errorf("under a side's line the child is at %v, want 3 lower", below)
+	}
+	// The child is clipped at the edge and paints over the border.
+	img := tt.Image()
+	if c := img.RGBAAt(20, 18); c.B < 200 || c.R > 40 {
+		t.Errorf("the border shows over the child: %v", c)
+	}
+}

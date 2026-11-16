@@ -319,6 +319,9 @@ type layoutStyle struct {
 	// baselines is set on the row of a field in a form, which lines up
 	// the first lines of its label and control.
 	baselines bool
+	// borderOver draws the border over the edges, taking no room (Border
+	// under Theme.BordersTakeNoRoom).
+	borderOver bool
 	// fitLines sizes it as wide as its widest line within its maximum
 	// width (FitLines).
 	fitLines bool
@@ -1642,8 +1645,11 @@ func (e *node) Stripes(c Color, width, gap, angle float32) *node {
 // Border draws a border of width DIPs inside the element's edges, on every
 // side; BorderWidth sets different widths. As in CSS, the border takes room
 // within the element's size: the padding and the children are inside it.
+// Under a theme with BordersTakeNoRoom it takes none: it draws over the
+// edges, the padding counts from them and the children may reach them.
 func (e *node) Border(width float32, c Color) *node {
 	e.border, e.borderC = [4]float32{width, width, width, width}, c
+	e.borderOver = e.c.theme != nil && e.c.theme.BordersTakeNoRoom
 	e.logical &^= logBorder
 	return e
 }
@@ -1654,7 +1660,7 @@ func (e *node) Border(width float32, c Color) *node {
 //
 //	ui.Row(c).BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
 func (e *node) BorderWidth(v ...float32) *node {
-	e.border = edges(v)
+	e.border, e.borderOver = edges(v), false
 	e.logical &^= logBorder
 	return e
 }

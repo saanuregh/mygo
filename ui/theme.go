@@ -72,6 +72,11 @@ type Theme struct {
 	Focus           Color
 	FocusRingWidth  float32
 	FocusRingOffset float32
+	// BordersTakeNoRoom makes Border draw over an element's edges instead
+	// of taking room inside them: the padding counts from the edge and the
+	// children may reach it. BorderWidth's borders, lines on chosen sides,
+	// still take room.
+	BordersTakeNoRoom bool
 	// OverlaysKeepAlignment keeps an overlay that passes the window's
 	// end along its target (a menu below its button, wider than the room
 	// right of it) aligned as asked and moves it into the window, as
