@@ -385,6 +385,18 @@ func (t *Tester) Advance(d time.Duration) {
 	t.now = end
 }
 
+// AdvanceTo moves the Tester's clock on to at, as Advance does, when at
+// is later than its time; an earlier at leaves it. A tester driven by a
+// real program (an app's headless snapshot, running against live
+// servers) passes time.Now() to keep its clock with the wall clock's,
+// which ages and timestamps read, where steps of Advance between
+// sleeps drift from it.
+func (t *Tester) AdvanceTo(at time.Time) {
+	if d := at.Sub(t.now); d > 0 {
+		t.Advance(d)
+	}
+}
+
 // due returns when the next frame is due: the next refresh if one was
 // asked for, or a timer's.
 func (t *Tester) due() (time.Time, bool) {
