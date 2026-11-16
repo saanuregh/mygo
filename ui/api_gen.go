@@ -7004,6 +7004,19 @@ func (_handle Element) PlaceholderColor(color Color) Element {
 	return wrapElement(_node.PlaceholderColor(color))
 }
 
+// PlaceholderOneLine keeps this input's placeholder on one line for this
+// build, cut at the input's edge where it is longer, as nanoui's
+// multiline fields drew theirs; a TextArea's wraps by default.
+func (_handle Element) PlaceholderOneLine() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.PlaceholderOneLine())
+}
+
 // PointerPosition returns the pointer's position relative to the
 // element's box and whether it is over the element. Elements asking for it
 // get a frame whenever the pointer moves over them. The build that reads

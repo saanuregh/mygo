@@ -89,6 +89,16 @@ func (e *node) PlaceholderColor(color Color) *node {
 	return e
 }
 
+// PlaceholderOneLine keeps this input's placeholder on one line for this
+// build, cut at the input's edge where it is longer, as nanoui's
+// multiline fields drew theirs; a TextArea's wraps by default.
+func (e *node) PlaceholderOneLine() *node {
+	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
+		ed.placeholderOneLine = true
+	}
+	return e
+}
+
 // CaretWidth sets this input's painted caret width in DIPs for this build.
 // It defaults to one DIP. Positive widths are rounded to device pixels,
 // at least one pixel wide; zero and negative widths hide the caret. It does
