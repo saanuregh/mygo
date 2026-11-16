@@ -604,6 +604,20 @@ func (ed *editor) buildHover(c *ui.Context, anchor ui.Element) {
 	})
 }
 
+// buildCaretCard builds the app's card at the caret (State.CaretCard):
+// above its line, or below it while completions show.
+func (ed *editor) buildCaretCard(c *ui.Context, anchor ui.Element) {
+	ui.Overlay(c, func() {
+		card := ui.Box(c).Key("code caret card").HandleInput(shield)
+		if ed.complete.open() {
+			card.AttachTo(anchor, ui.AnchorBottomLeft, ui.AnchorTopLeft).Margin(4, 0, 0, 0)
+		} else {
+			card.AttachTo(anchor, ui.AnchorTopLeft, ui.AnchorBottomLeft).Margin(0, 0, 4, 0)
+		}
+		ed.o.caretCard(c, card)
+	})
+}
+
 // shield takes no input, but keeps the presses on what an editor shows
 // over its text, as its find bar, from the editor around it: the input
 // goes to the innermost element taking it as it comes, which then leaves

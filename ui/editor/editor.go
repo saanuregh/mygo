@@ -57,12 +57,14 @@ type options struct {
 	contextMenu   func(m *ui.Menu)
 	menu          func(m *ui.Menu)
 	onInput       func(ui.InputEvent) bool
+	onType        func(string) ([]Edit, []Selection, bool)
 	noInputMethod bool
 	// The parts' render functions, nil for the editor's own.
 	renderFindBar     func(*ui.Context, ui.Element, *FindBar)
 	renderGoToLine    func(*ui.Context, ui.Element, *GoToLineBar)
 	renderCompletions func(*ui.Context, ui.Element, *CompletionMenu)
 	renderHover       func(*ui.Context, ui.Element, *HoverCard)
+	caretCard         func(*ui.Context, ui.Element)
 	// decor shows a diff in the editor.
 	decor decor
 	// noScrollbar draws no vertical scroll bar, as the old side of a split

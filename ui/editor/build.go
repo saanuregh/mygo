@@ -169,6 +169,11 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		if hasHover {
 			ed.buildHover(c, hoverAnchor)
 		}
+		if ed.o.caretCard != nil {
+			if a, ok := anchor("code caret card anchor", ed.primary().head); ok {
+				ed.buildCaretCard(c, a)
+			}
+		}
 	})
 	// Once the hover has said whether the pointer or the keyboard is in
 	// it: the hover goes a grace after the pointer left the text hovered,
