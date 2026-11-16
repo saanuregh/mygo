@@ -281,6 +281,9 @@ type Tester struct {
 	// set it (wallSet); now until then.
 	wall    time.Time
 	wallSet bool
+	// held are the modifiers HoldModifiers left held, which the pointer's
+	// moves, scrolls and pinches carry, as a platform's do.
+	held Modifiers
 	// pointer and pressure are the device of the pointer's events, and
 	// how hard it presses (UsePointer).
 	pointer  PointerType
@@ -974,13 +977,13 @@ func (t *Tester) UsePointer(pointer PointerType, pressure float32) {
 
 // Move moves the pointer to (x, y).
 func (t *Tester) Move(x, y float32) {
-	t.send(platform.SurfaceEvent{Kind: platform.PointerMove, X: float64(x), Y: float64(y)})
+	t.send(platform.SurfaceEvent{Kind: platform.PointerMove, X: float64(x), Y: float64(y), Mods: platform.Modifiers(t.held)})
 }
 
 // Scroll scrolls by dx, dy DIPs with the pointer at (x, y), as a touchpad
-// does: at once.
+// does: at once, the modifiers held (HoldModifiers) with it.
 func (t *Tester) Scroll(x, y, dx, dy float32) {
-	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy), Precise: true})
+	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy), Precise: true, Mods: platform.Modifiers(t.held)})
 }
 
 // DropFiles drops files dragged from another app at (x, y), as from
@@ -996,13 +999,13 @@ func (t *Tester) DropFiles(x, y float32, paths ...string) bool {
 // a mouse wheel does: a scroll container glides there over a moment,
 // which advancing the clock (Advance) shows.
 func (t *Tester) Wheel(x, y, dx, dy float32) {
-	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy)})
+	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy), Mods: platform.Modifiers(t.held)})
 }
 
 // Pinch zooms by scale with the pointer at (x, y), as pinching a touchpad
 // does (InputZoom).
 func (t *Tester) Pinch(x, y, scale float32) {
-	t.send(platform.SurfaceEvent{Kind: platform.PointerZoom, X: float64(x), Y: float64(y), Scale: float64(scale)})
+	t.send(platform.SurfaceEvent{Kind: platform.PointerZoom, X: float64(x), Y: float64(y), Scale: float64(scale), Mods: platform.Modifiers(t.held)})
 }
 
 // TouchDown puts the finger id down at (x, y) on the touchscreen, which
@@ -1033,8 +1036,10 @@ func (t *Tester) TouchCancel(id uint64) {
 }
 
 // HoldModifiers presses or lets go of modifier keys on their own, as holding
-// Cmd does, leaving mods held.
+// Cmd does, leaving mods held: the pointer's moves, scrolls and pinches
+// carry them until they change.
 func (t *Tester) HoldModifiers(mods Modifiers) {
+	t.held = mods
 	t.send(platform.SurfaceEvent{Kind: platform.ModifiersChanged, Mods: platform.Modifiers(mods)})
 }
 
