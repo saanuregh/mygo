@@ -78,7 +78,14 @@ func (a *area) wrappedHeight(e *node, ed *editor, cw float32) float32 {
 				if indent := ed.paraIndent(p); indent > 0 {
 					part.Width = max(part.Width-indent, 1)
 				}
-				height += ed.sys.Shape(part).Height
+				// As paraLayout measures it: with its blocks' room, and none
+				// for its text where it collapses.
+				ph := ed.sys.Shape(part).Height
+				above, below, collapse := ed.paraRoom(p)
+				if collapse && part.Text == ed.buf.text(p) && ed.allHidden(ed.buf.start(p), ed.buf.end(p)) {
+					ph = 0
+				}
+				height += ph + above + below
 			}
 			a.wrapped, a.wrappedParams, a.wrappedVersion = height, params, ed.buf.version
 			a.wrappedCompose, a.wrappedStyle = ed.compose, style
@@ -171,7 +178,12 @@ func (a *area) paraLayout(ed *editor, p int) *text.Layout {
 	}
 	spans := ed.rangeKey(b.start(p), b.end(p))
 	indent := ed.paraIndent(p)
-	if pr.layout != nil && pr.compose == compose && pr.spans == spans && pr.indent == indent {
+	above, below, collapse := ed.paraRoom(p)
+	room := [3]float32{above, below, 0}
+	if collapse && compose == "" && ed.allHidden(b.start(p), b.end(p)) {
+		room[2] = 1
+	}
+	if pr.layout != nil && pr.compose == compose && pr.spans == spans && pr.indent == indent && pr.room == room {
 		return pr.layout
 	}
 	t := b.text(p)
@@ -193,13 +205,26 @@ func (a *area) paraLayout(ed *editor, p int) *text.Layout {
 	if pr.layout == nil {
 		a.laid++
 	}
-	if pr.h > 0 {
-		a.hs.add(p, float64(l.Height-pr.h), 0)
-	} else {
-		a.hs.add(p, float64(l.Height), -1)
+	// A paragraph collapsed takes no room for its text, its blocks' rooms
+	// above and below aside.
+	h := l.Height
+	if room[2] != 0 {
+		h = 0
 	}
-	pr.layout, pr.compose, pr.spans, pr.indent, pr.h = l, compose, spans, indent, l.Height
+	h += room[0] + room[1]
+	if pr.h > 0 {
+		a.hs.add(p, float64(h-pr.h), 0)
+	} else {
+		a.hs.add(p, float64(h), -1)
+	}
+	pr.layout, pr.compose, pr.spans, pr.indent, pr.room, pr.above, pr.h = l, compose, spans, indent, room, room[0], h
 	return l
+}
+
+// textTop returns the top of paragraph p's text in the content: below the
+// room its blocks give it above (TextBlock.Top). Lay p out first.
+func (a *area) textTop(b *buffer, p int) float64 {
+	return a.hs.top(p) + float64(b.paras[p].above)
 }
 
 // offsetX returns how far right of the content's left the lines of
@@ -222,6 +247,13 @@ func (a *area) paragraphStyles(ed *editor) string {
 	for p := range ed.buf.paras {
 		out = append(out, ed.rangeKey(ed.buf.start(p), ed.buf.end(p))...)
 		out = binary.LittleEndian.AppendUint32(append(out, 0), math.Float32bits(ed.paraIndent(p)))
+		if above, below, collapse := ed.paraRoom(p); above != 0 || below != 0 || collapse {
+			out = binary.LittleEndian.AppendUint32(out, math.Float32bits(above))
+			out = binary.LittleEndian.AppendUint32(out, math.Float32bits(below))
+			if collapse && ed.allHidden(ed.buf.start(p), ed.buf.end(p)) {
+				out = append(out, 1)
+			}
+		}
 	}
 	return string(out)
 }
@@ -262,7 +294,7 @@ func (a *area) caretAt(ed *editor, i, extra int) (x float32, y float64, h float3
 		affinity = ed.caretAffinity
 	}
 	x, ly, h := l.CaretAt(text.CaretPosition{Index: a.local(ed, p, i) + extra, Affinity: affinity})
-	return x + a.offsetX(ed, p), a.hs.top(p) + float64(ly), h
+	return x + a.offsetX(ed, p), a.textTop(&ed.buf, p) + float64(ly), h
 }
 
 // lineEdges returns the edges of the visual line holding rune i.
@@ -313,10 +345,10 @@ func (a *area) hitPosition(ed *editor, x float32, y float64, virtual bool) text.
 		switch {
 		case y < top && p > 0:
 			p--
-		case y >= top+float64(l.Height) && p < n-1:
+		case y >= top+float64(ed.buf.paras[p].h) && p < n-1:
 			p++
 		default:
-			position := l.PositionAt(x-a.offsetX(ed, p), float32(y-top))
+			position := l.PositionAt(x-a.offsetX(ed, p), float32(y-a.textTop(&ed.buf, p)))
 			if virtual {
 				position.Index += ed.buf.start(p)
 				if ed.compose != "" && p > ed.buf.para(ed.caret) {
@@ -443,7 +475,7 @@ func (a *area) paint(e *node, p *Painter, ox, oy float32) {
 	}
 	for i := a.first; i <= a.last; i++ {
 		l := a.paraLayout(ed, i)
-		y := oy + float32(a.hs.top(i)-a.scroll)
+		y := oy + float32(a.textTop(b, i)-a.scroll)
 		start, end := b.start(i), b.end(i)
 		_, sp := ed.rangeSpans(start, end)
 		px := ox + a.offsetX(ed, i)

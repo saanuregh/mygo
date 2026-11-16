@@ -75,7 +75,13 @@ type paragraph struct {
 	spans string
 	// indent is the TextBlock indent its layout took, narrower by it.
 	indent float32
-	h      float32
+	// room is what its blocks give it, as its height took them: room
+	// above its text and below (TextBlock.Top, Bottom), and 1 when it is
+	// collapsed (TextBlock.CollapseHidden); above is room[0]. h is its
+	// height, those included.
+	room  [3]float32
+	above float32
+	h     float32
 }
 
 func (b *buffer) set(s string) {

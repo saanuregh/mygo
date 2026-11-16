@@ -379,3 +379,78 @@ func TestTextBlockMarkers(t *testing.T) {
 		t.Errorf("a click on the marker: %d clicks, caret %d, was %d", clicks, ed.caret, caret)
 	}
 }
+
+// A block's Top and Bottom add room in its box above its first paragraph
+// and below its last, and with CollapseHidden a paragraph all hidden takes
+// none: a code block's header over its code, its fences hidden, as
+// nanoui's rich field lays one out.
+func TestTextBlockRoom(t *testing.T) {
+	s := "before\n```\ncode\n```\nafter"
+	var el *node
+	var box Rect
+	headerClicks := 0
+	tt := coreNewTester(func(c *context) {
+		el = coreTextAreaBase(c, &s).Width(220).Lines(1, 20).
+			TextRanges(TextRange{Start: 7, End: 10, Hidden: true, RevealStart: 7, RevealEnd: 10}, TextRange{Start: 16, End: 19, Hidden: true, RevealStart: 16, RevealEnd: 19}).
+			TextBlocks(TextBlock{Start: 7, End: 19, Top: 20, Bottom: 6, CollapseHidden: true, Paint: func(p *Painter, r Rect) { box = r },
+				OnTopClick: func() { headerClicks++ }})
+	}, 260, 300)
+	defer tt.rt.close()
+	tt.Frame()
+	ed := el.st.editor
+	_, y0, h := caretAt(el, 0)
+	_, y2, _ := caretAt(el, 11) // in "code"
+	_, y4, _ := caretAt(el, 20) // in "after"
+	// The opening fence collapses, its room above stays: "code" is 20
+	// below "before".
+	if !closeTo(y2-y0, h+20, 0.5) {
+		t.Errorf("code is %v below before, want %v", y2-y0, h+20)
+	}
+	// The closing fence collapses under the code, 6 below it.
+	if !closeTo(y4-y2, h+6, 0.5) {
+		t.Errorf("after is %v below code, want %v", y4-y2, h+6)
+	}
+	top := el.st.y + ed.originY + float32(ed.area.hs.top(1))
+	if !closeTo(box.Y, top, 0.5) || !closeTo(box.H, 20+h+6, 0.5) {
+		t.Errorf("the block's box %v, want from %v, %v high", box, top, 20+h+6)
+	}
+	// A click in the room above the code is the block's.
+	tt.ClickAt(box.X+30, box.Y+10)
+	if headerClicks != 1 {
+		t.Errorf("a click on the header called OnTopClick %d times", headerClicks)
+	}
+	// The caret on a fence shows it: it takes a line again.
+	ed.caret, ed.anchor = 8, 8
+	tt.Frame()
+	_, y2, _ = caretAt(el, 11)
+	if !closeTo(y2-y0, 20+2*h, 0.5) {
+		t.Errorf("with the fence shown, code is %v below before, want %v", y2-y0, 20+2*h)
+	}
+}
+
+// A text area sized by its lines grows by its blocks' rooms, and shrinks
+// by the paragraphs they collapse.
+func TestTextBlockRoomSizesTheArea(t *testing.T) {
+	s := "before\n```\ncode\n```\nafter"
+	var el *node
+	room := false
+	tt := coreNewTester(func(c *context) {
+		el = coreTextAreaBase(c, &s).Width(220).Lines(1, 20).
+			TextRanges(TextRange{Start: 7, End: 10, Hidden: true, RevealStart: 7, RevealEnd: 10}, TextRange{Start: 16, End: 19, Hidden: true, RevealStart: 16, RevealEnd: 19})
+		if room {
+			el.TextBlocks(TextBlock{Start: 7, End: 19, Top: 20, Bottom: 6, CollapseHidden: true})
+		} else {
+			el.TextBlocks(TextBlock{Start: 7, End: 19})
+		}
+	}, 260, 300)
+	defer tt.rt.close()
+	tt.Frame()
+	plain := el.st.h
+	_, _, h := caretAt(el, 0)
+	room = true
+	tt.Frame()
+	tt.Frame()
+	if got := el.st.h - plain; !closeTo(got, 20+6-2*h, 0.5) {
+		t.Errorf("the area grew by %v, want %v", got, 20+6-2*h)
+	}
+}
