@@ -47,6 +47,16 @@ func (e Element) OnShortcut(mods Modifiers, key Key, fn func()) Element {
 	return e.on(actionShortcut, mods, key, fn)
 }
 
+// GrabKeys gives fn every key pressed while the view declares it, before
+// the focus and any shortcut, as a chord's first key waiting for its
+// second does. fn returning true takes the key, and the text it types; the
+// pointer is untouched.
+func (c *Context) GrabKeys(fn func(InputEvent) bool) {
+	if raw := c.build(); raw != nil && fn != nil {
+		raw.rt.nextKeyGrab = fn
+	}
+}
+
 // OnShortcut declares a handler in the current context's parent scope:
 // the window's, as OnWindowShortcut, at the root, else the parent
 // element's focus subtree, as Element.OnShortcut.
