@@ -61,6 +61,22 @@ func (e *node) OpenPopoverMenu(x, y float32, build func(m *Menu)) {
 	rt.consumed = true
 }
 
+// OpenPopoverMenuBelow opens the element's menu drawn in the window below
+// the element, or above it where the window has no room, lined up with its
+// start, as a menu button's: for a menu anchored on a box, as a code
+// editor's actions on the caret's, which never covers the box. As
+// OpenPopoverMenu, build fills it in place of the element's own function.
+func (e *node) OpenPopoverMenuBelow(build func(m *Menu)) {
+	if !e.hasState() || e.disabled() || build == nil {
+		return
+	}
+	rt := e.c.rt
+	d := &drawnMenu{id: e.id, built: rt.frame, pass: rt.pass, build: build}
+	d.menu = menuShown{below: true, opened: rt.frame, levels: []menuLevel{{}}, pointer: [2]float32{rt.pointerX, rt.pointerY}}
+	rt.menu.drawn = d
+	rt.consumed = true
+}
+
 // MenuShows reports whether the element's menu drawn in the window shows:
 // its PopoverMenu or PopoverMenuButton, its ContextMenu or Menu in a
 // window that draws its menus, or one OpenPopoverMenu opened on it.
