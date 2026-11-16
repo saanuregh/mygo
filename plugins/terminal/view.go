@@ -290,8 +290,9 @@ func (v *view) build(c *ui.Context, e ui.Element) {
 	v.lang = c.Locale()
 	dark := c.Theme().Dark
 	// Its own menu open (a right click) keeps it as focused: the menu
-	// gives the focus back as it closes.
-	focused := e.Focused() || e.MenuShows()
+	// gives the focus back as it closes. So does another element's menu
+	// opened while it had the focus, as a tab's.
+	focused := e.Focused() || e.MenuShows() || e.FocusedUnderMenu()
 	t.mu.Lock()
 	theme := t.opts.Theme
 	if dark && t.opts.DarkTheme != nil {

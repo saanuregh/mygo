@@ -5477,6 +5477,20 @@ func (_handle Element) Focused() bool {
 	return _node.Focused()
 }
 
+// FocusedUnderMenu reports whether the element had the keyboard focus as
+// the drawn menu that shows opened, its own or another element's: a view
+// that draws its own caret or cursor keeps it, as nanoui's menus left the
+// focus where it was.
+func (_handle Element) FocusedUnderMenu() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.FocusedUnderMenu()
+}
+
 // FollowEnd starts a scroll container (Scroll) at the end of its content,
 // and keeps the end in view as the content grows while it shows it, as a
 // log does: scrolling away from the end stops following it, and scrolling
@@ -6937,7 +6951,8 @@ func (_handle Element) Opacity(o float32) Element {
 // one with ContextMenu or Menu in a window that draws its menus
 // (SetMenuPresentation); build's items report Chosen as the element's own
 // do, and the menu goes as the element goes. It takes the focus as
-// PopoverMenu's does.
+// PopoverMenu's does, and notes the element that had it, as a menu the
+// pointer opens does (FocusedUnderMenu).
 func (_handle Element) OpenPopoverMenu(x float32, y float32, build func(m *Menu)) {
 	_node := _handle.node()
 	if _node == nil {

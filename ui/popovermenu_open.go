@@ -48,14 +48,15 @@ func (rt *engine) openNextMenu(d *drawnMenu, build func(m *Menu)) {
 // one with ContextMenu or Menu in a window that draws its menus
 // (SetMenuPresentation); build's items report Chosen as the element's own
 // do, and the menu goes as the element goes. It takes the focus as
-// PopoverMenu's does.
+// PopoverMenu's does, and notes the element that had it, as a menu the
+// pointer opens does (FocusedUnderMenu).
 func (e *node) OpenPopoverMenu(x, y float32, build func(m *Menu)) {
 	if !e.hasState() || e.disabled() || build == nil {
 		return
 	}
 	rt := e.c.rt
 	b := e.Bounds()
-	d := &drawnMenu{id: e.id, built: rt.frame, pass: rt.pass, build: build}
+	d := &drawnMenu{id: e.id, built: rt.frame, pass: rt.pass, build: build, back: rt.focused}
 	d.menu = menuShown{dx: x - b.X, dy: y - b.Y, opened: rt.frame, levels: []menuLevel{{}}, pointer: [2]float32{rt.pointerX, rt.pointerY}}
 	rt.menu.drawn = d
 	rt.consumed = true
@@ -71,7 +72,7 @@ func (e *node) OpenPopoverMenuBelow(build func(m *Menu)) {
 		return
 	}
 	rt := e.c.rt
-	d := &drawnMenu{id: e.id, built: rt.frame, pass: rt.pass, build: build}
+	d := &drawnMenu{id: e.id, built: rt.frame, pass: rt.pass, build: build, back: rt.focused}
 	d.menu = menuShown{below: true, opened: rt.frame, levels: []menuLevel{{}}, pointer: [2]float32{rt.pointerX, rt.pointerY}}
 	rt.menu.drawn = d
 	rt.consumed = true
@@ -83,4 +84,13 @@ func (e *node) OpenPopoverMenuBelow(build func(m *Menu)) {
 func (e *node) MenuShows() bool {
 	d := e.c.rt.menu.drawn
 	return d != nil && d.id == e.id && e.hasState()
+}
+
+// FocusedUnderMenu reports whether the element had the keyboard focus as
+// the drawn menu that shows opened, its own or another element's: a view
+// that draws its own caret or cursor keeps it, as nanoui's menus left the
+// focus where it was.
+func (e *node) FocusedUnderMenu() bool {
+	d := e.c.rt.menu.drawn
+	return d != nil && e.hasState() && d.back == e.id
 }
