@@ -369,15 +369,20 @@ type hover struct {
 	// byPointer marks a hover the resting pointer asked for, which goes
 	// as the pointer leaves, rather than the keyboard.
 	byPointer bool
-	// pointerX is where the pointer was across the editor as it asked
-	// (byPointer): HoverBelow places the hover there.
-	pointerX float32
+	// pointerX and pointerY are where the pointer was in the editor as
+	// it asked (byPointer): HoverBelow places the hover from there.
+	pointerX, pointerY float32
 	// hideAt is when the hover goes, the pointer having left the text
 	// hovered, unless it goes into the hover first; focused reports the
 	// keyboard in the hover, as its text is selected and copied, which
 	// keeps it.
 	hideAt  time.Time
 	focused bool
+	// place is the window's rect HoverBelow places the hover from (as
+	// zode's hover_card.zig anchor), and fresh marks a hover not yet
+	// laid out, whose height is taken as its most.
+	place ui.Rect
+	fresh bool
 }
 
 // defaultHoverDelay is how long the pointer rests before a hover is asked
