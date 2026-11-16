@@ -2365,3 +2365,36 @@ func sameLayout(a, b *Layout) bool {
 	}
 	return true
 }
+
+// TestDigitCells sets each digit in a cell as wide as the widest digit,
+// centred in it, with the font's own glyphs (nanoui's tabular text): 111
+// and 888 measure the same, as wide as the widest digit thrice, and a
+// letter after them moves by what the cells add.
+func TestDigitCells(t *testing.T) {
+	s := newSystem()
+	layout := func(text, features string) *Layout {
+		return s.Layout(Params{Text: text, Style: Style{Size: 13, Features: features}})
+	}
+	// Proportional figures, where the font has them, set in cells as wide
+	// as its widest default digit.
+	widest := float32(0)
+	for _, d := range "0123456789" {
+		widest = max(widest, layout(string(d), "").Width)
+	}
+	ones, eights := layout("111", "pnum, "+DigitCells), layout("888", "pnum, "+DigitCells)
+	if math.Abs(float64(ones.Width-eights.Width)) > 0.01 || math.Abs(float64(ones.Width-3*widest)) > 0.01 {
+		t.Errorf("111 is %v wide, 888 %v, the widest digit %v", ones.Width, eights.Width, widest)
+	}
+	if n := len(ones.Lines[0].Glyphs); n != 3 {
+		t.Errorf("111 has %d glyphs", n)
+	}
+	// The glyph of 1 is centred in its cell.
+	one := layout("1", "pnum")
+	if g := ones.Lines[0].Glyphs[1]; math.Abs(float64(g.X-(widest+(widest-one.Width)/2))) > 0.01 {
+		t.Errorf("the second 1 is drawn at %v, its cell at %v, a 1 %v wide", g.X, widest, one.Width)
+	}
+	plain, cells := layout("Ln 11, Col 1", "pnum"), layout("Ln 11, Col 1", "pnum, "+DigitCells)
+	if want := plain.Width + 3*(widest-one.Width); math.Abs(float64(cells.Width-want)) > 0.01 {
+		t.Errorf("Ln 11, Col 1 is %v wide in cells, want %v", cells.Width, want)
+	}
+}

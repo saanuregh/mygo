@@ -5511,7 +5511,8 @@ func (_handle Element) Font(family string) Element {
 //	ui.Textf(c, "%d items", n).FontFeatures("tnum")   // digits of one width
 //	ui.Text(c, "office").FontFeatures("liga=0")       // no ligatures
 //
-// A font without a feature ignores it.
+// A font without a feature ignores it. DigitCells, among them, sets each
+// digit in a cell as wide as the font's widest, its own glyph centred.
 func (_handle Element) FontFeatures(features ...string) Element {
 	_node := _handle.node()
 	if _node == nil {
