@@ -626,9 +626,7 @@ func (ed *editor) buildHover(c *ui.Context, anchor ui.Element) {
 		// It scrolls, no taller than the window's room beside the text
 		// hovered.
 		panel := ui.Scroll(c).Key("code hover").Role(ui.RoleTooltip).HandleInput(shield)
-		if ed.o.hoverBelow {
-			panel.AttachTo(anchor, ui.AnchorBottomLeft, ui.AnchorTopLeft)
-		} else {
+		if !ed.o.hoverBelow {
 			panel.AttachTo(anchor, ui.AnchorTopLeft, ui.AnchorBottomLeft)
 		}
 		h.over, h.focused = panel.Hovered(), panel.FocusWithin()
@@ -640,7 +638,41 @@ func (ed *editor) buildHover(c *ui.Context, anchor ui.Element) {
 			render = DefaultHover
 		}
 		render(c, panel, &HoverCard{c: c, ed: ed})
+		if ed.o.hoverBelow {
+			ed.placeHover(c, panel)
+		}
 	})
+}
+
+// placeHover places the hover as zode's hover_card.zig drawHover does
+// (HoverBelow), over what its render set: 4 below its rect (place) while
+// below has room for its height or 160, else 4 above it; 12 left of it,
+// kept 8 inside the window as if 600 wide; at most 320 high, or the room
+// on its side.
+func (ed *editor) placeHover(c *ui.Context, panel ui.Element) {
+	h := &ed.hover
+	a := h.place
+	ww, wh := c.Size()
+	const most float32 = 320
+	below := wh - (a.Y + a.H) - 32
+	height := most
+	if !h.fresh {
+		if b := panel.LayoutBounds(); b.H > 0 {
+			height = b.H
+		}
+	}
+	h.fresh = false
+	y := max(4, a.Y-height-4)
+	if below >= min(height, 160) {
+		y = a.Y + a.H + 4
+	}
+	width := min(600, ww-16)
+	x := min(max(a.X-12, 8), max(8, ww-width-8))
+	room := a.Y - 8
+	if below >= 160 {
+		room = below
+	}
+	panel.Absolute().Left(x).Top(y).Margin(0).MaxWidth(width).MaxHeight(max(80, min(most, room)))
 }
 
 // buildCaretCard builds the app's card at the caret (State.CaretCard):

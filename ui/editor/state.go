@@ -157,9 +157,12 @@ type State struct {
 	// place of the editor's, for that line, as a debugger's breakpoint
 	// menu; the selections stay as they are.
 	GutterMenu func(m *ui.Menu, line int)
-	// HoverBelow places the hover below the line of the text hovered,
-	// rather than above it (each goes to the other side where it would
-	// leave the window); RenderHover's margins keep it apart.
+	// HoverBelow places the hover as zode's hover_card.zig: from a rect 10
+	// above the resting pointer and 26 high, or the caret's (the keyboard
+	// asked), 4 below it while there is room below for its height or 160,
+	// else 4 above it; 12 left of it and 8 inside the window, at most 600
+	// wide and 320 high (or the room on its side). With HoverAppOnly, a
+	// press on the word hovered keeps it.
 	HoverBelow bool
 	// HoverAppOnly shows in the hover only what the app gives ShowHover:
 	// no diagnostics, and nothing before its answer. The hover goes as
@@ -737,6 +740,7 @@ func (st *State) ShowHover(start, end int, text string, build func(c *ui.Context
 	st.ensure()
 	h := &st.ed.hover
 	h.shown, h.start, h.end, h.text, h.build = true, start, end, text, build
+	h.fresh = true
 	if h.diags == nil {
 		h.diags = st.ed.diagnosticsAt(start)
 	}

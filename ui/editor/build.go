@@ -140,7 +140,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		} else {
 			h.pending = false
 			ed.requestHover(h.restOff)
-			h.byPointer, h.pointerX = true, ed.pointer.X
+			h.byPointer, h.pointerX, h.pointerY = true, ed.pointer.X, ed.pointer.Y
 		}
 	}
 	e.Children(func() {
@@ -159,9 +159,18 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		}
 		if h.shown {
 			hoverAnchor, hasHover = anchor("code hover anchor", h.start, 0)
-			// Below the line, where the pointer was across it.
-			if hasHover && ed.o.hoverBelow && h.byPointer {
-				hoverAnchor.Left(h.pointerX)
+			// Below the pointer as it asked: from 10 above it, 26 high (as
+			// zode's hover_card.zig anchors its card); asked by the
+			// keyboard, the caret.
+			if hasHover && ed.o.hoverBelow {
+				eb := e.LayoutBounds()
+				if h.byPointer {
+					y := h.pointerY - 10
+					hoverAnchor.Left(h.pointerX).Top(y).Size(1, 26)
+					h.place = ui.Rect{X: eb.X + h.pointerX, Y: eb.Y + y, W: 1, H: 26}
+				} else if cr, ok := ed.caretRect(ed.primary().head); ok {
+					h.place = ui.Rect{X: eb.X + ed.textX + cr.X - ed.scrollX, Y: eb.Y + float32(float64(cr.Y)-ed.scrollY), W: cr.W, H: cr.H}
+				}
 			}
 		}
 		ed.buildReplacements(c)
@@ -197,7 +206,13 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 			if wait := h.hideAt.Sub(c.Now()); wait > 0 {
 				c.After(wait)
 			} else {
+				pending, restOff, restAt := h.pending, h.restOff, h.restAt
 				ed.closeHover()
+				if ed.o.hoverAppOnly {
+					// zode's: the pointer's rest on the next name goes on
+					// (hover_card.zig keeps its wish as the card goes).
+					h.pending, h.restOff, h.restAt = pending, restOff, restAt
+				}
 				c.Invalidate()
 			}
 		}

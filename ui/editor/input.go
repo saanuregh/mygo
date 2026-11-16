@@ -172,7 +172,9 @@ func (ed *editor) regionAt(x, y float32) region {
 func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 	ed.pointer, ed.pointerIn = ui.Point{X: ev.X, Y: ev.Y}, true
 	ed.region = ed.regionAt(ev.X, ev.Y)
-	ed.hover.close()
+	if !ed.pressKeepsHover(ev) {
+		ed.hover.close()
+	}
 	if ev.Button != 0 {
 		// The secondary button keeps a selection under it for the menu;
 		// on a line's number, the gutter's menu is of that line.
@@ -1009,4 +1011,17 @@ func abs(f float32) float32 {
 		return -f
 	}
 	return f
+}
+
+// pressKeepsHover reports whether a press keeps the hover: zode's
+// (HoverAppOnly) a resting pointer asked for, pressed on the text it is
+// about (hover_card.zig closes it only as the word under the pointer
+// changes).
+func (ed *editor) pressKeepsHover(ev ui.InputEvent) bool {
+	h := &ed.hover
+	if !ed.o.hoverAppOnly || !h.shown || !h.byPointer || ev.Button != 0 || ed.region != regionText {
+		return false
+	}
+	off := ed.offsetAt(ed.toContent(ev.X, ev.Y))
+	return off >= h.start && off <= h.end
 }
