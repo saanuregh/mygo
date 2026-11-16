@@ -443,6 +443,11 @@ type engine struct {
 	// a frame.
 	keysHeld []heldKey
 	keysRead bool
+	// keyGrab is what the last frame declared takes every key first
+	// (Context.GrabKeys), nextKeyGrab what this one does; grabbed, that it
+	// took the key last pressed, whose text and release it takes too.
+	keyGrab, nextKeyGrab func(InputEvent) bool
+	grabbed              bool
 	// withinRead tells that the frame read FocusWithin, which follows the
 	// parents its last layout committed: the focus moving as it builds, to
 	// an element it builds for the first time or after the read, draws
@@ -796,6 +801,7 @@ func (rt *engine) runFrame() {
 			rt.painted = [3]float32{w, h, scale}
 		}
 		rt.nextRegs = rt.nextRegs[:0]
+		rt.nextKeyGrab = nil
 		clear(rt.kept)
 		rt.c.reset(now, appW, h)
 		rt.view(&rt.c)
@@ -928,6 +934,7 @@ func (rt *engine) runFrame() {
 	rt.text.EndFrame()
 	rt.settleKeys()
 	rt.regs, rt.nextRegs = rt.nextRegs, rt.regs
+	rt.keyGrab = rt.nextKeyGrab
 	rt.updateTextInput()
 	rt.updateCursor()
 	if rt.access {

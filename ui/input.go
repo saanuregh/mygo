@@ -143,11 +143,18 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 		}
 		delete(rt.byPosition, physical)
 		rt.releaseKey(key, physical)
+		if rt.grabbed {
+			rt.grabbed = false
+			break
+		}
 		rt.observeFocus(InputEvent{Kind: InputKeyUp, Key: key, PhysicalKey: physical, Code: KeyCode(ev.Code), Mods: Modifiers(ev.Mods)})
 		if h := rt.focusHandler(); h != nil {
 			rt.deliver(h, InputEvent{Kind: InputKeyUp, Key: key, PhysicalKey: physical, Code: KeyCode(ev.Code), Mods: Modifiers(ev.Mods)})
 		}
 	case platform.TextInput:
+		if rt.grabbed {
+			break // the text of a key GrabKeys took
+		}
 		rt.editEvent(rt.replaced(editEvent{kind: editInsert, text: ev.Text}, ev))
 	case platform.TextComposition:
 		taken = rt.editEvent(rt.replaced(editEvent{kind: editCompose, text: ev.Text, caret: ev.Caret}, ev))
@@ -164,6 +171,7 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 		rt.modsChanged(0)
 		clear(rt.byPosition)
 		rt.releaseKeys()
+		rt.grabbed = false
 		if p := rt.pressed; p != nil {
 			x, y := p.local(rt.pointerX, rt.pointerY)
 			rt.endPress(p.input, x, y)
@@ -1118,6 +1126,13 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, code KeyCod
 		delete(rt.byPosition, physical)
 	}
 	if rt.inspectKey(mods, key) {
+		return true
+	}
+	// A key pressed after one GrabKeys took types its own text.
+	rt.grabbed = false
+	if g := rt.keyGrab; g != nil && g(InputEvent{Kind: InputKeyDown, Key: key, PhysicalKey: physical, Code: code, Mods: mods, Repeat: repeat}) {
+		rt.grabbed = true
+		rt.requestFrame()
 		return true
 	}
 	rt.observeFocus(InputEvent{Kind: InputKeyDown, Key: key, PhysicalKey: physical, Code: code, Mods: mods, Repeat: repeat})
