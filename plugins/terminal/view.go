@@ -29,8 +29,9 @@ import (
 // The wheel scrolls the scrollback unless the program takes the mouse,
 // and zooms with Control held (Command on macOS; Options.OnZoom). Hold
 // Shift to select while a program takes the mouse, and Command (Control
-// elsewhere) to underline a link and open it on click: a hyperlink (OSC 8),
-// a URL printed as text, or a file path with Options.OpenLink. Alt+click
+// elsewhere) to underline a link and open it on click, unless
+// Options.NoLinks: a hyperlink (OSC 8), a URL printed as text, or a file
+// path with Options.OpenLink. Alt+click
 // (Option+click on macOS) on the input of a shell's prompt moves the
 // shell's cursor there, when the shell marks its prompt (OSC 133).
 func View(c *ui.Context, t *Terminal) ui.Element {
@@ -576,23 +577,40 @@ func (v *view) menu(m *ui.Menu) {
 	}
 	t.mu.Unlock()
 	tx := l10n.In(v.lang)
-	if v.menuItem(m, tx.Copy(), ActionCopy).Disabled(!selected || text == "").Chosen() {
-		v.services.WriteClipboard(text)
-		v.copied(text, CopyUser)
+	items := t.opts.ContextMenu
+	if items == nil {
+		items = defaultMenu
 	}
-	if v.menuItem(m, tx.Paste(), ActionPaste).Chosen() {
-		v.paste()
-	}
-	if v.menuItem(m, tx.SelectAll(), ActionSelectAll).Chosen() {
-		v.selectAll()
-	}
-	m.Separator()
-	// Clear clears as ⌘K does, as Ghostty's: clearing the scrollback
-	// alone would change nothing on the screen.
-	if v.menuItem(m, tx.ClearTerminal(), ActionClearScreen).Disabled(alt).Chosen() {
-		v.clearScreen()
+	for i, a := range items {
+		switch a {
+		case ActionCopy:
+			if v.menuItem(m, tx.Copy(), ActionCopy).Disabled(!selected || text == "").Chosen() {
+				v.services.WriteClipboard(text)
+				v.copied(text, CopyUser)
+			}
+		case ActionPaste:
+			if v.menuItem(m, tx.Paste(), ActionPaste).Chosen() {
+				v.paste()
+			}
+		case ActionSelectAll:
+			if v.menuItem(m, tx.SelectAll(), ActionSelectAll).Chosen() {
+				v.selectAll()
+			}
+		case ActionClearScreen:
+			if i > 0 {
+				m.Separator()
+			}
+			// Clear clears as ⌘K does, as Ghostty's: clearing the
+			// scrollback alone would change nothing on the screen.
+			if v.menuItem(m, tx.ClearTerminal(), ActionClearScreen).Disabled(alt).Chosen() {
+				v.clearScreen()
+			}
+		}
 	}
 }
+
+// defaultMenu is the context menu without Options.ContextMenu.
+var defaultMenu = []Action{ActionCopy, ActionPaste, ActionSelectAll, ActionClearScreen}
 
 // menuItem adds an item of the menu, showing the key bound to its action.
 func (v *view) menuItem(m *ui.Menu, label string, a Action) *ui.MenuItem {
@@ -1258,7 +1276,7 @@ func (t *Terminal) HoveredLink() (link string, path bool, at ui.Rect) {
 // a file path, and its cells: none without Command, or while the primary
 // button selects or the program has a press; t.mu is held.
 func (v *view) linkUnder(mods ui.Modifiers, x, y float32) (link string, path bool, at linkSpan) {
-	if mods&ui.Cmd == 0 || v.selecting || v.reporting || v.cellW == 0 || v.overScrollbar(x, y) {
+	if mods&ui.Cmd == 0 || v.t.opts.NoLinks || v.selecting || v.reporting || v.cellW == 0 || v.overScrollbar(x, y) {
 		return "", false, linkSpan{}
 	}
 	return v.linkAt(v.cellAt(x, y))
