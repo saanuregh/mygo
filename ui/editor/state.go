@@ -537,6 +537,10 @@ func (st *State) SetDiagnostics(version uint64, ds []Diagnostic) {
 	ed := &st.ed
 	ed.sync()
 	ds = slices.Clone(ds)
+	for i := range ds {
+		// Of an older version, the line in the text now: near enough.
+		ds[i].Line = ed.view.text.LineOf(min(max(ds[i].Start, 0), ed.view.text.Len()))
+	}
 	if version != ed.view.version {
 		// Moved through the edits since, up to the text the editor shows.
 		entries, _, ok := st.Buffer.entriesSince(version)

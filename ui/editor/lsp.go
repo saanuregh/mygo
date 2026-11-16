@@ -75,6 +75,10 @@ type Diagnostic struct {
 	Severity   Severity
 	Message    string
 	Source     string
+	// Line is the line Start was on as SetDiagnostics was given it (a
+	// language server's line), kept while edits move Start. SetDiagnostics
+	// sets it.
+	Line int
 }
 
 // Severity is how bad a diagnostic is.
