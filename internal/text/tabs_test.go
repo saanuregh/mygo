@@ -14,3 +14,17 @@ func TestEllipsisKeepsTheSpaceBeforeIt(t *testing.T) {
 		t.Fatalf("truncated %v, lines %+v", l.Truncated, l.Lines)
 	}
 }
+
+// TestTrimLineStarts leaves out the spaces starting a line after the
+// first, as nanoui's wrapped text, and keeps the first line's.
+func TestTrimLineStarts(t *testing.T) {
+	s := newSystem()
+	style := Style{Size: 12, Family: "monospace"}
+	l := s.Layout(Params{Text: "  a\n    b", Style: style, Width: 400, TrimLineStarts: true})
+	if len(l.Lines) != 2 || l.Lines[0].Start != 0 || l.Lines[1].Start != 8 {
+		t.Fatalf("lines %+v", l.Lines)
+	}
+	if g := l.Lines[1].Glyphs; len(g) != 1 || g[0].X != 0 {
+		t.Fatalf("the second line's glyphs %+v", g)
+	}
+}
