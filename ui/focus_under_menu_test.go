@@ -47,3 +47,56 @@ func TestFocusUnderAMenuOpenedFromCode(t *testing.T) {
 		t.Fatal("the area had the focus as its own menu opened")
 	}
 }
+
+// Unfocus gives up the focus the element has, and leaves another's.
+func TestUnfocusGivesTheFocusUp(t *testing.T) {
+	a, b := "", ""
+	drop := false
+	var first *node
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Gap(10).Children(func() {
+			first = coreTextInput(c, &a).Label("First")
+			coreTextInput(c, &b).Label("Second")
+			if drop {
+				first.Unfocus()
+			}
+		})
+	}, 300, 200)
+	tt.Click("Second")
+	drop = true
+	tt.Frame()
+	if !tt.Focused("Second") {
+		t.Fatal("took another's focus")
+	}
+	drop = false
+	tt.Click("First")
+	drop = true
+	tt.Frame()
+	drop = false
+	tt.Frame()
+	if tt.Focused("First") {
+		t.Fatal("kept the focus")
+	}
+}
+
+// PopupShown tells a popover or menu showed in the last frame.
+func TestPopupShownFollowsAMenu(t *testing.T) {
+	shown := false
+	tt := coreNewTester(func(c *context) {
+		shown = c.PopupShown()
+		row := coreRow(c).Padding(8).Label("Row").Children(func() { coreText(c, "Row one") })
+		row.PopoverMenu(func(m *Menu) { m.Item("Choose") })
+	}, 300, 200)
+	tt.Frame()
+	if shown {
+		t.Fatal("shown with none")
+	}
+	if err := tt.RightClick("Row one"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if !shown {
+		t.Fatal("not shown under a menu")
+	}
+}

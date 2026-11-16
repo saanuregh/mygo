@@ -1942,6 +1942,26 @@ func (e *node) focus(reveal bool) {
 	}
 }
 
+// Unfocus takes the keyboard focus from the element, or from the input a
+// field around it gives it to, when it has it: the focus goes nowhere, as
+// a nanoui field's Escape left it. The focus another element has stays.
+func (e *node) Unfocus() *node {
+	if e != nil && e.focusTo != nil {
+		e.focusTo.Unfocus()
+		return e
+	}
+	if !e.hasState() {
+		return e
+	}
+	rt := e.c.rt
+	if rt.focused == e.id {
+		rt.focused = 0
+		rt.focusVisible = false
+		rt.requestFrame()
+	}
+	return e
+}
+
 // AutoFocus gives the element the keyboard focus in the frame it appears,
 // as the first field of a dialog.
 func (e *node) AutoFocus() *node {

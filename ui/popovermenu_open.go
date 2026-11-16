@@ -94,3 +94,9 @@ func (e *node) FocusedUnderMenu() bool {
 	d := e.c.rt.menu.drawn
 	return d != nil && e.hasState() && d.back == e.id
 }
+
+// PopupShown reports whether a popover, a select's options or a drawn
+// menu showed anywhere in the window in the last frame, as nanoui's
+// Context.popovers_last: a view that rests while nothing needs it stays
+// awake under one.
+func (c *context) PopupShown() bool { return c.rt.tips.popupsLast }

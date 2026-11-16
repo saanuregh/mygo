@@ -32,6 +32,9 @@ type tooltips struct {
 	dismissed uint64
 	// lastShown is when a tip last showed, or went.
 	lastShown time.Time
+	// popups is set once a popup shows in the frame (popupShows), and
+	// popupsLast as the next frame starts (Context.PopupShown).
+	popups, popupsLast bool
 }
 
 // TooltipBase shows a tip without a look by anchor: fn styles the tip and
@@ -98,6 +101,7 @@ func tooltipBase(c *context, anchor *node, fn func(tip *node)) (*node, bool) {
 // popupShows notes that a popup attached to e shows in the frame: its
 // menu, its popover or its options, while which its tip does not show.
 func (e *node) popupShows() {
+	e.c.rt.tips.popups = true
 	if e.hasState() {
 		e.st.popped = e.c.rt.frame
 	}
