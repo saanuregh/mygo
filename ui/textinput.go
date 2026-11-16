@@ -316,9 +316,12 @@ func (k TextKey) SetSelection(anchor, caret int) {
 // min lines up to max, past which it scrolls, as a message field grows with
 // what is typed: TextArea(c, &draft).Lines(1, 8). Without it, a text area is
 // as high as its paragraphs, three lines at least, unless given a height.
+// The least height a styled TextArea starts with gives way to min lines; a
+// MinHeight given after Lines still holds.
 func (e *node) Lines(min, max int) *node {
 	if ed := e.st.editor; ed != nil && ed.area != nil {
 		ed.lines = [2]int{min, max}
+		e.minH = bound{}
 	}
 	return e
 }

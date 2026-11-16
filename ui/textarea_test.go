@@ -1100,3 +1100,20 @@ func TestTextRangesOfParagraphs(t *testing.T) {
 		t.Error("the second paragraph has a weight, but no key")
 	}
 }
+
+// A styled text area with Lines is as high as its least lines, its own
+// least height (three lines' room) giving way, as the bare one is.
+func TestStyledTextAreaLinesWinOverItsMinimumHeight(t *testing.T) {
+	draft := ""
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Width(300).Children(func() {
+			coreTextAreaBase(c, &draft).Lines(1, 8).Label("Bare")
+			coreTextArea(c, &draft).Lines(1, 8).Padding(0).Border(0, Color{}).Label("Styled")
+		})
+	}, 400, 600)
+	bare, _ := tt.Find("Bare")
+	styled, _ := tt.Find("Styled")
+	if bare.H <= 0 || abs32(styled.H-bare.H) > 0.5 {
+		t.Fatalf("styled %v high, bare %v", styled.H, bare.H)
+	}
+}

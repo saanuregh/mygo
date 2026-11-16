@@ -6176,6 +6176,8 @@ func (_handle Element) LinearGradient(g LinearGradient) Element {
 // min lines up to max, past which it scrolls, as a message field grows with
 // what is typed: TextArea(c, &draft).Lines(1, 8). Without it, a text area is
 // as high as its paragraphs, three lines at least, unless given a height.
+// The least height a styled TextArea starts with gives way to min lines; a
+// MinHeight given after Lines still holds.
 func (_handle Element) Lines(min int, max int) Element {
 	_node := _handle.node()
 	if _node == nil {
