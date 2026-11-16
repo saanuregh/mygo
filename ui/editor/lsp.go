@@ -504,14 +504,16 @@ func sortInlays(in []inlay) {
 // setInlays shows the inlay hints.
 func (ed *editor) setInlays(hints []Inlay) {
 	ed.view.inlays = slices.DeleteFunc(ed.view.inlays, func(in inlay) bool { return in.kind == 0 || in.kind == inlayTrailing })
-	for _, h := range hints {
+	for i, h := range hints {
 		kind := 0
 		if h.Trailing {
 			kind = inlayTrailing
 		}
-		ed.view.inlays = append(ed.view.inlays, inlay{at: h.Offset, text: h.Text, kind: kind, ellipsis: h.Ellipsis})
+		ed.view.inlays = append(ed.view.inlays, inlay{at: h.Offset, text: h.Text, kind: kind, ellipsis: h.Ellipsis, index: i})
 	}
 	sortInlays(ed.view.inlays)
 	ed.view.lines.m = nil
 	ed.view.invalidateStyledLines()
+	// Indexes of the old list: the next move tells the hint under it anew.
+	ed.inlayHovered = -1
 }

@@ -126,6 +126,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 	outside := !e.Hovered() && !ed.gesture.active && !ed.scrollbar.active
 	if outside && ed.pointerIn {
 		ed.pointerIn = false
+		ed.tellInlayHover(-1, ui.Rect{})
 		ed.hoverLine = -1
 		h.pending, h.restOff = false, -1
 	}

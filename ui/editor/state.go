@@ -128,6 +128,20 @@ type State struct {
 	// NoDefinitionLink shows no link under the pointer with Cmd held,
 	// though Cmd+click still goes to the definition.
 	NoDefinitionLink bool
+	// OnInlayHover is told which inlay hint the pointer is over as it
+	// comes onto one, moves to another and leaves them (Index -1), as to
+	// show a hint's tooltip once it rests there (ShowHover at the hint's
+	// Offset keeps it while the pointer stays on the hint). While the
+	// pointer is on a hint, OnHover is not asked about the text beside
+	// it. SetInlays forgets the hint under the pointer: the next move
+	// tells it again. Trailing inlays are not hints: OnHover is asked
+	// about them as about the line's end.
+	OnInlayHover func(InlayHover)
+	// OnInlayClick is told of a press of the primary button on an inlay
+	// hint, not a trailing inlay, as Cmd+click (Ctrl+click elsewhere) to
+	// go where its label points; returning true takes the press, which
+	// then neither moves the carets nor goes to a definition.
+	OnInlayClick func(InlayClick) bool
 	// OnGutterClick is called for a click on a line's number, as to set a
 	// breakpoint.
 	OnGutterClick func(line int)
@@ -319,7 +333,7 @@ func (st *State) options() options {
 		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, completionScore: st.CompletionScore, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
-		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
+		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift,
 	}

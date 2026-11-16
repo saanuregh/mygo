@@ -54,6 +54,8 @@ type options struct {
 	onHover       func(HoverRequest)
 	onDefinition  func(int)
 	onGutterClick func(int)
+	onInlayHover  func(InlayHover)
+	onInlayClick  func(InlayClick) bool
 	contextMenu   func(m *ui.Menu)
 	menu          func(m *ui.Menu)
 	gutterMenu    func(m *ui.Menu, line int)
@@ -219,6 +221,9 @@ type editor struct {
 	pointer      ui.Point
 	pointerIn    bool
 	hoverLine    int
+	// inlayHovered is the hint the app was told the pointer is on, -1
+	// for none (OnInlayHover).
+	inlayHovered int
 	// region is the part of the editor under the pointer, which its
 	// cursor and the scroll bars' highlight show.
 	region region
@@ -324,6 +329,7 @@ func (ed *editor) init(buf *Buffer, o options, t *ui.Theme) {
 		ed.blinkStart = ed.frameNow
 		ed.hover.asked = -1
 		ed.hoverLine = -1
+		ed.inlayHovered = -1
 	}
 	if ed.view.lineHeight == 0 {
 		ed.view.setStyle(o.font, o.lineHeight, 1, ed.tabSize())

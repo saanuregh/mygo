@@ -212,6 +212,10 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		ed.toggleFoldLine(line)
 		return true
 	}
+	// A hint's own press, as Cmd+click to where its label points.
+	if ed.pressOnInlay(cx, cy, ev) {
+		return true
+	}
 	off := ed.offsetAt(cx, cy)
 	mods := ev.Mods
 	ed.endGroup()
@@ -422,8 +426,11 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 			off = ed.offsetAt(cx, cy)
 		}
 	}
-	if off < 0 {
-		// Off the text, nothing rests.
+	onHint, hintChanged := ed.pointerOnInlay(ev.X, ev.Y, off >= 0)
+	changed = changed || hintChanged
+	if off < 0 || onHint {
+		// Off the text, nothing rests; on a hint, the app's hover does
+		// (OnInlayHover).
 		h.pending, h.restOff = false, -1
 	}
 	// Off the text hovered, the hover goes after a grace, so that the
@@ -436,7 +443,7 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 			changed = true
 		}
 	}
-	if off >= 0 && !ed.o.noPointerHover && (ed.o.onHover != nil || len(ed.diags) > 0) && off != h.restOff {
+	if off >= 0 && !onHint && !ed.o.noPointerHover && (ed.o.onHover != nil || len(ed.diags) > 0) && off != h.restOff {
 		h.restOff, h.restAt, h.pending = off, ed.frameNow, true
 		changed = true
 	}

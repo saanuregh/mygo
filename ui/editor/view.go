@@ -101,6 +101,9 @@ type inlay struct {
 	text     string
 	kind     int // 0 a hint, 1 a suggestion, inlayNoNewline a diff's mark, inlayTrailing text at a line's end
 	ellipsis string
+	// index is the inlay's in the app's list (SetInlays), which a
+	// hint's pointer events tell (OnInlayHover, OnInlayClick).
+	index int
 }
 
 // inlayNoNewline is the kind of inlay a diff marks the last line of a
