@@ -411,6 +411,7 @@ var elementChains = map[string]bool{
 	"TruncateStart":         true,
 	"Underline":             true,
 	"UnderlineOffset":       true,
+	"Unfocus":               true,
 	"Unselectable":          true,
 	"Value":                 true,
 	"Vertical":              true,

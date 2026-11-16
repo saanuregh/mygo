@@ -729,6 +729,7 @@ func (rt *engine) runFrame() {
 
 	rt.buildAsked, rt.lookDue, rt.viewMoved = false, false, false
 	rt.frame++
+	rt.tips.popupsLast, rt.tips.popups = rt.tips.popups, false
 	rt.input = false
 	rt.focusRead, rt.activeRead, rt.withinRead, rt.keysRead = false, false, false, false
 	rt.stats.begin(rt)

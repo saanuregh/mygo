@@ -503,6 +503,18 @@ func (_handle *Context) OpenURLThen(url string, done func(err error)) {
 	_ctx.OpenURLThen(url, done)
 }
 
+// PopupShown reports whether a popover, a select's options or a drawn
+// menu showed anywhere in the window in the last frame, as nanoui's
+// Context.popovers_last: a view that rests while nothing needs it stays
+// awake under one.
+func (_handle *Context) PopupShown() bool {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return false
+	}
+	return _ctx.PopupShown()
+}
+
 // Preferences returns the settings of the desktop that controls follow.
 // A frame follows their changes.
 func (_handle *Context) Preferences() Preferences {
@@ -8811,6 +8823,19 @@ func (_handle Element) UnderlineOffset(v float32) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.UnderlineOffset(v))
+}
+
+// Unfocus takes the keyboard focus from the element, or from the input a
+// field around it gives it to, when it has it: the focus goes nowhere, as
+// a nanoui field's Escape left it. The focus another element has stays.
+func (_handle Element) Unfocus() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Unfocus())
 }
 
 // Unselectable excludes a paragraph or container subtree from a surrounding
