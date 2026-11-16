@@ -1107,6 +1107,9 @@ func (rt *engine) claimed(k keyEvent) bool { return rt.claimedBy(k, true) }
 // claimedBy reports whether an element around the focus handles the key as
 // a shortcut, or, when window is set, the window.
 func (rt *engine) claimedBy(k keyEvent, window bool) bool {
+	if rt.focusOnly {
+		return false
+	}
 	var chain []uint64
 	for _, r := range rt.regs {
 		if r.mods != k.mods || r.key != k.key || r.overlay {
@@ -1233,6 +1236,9 @@ func (rt *engine) keyDownPhysical(mods Modifiers, key, physical Key, code KeyCod
 	// Space types a space where the focus takes text, rather than
 	// paging, as in a web page's field: the text comes after the key.
 	if !rt.claimed(k) && !(typesText(k) && rt.focusTakesText()) && rt.scrollKey(mods, key) {
+		return false
+	}
+	if rt.focusOnly {
 		return false
 	}
 	rt.keys = append(rt.keys, k)

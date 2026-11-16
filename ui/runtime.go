@@ -300,6 +300,10 @@ type engine struct {
 	observers  int
 	observeBuf []uint64
 
+	// focusOnly makes the key being pressed the focus's alone: no
+	// shortcut sees it (Tester.KeyToFocus).
+	focusOnly bool
+
 	// trans are the transitions of the elements given one, by ID
 	// (transition.go): exitsBuilt tells that the last frame built elements
 	// with an Exit or flying with a Match, whose arena the next frame
