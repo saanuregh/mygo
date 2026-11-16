@@ -913,8 +913,10 @@ type state struct {
 	// dragged (Drop), and droppedValue is the value dropped on it, while
 	// hasDropped, at (dropX, dropY). dragMissed is set on the source when
 	// its value was let go over no element taking it, at (missX, missY).
+	// dragBare: no copy of the element follows the pointer (DragBare).
 	dragValue    any
 	dragFn       func() any
+	dragBare     bool
 	accepts      func(any) bool
 	droppedValue any
 	hasDropped   bool
@@ -1003,7 +1005,7 @@ func (rt *engine) lookState(id uint64) (s *state, built bool) {
 	s.seen, s.pass = rt.frame, rt.pass
 	s.hoverBuilt = false
 	// What the element drags and takes, as this pass asks.
-	s.dragValue, s.dragFn, s.accepts = nil, nil, nil
+	s.dragValue, s.dragFn, s.accepts, s.dragBare = nil, nil, nil, false
 	s.dataSource, s.dataTarget = nil, nil
 	return s, built
 }

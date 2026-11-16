@@ -55,6 +55,14 @@ func (e *node) Drag(value any) *node {
 	return e
 }
 
+// DragBare has no copy of the element follow the pointer as it drags its
+// value (Drag): the app draws what follows it, as a chip with its name,
+// while Dragging.
+func (e *node) DragBare() *node {
+	e.st.dragBare = true
+	return e
+}
+
 // dragFrom makes the element the source of a value that value returns as
 // the drag starts, as the rows chosen in a list.
 func (e *node) dragFrom(value func() any) *node {
@@ -358,7 +366,7 @@ func (rt *engine) paintDrag(p *Painter, w, h float32) {
 	if e == nil {
 		e = d.ghost
 	}
-	if e == nil || e.c == nil {
+	if e == nil || e.c == nil || e.st != nil && e.st.dragBare {
 		return
 	}
 	px, py := e.world.Point(e.x+d.offX, e.y+d.offY)

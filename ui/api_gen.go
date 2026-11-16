@@ -4820,6 +4820,19 @@ func (_handle Element) Drag(value any) Element {
 	return wrapElement(_node.Drag(value))
 }
 
+// DragBare has no copy of the element follow the pointer as it drags its
+// value (Drag): the app draws what follows it, as a chip with its name,
+// while Dragging.
+func (_handle Element) DragBare() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.DragBare())
+}
+
 // DragData makes e a native drag source after a primary press moves a few
 // DIPs. Data can go to other windows and applications. A source also given
 // Drag(value) offers that value to typed targets in this process only.
