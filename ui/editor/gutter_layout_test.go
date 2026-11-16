@@ -93,3 +93,34 @@ func TestFindFromOrigin(t *testing.T) {
 		}
 	}
 }
+
+// E7-9, zode's view.zig: with a gutter layout, the mark a click would
+// put shows only with the pointer right of the fold strip (Left), whose
+// press folds.
+func TestGutterHoverMarkRightOfTheFoldStrip(t *testing.T) {
+	ct := newEditorTest(t, "", "one\ntwo|")
+	ct.st.Theme = &Theme{Background: ui.RGB(255, 255, 255)}
+	ct.st.Gutter = &GutterLayout{Left: 18, Right: 14, MinDigits: 3}
+	ct.st.GutterHoverMark = GutterMark{Color: ui.RGB(255, 0, 0), Size: 8}
+	ct.st.NoActiveLine = true
+	ct.tt.Frame()
+	y := ct.st.ed.view.lineHeight / 2
+	red := func() bool {
+		for x := float32(2); x < 14; x++ {
+			if r, g, b := ct.pixel(x, y); r > 200 && g < 80 && b < 80 {
+				return true
+			}
+		}
+		return false
+	}
+	ct.tt.Move(8, y)
+	ct.tt.Frame()
+	if red() {
+		t.Fatal("a mark with the pointer over the fold strip")
+	}
+	ct.tt.Move(24, y)
+	ct.tt.Frame()
+	if !red() {
+		t.Fatal("no mark with the pointer right of the fold strip")
+	}
+}

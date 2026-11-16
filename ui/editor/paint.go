@@ -979,8 +979,9 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 					ed.paintGutterMark(p, m, r.X, numLeft, ny, lh)
 				}
 			}
-			// Where a click would put a mark, under the pointer.
-			if hm := ed.o.gutterHoverMark; hm.Color.A > 0 && !marked && ed.pointerIn && ed.pointer.X < ed.gutterW && line == ed.hoverGutterLine() {
+			// Where a click would put a mark, under the pointer: with a
+			// layout, right of the fold strip (whose press folds).
+			if hm := ed.o.gutterHoverMark; hm.Color.A > 0 && !marked && ed.pointerIn && ed.pointer.X < ed.gutterW && (gl == nil || ed.pointer.X >= gl.Left) && line == ed.hoverGutterLine() {
 				ed.paintGutterMark(p, hm, r.X, numLeft, ny, lh)
 			}
 			// Change bars.
