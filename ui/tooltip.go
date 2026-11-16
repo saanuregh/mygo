@@ -74,11 +74,13 @@ func tooltipBase(c *context, anchor *node, fn func(tip *node)) (*node, bool) {
 	// The theme the anchor builds with sets how long the pointer rests on
 	// it, which showTooltip reads from its state.
 	anchor.st.tipDelay, anchor.st.tipWarm = c.theme.tooltipDelay()
+	anchor.st.tipAfterClick = c.theme.TooltipAfterClick
 	rt := c.rt
 	// A press or a click on the anchor, by the pointer, the keys or
 	// assistive technology, hides its tip, as Base UI's closeOnClick: a
 	// menu button's menu opens as the pointer goes down, without a click.
-	if anchor.st.clicks > 0 || slices.ContainsFunc(rt.downs, func(id uint64) bool { return rt.pressedWithin(id, anchor) }) {
+	// With TooltipAfterClick only a press does, while it lasts (showTooltip).
+	if !anchor.st.tipAfterClick && (anchor.st.clicks > 0 || slices.ContainsFunc(rt.downs, func(id uint64) bool { return rt.pressedWithin(id, anchor) })) {
 		rt.tips.dismissed = anchor.id
 	}
 	if c.inert || rt.showTooltip(c) != anchor.id || rt.tips.dismissed == anchor.id {
@@ -129,13 +131,13 @@ func (e *node) Tooltip(s string) *node {
 	}
 	c := e.c
 	t := c.theme
-	fill, text := t.inverse()
+	look := t.TooltipLook()
 	tooltipBase(c, e, func(tip *node) {
-		tip.MaxWidth(t.Space(80)).Padding(t.Space(1.25), t.Space(2)).Radius(t.Space(1.25)).
-			Background(fill).TextColor(text).FontSize(t.FontSize - 1)
+		tip.MaxWidth(t.Space(80)).Padding(look.PaddingY, look.PaddingX).Radius(look.Radius).
+			Background(look.Background).TextColor(look.Text).FontSize(look.FontSize)
 		tip.Shadow(0, 2, 8, 0, RGBA(0, 0, 0, 0.2))
 		tip.Children(func() { coreText(c, s) })
-		tip.AttachTo(e, AnchorTop, AnchorBottom).Margin(0, 0, t.Space(1.5), 0)
+		tip.AttachTo(e, AnchorTop, AnchorBottom).Margin(0, 0, look.Gap, 0)
 	})
 	return e
 }
@@ -190,7 +192,12 @@ func (rt *engine) showTooltip(c *context) uint64 {
 		t.dismissed = 0
 	}
 	if rt.pressed != nil && hover != 0 {
-		t.dismissed = hover
+		if s := rt.states[hover]; s.tipAfterClick {
+			// Hidden while the pointer is down, back as it comes up.
+			hover = 0
+		} else {
+			t.dismissed = hover
+		}
 	}
 	// An element whose menu or popover shows, in this frame or the last
 	// one, shows no tip: the pointer coming back to a menu button while
