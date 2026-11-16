@@ -48,6 +48,9 @@ type Theme struct {
 	Success Color
 	// Selection highlights selected text.
 	Selection Color
+	// InputNoHover keeps a text input's border as it is under the
+	// pointer, as nanoui's text field, rather than darkening it.
+	InputNoHover bool
 	// Focus is the ring around the control with the keyboard focus,
 	// FocusRingWidth DIPs wide (2 by default; 0 is 2) and FocusRingOffset
 	// DIPs outside its edge (1 in LightTheme and DarkTheme): 0 puts the
