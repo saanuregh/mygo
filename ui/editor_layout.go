@@ -166,7 +166,8 @@ func (e *node) paintInput(p *Painter) {
 	saved := p.clip
 	p.pushClip(clip, [4]float32{})
 	ox, oy := e.x+ed.originX-ed.scrollX, e.y+ed.originY
-	focused := e.Focused()
+	// A drawn menu another element opened over it leaves its caret.
+	focused := e.Focused() || e.c.rt.caretUnderMenu(e.id)
 	ts := e.resolvedText()
 	if ed.buf.n == 0 && ed.compose == "" && ed.placeholder != "" {
 		pl := ed.sys.Layout(e.placeholderParams(box.W))
