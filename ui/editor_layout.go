@@ -204,7 +204,10 @@ func (e *node) paintInput(p *Painter) {
 	if focused && !ed.readOnly && !(t.InputSelection.NoCaret && ed.caret != ed.anchor) {
 		rt := e.c.rt
 		phase := e.c.now.Sub(rt.blinkStart)
-		const blink = 530 * time.Millisecond
+		blink := t.CaretBlink
+		if blink <= 0 {
+			blink = 530 * time.Millisecond
+		}
 		if (phase/blink)%2 == 0 && ed.caretWidth > 0 {
 			x, y, h := l.CaretAt(text.CaretPosition{Index: ed.displayIndex(ed.caret) + ed.composeCaret, Affinity: ed.caretAffinity})
 			caret := ts.caretColor(t)

@@ -55,6 +55,9 @@ type Theme struct {
 	// as nanoui's text field: its rectangles' corners rounded by Radius,
 	// and, with NoCaret, no caret while text is selected.
 	InputSelection InputSelectionStyle
+	// CaretBlink is how long a text input's caret shows, then hides, as
+	// it blinks; 0 is 530 milliseconds, the system's usual.
+	CaretBlink time.Duration
 	// Focus is the ring around the control with the keyboard focus,
 	// FocusRingWidth DIPs wide (2 by default; 0 is 2) and FocusRingOffset
 	// DIPs outside its edge (1 in LightTheme and DarkTheme): 0 puts the
