@@ -6584,6 +6584,19 @@ func (_handle Element) Menu(build func(m *Menu)) Element {
 	return wrapElement(_node.Menu(build))
 }
 
+// MenuShows reports whether the element's menu drawn in the window shows:
+// its PopoverMenu or PopoverMenuButton, its ContextMenu or Menu in a
+// window that draws its menus, or one OpenPopoverMenu opened on it.
+func (_handle Element) MenuShows() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.MenuShows()
+}
+
 func (_handle Element) MinHeight(v float32) Element {
 	_node := _handle.node()
 	if _node == nil {
@@ -6913,6 +6926,26 @@ func (_handle Element) Opacity(o float32) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.Opacity(o))
+}
+
+// OpenPopoverMenu opens the element's menu drawn in the window at (x, y)
+// in the window, as a right-click there would, filled by build in place of
+// the element's own function: for a menu that a control opens on the
+// element, as a row's button that shows only while the row is hovered
+// opening a menu that stays as the pointer leaves the row. Call it on an
+// element with PopoverMenu or PopoverMenuButton built in this pass, or on
+// one with ContextMenu or Menu in a window that draws its menus
+// (SetMenuPresentation); build's items report Chosen as the element's own
+// do, and the menu goes as the element goes. It takes the focus as
+// PopoverMenu's does.
+func (_handle Element) OpenPopoverMenu(x float32, y float32, build func(m *Menu)) {
+	_node := _handle.node()
+	if _node == nil {
+		return
+	}
+	_ctx := _node.c
+	_ = _ctx
+	_node.OpenPopoverMenu(x, y, build)
 }
 
 // Orientation tells assistive technology which way the element runs, as

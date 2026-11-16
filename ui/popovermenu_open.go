@@ -1,0 +1,70 @@
+package ui
+
+import "github.com/egoist/mygo/internal/platform"
+
+// NextMenu adds an item showing label which, chosen, closes the menu and
+// opens another where it was, which build fills as the menu's function
+// fills the menu, its items' Chosen reporting their choice as there: a
+// second step of a choice, as a thread's Snooze… opening the times it can
+// sleep until. Chosen by the keys, the next menu starts on its first item.
+// In a menu the system shows, it adds build's items as a submenu instead.
+// Its Chosen reports false; the item is found by its place and label.
+//
+//	m.NextMenu("Snooze…", func(m *ui.Menu) {
+//		if m.Item("Tomorrow").Chosen() {
+//			app.snooze(tomorrow)
+//		}
+//	})
+func (m *Menu) NextMenu(label string, build func(m *Menu)) *MenuItem {
+	r := m.run
+	if !r.drawn {
+		return m.Submenu(label, build)
+	}
+	it := m.add(label, platform.MenuItemNormal)
+	if !r.collect && r.choice == it.seq && r.label == label {
+		r.chosen, r.next = true, build
+	}
+	return it
+}
+
+// openNextMenu opens the menu build fills where the drawn menu d was, as d
+// closes for the NextMenu item chosen from it: on its first item when the
+// keys chose it, as they show the focus.
+func (rt *engine) openNextMenu(d *drawnMenu, build func(m *Menu)) {
+	// Built in this pass, as d was: it stays once the pass is done.
+	next := &drawnMenu{id: d.id, text: d.text, built: rt.frame, pass: rt.pass, build: build}
+	next.menu = menuShown{below: d.menu.below, dx: d.menu.dx, dy: d.menu.dy, attach: d.menu.attach, opened: rt.frame,
+		levels: []menuLevel{{first: rt.focusVisible}}, pointer: [2]float32{rt.pointerX, rt.pointerY}}
+	rt.menu.drawn = next
+	rt.consumed = true
+}
+
+// OpenPopoverMenu opens the element's menu drawn in the window at (x, y)
+// in the window, as a right-click there would, filled by build in place of
+// the element's own function: for a menu that a control opens on the
+// element, as a row's button that shows only while the row is hovered
+// opening a menu that stays as the pointer leaves the row. Call it on an
+// element with PopoverMenu or PopoverMenuButton built in this pass, or on
+// one with ContextMenu or Menu in a window that draws its menus
+// (SetMenuPresentation); build's items report Chosen as the element's own
+// do, and the menu goes as the element goes. It takes the focus as
+// PopoverMenu's does.
+func (e *node) OpenPopoverMenu(x, y float32, build func(m *Menu)) {
+	if !e.hasState() || e.disabled() || build == nil {
+		return
+	}
+	rt := e.c.rt
+	b := e.Bounds()
+	d := &drawnMenu{id: e.id, built: rt.frame, pass: rt.pass, build: build}
+	d.menu = menuShown{dx: x - b.X, dy: y - b.Y, opened: rt.frame, levels: []menuLevel{{}}, pointer: [2]float32{rt.pointerX, rt.pointerY}}
+	rt.menu.drawn = d
+	rt.consumed = true
+}
+
+// MenuShows reports whether the element's menu drawn in the window shows:
+// its PopoverMenu or PopoverMenuButton, its ContextMenu or Menu in a
+// window that draws its menus, or one OpenPopoverMenu opened on it.
+func (e *node) MenuShows() bool {
+	d := e.c.rt.menu.drawn
+	return d != nil && d.id == e.id && e.hasState()
+}

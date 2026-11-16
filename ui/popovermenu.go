@@ -254,6 +254,9 @@ type menuParts struct {
 	// moved is set while the pointer moved since it last highlighted an
 	// item; closed once the menu closes in this pass.
 	moved, closed bool
+	// shift moves a menu opened at a point back toward the window's start
+	// by as much (MenuStyle.ShiftIntoWindow).
+	shift float32
 }
 
 // menuBuilt is a menu, or a submenu, built in a pass: its panel, its items
@@ -453,7 +456,7 @@ func (m *menuParts) Popup(fn func(panel *node)) *node {
 		// the element as it moves.
 		anchor := m.Trigger
 		if !s.below {
-			anchor = coreBox(c).Key(mix(m.Trigger.id, 0)).Size(0, 0).AttachTo(m.Trigger, AnchorTopLeft, AnchorTopLeft).Margin(s.dy, 0, 0, s.dx)
+			anchor = coreBox(c).Key(mix(m.Trigger.id, 0)).Size(0, 0).AttachTo(m.Trigger, AnchorTopLeft, AnchorTopLeft).Margin(s.dy, 0, 0, s.dx-m.shift)
 		}
 		root = m.panel(0, anchor, fn)
 		for level := 1; level < len(s.levels) && !m.closed; level++ {
@@ -976,6 +979,12 @@ type drawnMenu struct {
 	items  *platform.Menu
 	keys   []string
 	choose int
+	// looks are its items as the menu's function made them, by place
+	// (Tester.PopoverMenu).
+	looks []*MenuItem
+	// build, when set, fills it in place of the element's function: a
+	// menu opened by NextMenu or OpenPopoverMenu.
+	build func(m *Menu)
 	// highlighted are the items highlighted as the last pass built the
 	// menu, which the next build's MenuItem.Highlighted reports.
 	highlighted []menuRef
@@ -1073,6 +1082,9 @@ func drawMenuWith(rt *engine, e *node, build func(m *Menu), begin func(rt *engin
 	if m == nil {
 		return
 	}
+	if d.build != nil {
+		build = d.build
+	}
 	build(m)
 	if it := built(rt, e, d, m); it != nil {
 		rt.drawnChoice(d, m.run, build, it)
@@ -1091,7 +1103,7 @@ func (rt *engine) beginDrawnMenu(e *node) (*drawnMenu, *Menu) {
 		rt.menu.drawn = nil
 		return nil, nil
 	}
-	run := &menuRun{collect: true, highlighted: d.highlighted}
+	run := &menuRun{collect: true, highlighted: d.highlighted, drawn: true}
 	return d, &Menu{run: run, menu: &platform.Menu{}, rt: rt, text: rt.states[d.text]}
 }
 
@@ -1105,7 +1117,7 @@ func (rt *engine) drawnMenuBuilt(e *node, d *drawnMenu, m *Menu) *platform.MenuI
 		return nil
 	}
 	keys := d.keys
-	d.items, d.keys = pm, run.keys
+	d.items, d.keys, d.looks = pm, run.keys, run.items
 	if id := d.choose; id != 0 {
 		rt.menu.drawn = nil
 		if id <= len(keys) && keys[id-1] != "" {
@@ -1116,6 +1128,7 @@ func (rt *engine) drawnMenuBuilt(e *node, d *drawnMenu, m *Menu) *platform.MenuI
 	}
 	c := e.c
 	t := c.theme
+	st := &t.Menu
 	open := true
 	parts := &menuParts{Trigger: e, c: c, open: &open, s: &d.menu, level: -1}
 	var chosen *platform.MenuItem
@@ -1123,10 +1136,24 @@ func (rt *engine) drawnMenuBuilt(e *node, d *drawnMenu, m *Menu) *platform.MenuI
 	refs := map[uint64]menuRef{}
 	style := func(panel *node, width float32) {
 		panel.widget = "PopoverMenu"
-		panel.MinWidth(t.Space(45)).Padding(t.Space(1)).Radius(t.Radius+2).Background(t.Background).Border(1, t.Border)
-		panel.Shadow(0, 6, 20, 0, RGBA(0, 0, 0, 0.18))
-		if width > 0 {
+		pad := t.Space(1)
+		if st.Padding > 0 {
+			pad = max(st.Padding-1, 0) // from the panel's edge, past its border
+		}
+		panel.MinWidth(t.Space(45)).Padding(pad).Radius(or(st.Radius, t.Radius+2)).Background(or(st.Background, t.Background)).Border(1, t.Border)
+		if st.Shadow != (Color{}) {
+			panel.Shadow(0, st.ShadowY, st.ShadowBlur, 0, st.Shadow)
+		} else {
+			panel.Shadow(0, 6, 20, 0, RGBA(0, 0, 0, 0.18))
+		}
+		if st.Gap > 0 {
+			panel.Gap(st.Gap)
+		}
+		switch {
+		case width > 0:
 			panel.MaxWidth(max(width, t.Space(45)))
+		case st.Width > 0:
+			panel.MinWidth(0).Width(st.Width)
 		}
 		if d.panel != nil {
 			d.panel(wrapElement(panel))
@@ -1144,7 +1171,11 @@ func (rt *engine) drawnMenuBuilt(e *node, d *drawnMenu, m *Menu) *platform.MenuI
 				continue
 			}
 			if it.Type == platform.MenuItemSeparator {
-				coreBox(c).Height(1).Margin(t.Space(1), t.Space(2)).Background(t.Border).Shrink(0)
+				if v := st.SeparatorSpace; v > 0 {
+					coreBox(c).Height(1).Margin(v, 0).Background(t.Border).Shrink(0)
+				} else {
+					coreBox(c).Height(1).Margin(t.Space(1), t.Space(2)).Background(t.Border).Shrink(0)
+				}
 				continue
 			}
 			mi := run.items[it.ID-1]
@@ -1165,13 +1196,21 @@ func (rt *engine) drawnMenuBuilt(e *node, d *drawnMenu, m *Menu) *platform.MenuI
 			}
 		}
 	}
+	if w := or(run.widths[pm], st.Width); st.ShiftIntoWindow && w > 0 && !d.menu.below && !e.rtl() {
+		// Back into the window, rather than before the point.
+		ww, _ := c.Size()
+		parts.shift = max(0, e.Bounds().X+d.menu.dx+max(w, t.Space(45))-(ww-windowMargin))
+	}
 	parts.Popup(func(panel *node) {
 		width := run.widths[pm]
 		style(panel, width)
 		if d.menu.below {
 			// Apart from the menu button, on the side it shows.
 			at, self := d.menu.buttonAnchors()
-			menuGap(panel, at, self, t.Space(1))
+			menuGap(panel, at, self, or(st.Offset, t.Space(1)))
+		} else if st.Offset > 0 {
+			// Below the point it opened at.
+			panel.Margin(st.Offset, 0, 0, 0)
 		}
 		items(pm, width)
 	})
@@ -1239,7 +1278,11 @@ func (rt *engine) drawnChoice(d *drawnMenu, run *menuRun, build func(m *Menu), i
 		rt.menuCommand(target, name)
 		rt.requestFrame()
 	} else {
-		rt.menuChoice(build, it.ID, it.Label, run.keys[it.ID-1], d.text)
+		choice := &menuRun{choice: it.ID, label: it.Label, key: run.keys[it.ID-1], drawn: true}
+		rt.menuChoice(build, choice, d.text)
+		if choice.next != nil {
+			rt.openNextMenu(d, choice.next)
+		}
 	}
 }
 
@@ -1269,6 +1312,7 @@ type menuItemKey struct{ id string }
 func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem, marks, icons bool) *node {
 	c := m.c
 	t := c.theme
+	st := &t.Menu
 	sub := it.Type == platform.MenuItemSubmenu && it.Submenu != nil
 	if mi.key != "" {
 		// The row is the item's wherever it goes among the others.
@@ -1285,7 +1329,12 @@ func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem,
 	default:
 		row = m.Item()
 	}
-	row.AlignItems(Center).Gap(t.Space(2)).Padding(t.Space(1.5), t.Space(2)).Radius(t.Radius).Shrink(0)
+	row.AlignItems(Center).Gap(or(st.ItemGap, t.Space(2))).Radius(or(st.ItemRadius, t.Radius)).Shrink(0)
+	if st.ItemHeight > 0 {
+		row.Height(st.ItemHeight).Padding(0, or(st.ItemPadding, t.Space(2)))
+	} else {
+		row.Padding(t.Space(1.5), or(st.ItemPadding, t.Space(2)))
+	}
 	row.Label(it.Label).Disabled(!it.Enabled)
 	// Assistive technology reads the subtitle, the trailing text and the
 	// tooltip, if any, as the item's description, and the shortcut as its
@@ -1306,7 +1355,13 @@ func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem,
 		row.TextColor(color)
 	case row.highlighted && row.expanded && m.s.levels[m.level+1].hi != 0:
 		// The way to the item highlighted in the submenu.
-		row.Background(t.SurfaceHover).TextColor(color)
+		row.Background(or(st.Hover, t.SurfaceHover)).TextColor(color)
+	case row.highlighted && st.Hover != (Color{}):
+		fill := st.Hover
+		if mi.danger {
+			fill = t.Danger.Alpha(0.12)
+		}
+		row.Background(fill).TextColor(color)
 	case row.highlighted:
 		color, muted = t.AccentText, t.AccentText
 		if mi.danger && legibleOn(t.Danger, t.Accent, t.AccentText) {
@@ -1322,7 +1377,8 @@ func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem,
 	rtl := row.rtl()
 	row.Children(func() {
 		if marks {
-			mark := coreBox(c).Size(t.Space(4), t.Space(4)).Shrink(0)
+			ms := or(st.MarkSize, t.Space(4))
+			mark := coreBox(c).Size(ms, ms).Shrink(0)
 			if it.Checked {
 				radio := it.Type == platform.MenuItemRadio
 				mark.Draw(func(p *Painter, r Rect) {
@@ -1339,7 +1395,7 @@ func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem,
 			var b *Bitmap
 			if it.Icon != nil {
 				tint := color
-				accent := row.highlighted && !(row.expanded && m.s.levels[m.level+1].hi != 0)
+				accent := row.highlighted && st.Hover == (Color{}) && !(row.expanded && m.s.levels[m.level+1].hi != 0)
 				if ic := it.IconColor; ic != nil && it.Enabled && !accent {
 					// Its own color, but on the highlight, the highlight's
 					// text color.
@@ -1347,10 +1403,11 @@ func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem,
 				}
 				b = d.icon(it.Icon, tint)
 			}
+			size := or(st.IconSize, platform.MenuIconSize)
 			if b == nil {
-				coreBox(c).Size(platform.MenuIconSize, platform.MenuIconSize).Shrink(0)
+				coreBox(c).Size(size, size).Shrink(0)
 			} else {
-				img := coreImage(c, b).Size(platform.MenuIconSize, platform.MenuIconSize).Fit(Contain).Shrink(0)
+				img := coreImage(c, b).Size(size, size).Fit(Contain).Shrink(0)
 				if !it.Enabled && !it.Icon.Template {
 					img.Opacity(0.4)
 				}
@@ -1367,16 +1424,25 @@ func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem,
 				mi.drawn = false
 				return
 			}
-			coreText(c, it.Label).SingleLine()
+			name := coreText(c, it.Label).SingleLine()
+			if st.FontSize > 0 {
+				name.FontSize(st.FontSize)
+			}
 			if it.Subtitle != "" {
-				coreText(c, it.Subtitle).SingleLine().TextColor(muted).FontSize(t.FontSize - 1)
+				coreText(c, it.Subtitle).SingleLine().TextColor(muted).FontSize(or(st.FontSize, t.FontSize) - 1)
 			}
 		})
 		if mi.trailing != "" {
-			coreText(c, mi.trailing).SingleLine().TextColor(muted).Shrink(0).MarginStart(t.Space(4))
+			trailing := coreText(c, mi.trailing).SingleLine().TextColor(muted).Shrink(0).MarginStart(t.Space(4))
+			if st.ShortcutSize > 0 {
+				trailing.FontSize(st.ShortcutSize)
+			}
 		}
 		if keys != "" {
-			coreText(c, keys).SingleLine().TextColor(muted).Shrink(0).MarginStart(t.Space(4))
+			shortcut := coreText(c, keys).SingleLine().TextColor(muted).Shrink(0).MarginStart(t.Space(4))
+			if st.ShortcutSize > 0 {
+				shortcut.FontSize(st.ShortcutSize)
+			}
 		}
 		if sub {
 			coreBox(c).Size(t.Space(4), t.Space(4)).Shrink(0).Draw(func(p *Painter, r Rect) {

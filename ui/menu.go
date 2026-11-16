@@ -126,16 +126,15 @@ func (e *node) buildMenu(button, drawn bool, build func(m *Menu)) {
 		rt.openMenu(e.id, button, pm, run.labels, run.keys, commands)
 	case mr.chosen == e.id && mr.chosenButton == button:
 		mr.chosen = 0
-		rt.menuChoice(build, mr.choice, mr.label, mr.chosenKey, mr.chosenText)
+		rt.menuChoice(build, &menuRun{choice: mr.choice, label: mr.label, key: mr.chosenKey}, mr.chosenText)
 	}
 }
 
-// menuChoice runs build for the item chosen from its menu, at place
-// choice and labeled label, or with the ID key when it has one
-// (MenuItem.ID), whose Chosen then reports it; text is the text the menu
-// opened on.
-func (rt *engine) menuChoice(build func(m *Menu), choice int, label, key string, text uint64) {
-	run := &menuRun{choice: choice, label: label, key: key}
+// menuChoice runs build for the item chosen from its menu, which run
+// names: at place run.choice and labeled run.label, or with the ID
+// run.key when it has one (MenuItem.ID), whose Chosen then reports it;
+// text is the text the menu opened on.
+func (rt *engine) menuChoice(build func(m *Menu), run *menuRun, text uint64) {
 	build(&Menu{run: run, rt: rt, text: rt.states[text]})
 	if run.chosen {
 		// The choice may change what was built before: build again.
@@ -180,6 +179,11 @@ type menuRun struct {
 	// widths are the widths MaxWidth gave the menu and its submenus, when
 	// collecting.
 	widths map[*platform.Menu]float32
+	// drawn is set for a menu drawn in the window, where NextMenu adds an
+	// item rather than a submenu; next is the menu the NextMenu item
+	// chosen opens, nil for none.
+	drawn bool
+	next  func(m *Menu)
 }
 
 // menuRef identifies an item of a menu across runs of its function: by
@@ -209,7 +213,8 @@ type MenuItem struct {
 	sub      bool
 	p        *platform.MenuItem // when the menu opens
 	// What a menu drawn in the window shows of it beyond p (Danger,
-	// Trailing, Content).
+	// Trailing, Content), and the icon given to Icon (Tester.PopoverMenu).
+	icon     MenuIcon
 	danger   bool
 	trailing string
 	content  func(MenuItemContent)
@@ -361,6 +366,7 @@ type MenuIcon interface {
 func (it *MenuItem) Icon(icon MenuIcon) *MenuItem {
 	if it.p != nil && icon != nil {
 		it.p.Icon = icon.PlatformMenuIcon()
+		it.icon = icon
 	}
 	return it
 }
