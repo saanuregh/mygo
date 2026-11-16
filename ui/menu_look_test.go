@@ -390,3 +390,29 @@ func TestMenuStyleShiftIntoWindow(t *testing.T) {
 		}
 	}
 }
+
+// TestMenuOffset checks a menu's own Offset puts it that far below the
+// point it opened at, while another menu keeps the style's.
+func TestMenuOffset(t *testing.T) {
+	top := func(offset float32) float32 {
+		view := func(c *context) {
+			th := LightTheme()
+			th.Menu = MenuStyle{Offset: 6}
+			c.SetTheme(th)
+			coreColumn(c).Fill().Padding(20).Children(func() {
+				coreRow(c).Padding(8).Children(func() { coreText(c, "Report.pdf") }).
+					PopoverMenu(func(m *Menu) {
+						m.Offset(offset)
+						m.Item("Open")
+					})
+			})
+		}
+		tt := coreNewTester(view, 400, 300)
+		r, _ := tt.Find("Report.pdf")
+		tt.RightClickAt(r.X+5, r.Y+5)
+		return menuPanel(t, tt).Y - (r.Y + 5)
+	}
+	if style, own := top(0), top(7); style != 6 || own != 7 {
+		t.Errorf("the menu %v below the point with the style's Offset 6, %v with its own 7", style, own)
+	}
+}

@@ -57,6 +57,23 @@ type MenuStyle struct {
 	Hover Color
 }
 
+// Offset sets the room between the menu, as PopoverMenu and
+// PopoverMenuButton draw it, and where it opens, d DIPs, for this menu
+// alone, in place of its theme's MenuStyle.Offset: below the point it
+// opened at, or apart from its menu button. 0 keeps the style's. The
+// system's menus take no offset from it.
+//
+//	m.Offset(7)
+func (m *Menu) Offset(d float32) *Menu {
+	if r := m.run; r.collect && m.menu != nil {
+		if r.offsets == nil {
+			r.offsets = map[*platform.Menu]float32{}
+		}
+		r.offsets[m.menu] = d
+	}
+	return m
+}
+
 // or returns v, or by when v is zero.
 func or[T comparable](v, by T) T {
 	var zero T
