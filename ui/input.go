@@ -547,6 +547,7 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 		return
 	}
 	var target, focus *state
+	cleared := false
 	for _, id := range chain {
 		s := rt.states[id]
 		if s == nil {
@@ -555,7 +556,10 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 		if target == nil && s.flags&interactive != 0 {
 			target = s
 		}
-		if focus == nil && s.flags&(flagFocusable|flagEditable|flagSelectable) != 0 && s.flags&flagDisabled == 0 {
+		if focus == nil && !cleared && s.clearsFocus {
+			cleared = true
+		}
+		if focus == nil && !cleared && s.flags&(flagFocusable|flagEditable|flagSelectable) != 0 && s.flags&flagDisabled == 0 {
 			focus = s
 		}
 	}
