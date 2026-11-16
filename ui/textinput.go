@@ -199,6 +199,17 @@ func (e *node) OnPaste(fn func(text string) bool) *node {
 	return e
 }
 
+// OnCut has fn see a cut from the text input, by Cmd+X, Ctrl+X or a Cut
+// menu item, on the main thread as it is made, before the selection goes:
+// an app keeping its own undo history makes it a step of its own. Like
+// OnPaste, it holds for the input that comes until the next frame.
+func (e *node) OnCut(fn func()) *node {
+	if ed := e.st.editor; ed != nil && e.flags&flagEditable != 0 {
+		ed.onCut = fn
+	}
+	return e
+}
+
 // OnTextKey has fn see a key pressed in the text input before the input
 // takes it, on the main thread as the key comes, with the text typed
 // before it in place, as AppKit's doCommandBySelector and a web page's
