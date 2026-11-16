@@ -471,7 +471,15 @@ func (a *area) paint(e *node, p *Painter, ox, oy float32) {
 			}
 		}
 	}
-	if focused && !ed.readOnly {
+	if focused && !ed.readOnly && t.SteadyTextAreaCaret {
+		if ed.caretWidth > 0 && ed.anchor == ed.caret {
+			x, y, h := a.caretAt(ed, ed.caret, ed.composeCaret)
+			caret := ts.caretColor(t)
+			p.add(scene.Op{Kind: scene.OpFill, Rect: p.snap(Rect{ox + x, oy + float32(y-a.scroll), 0, h}), Color: caret.scene(), Wide: p.wide(caret, Color{}, Color{}), Opacity: p.opacity})
+			op := &p.s.Ops[len(p.s.Ops)-1]
+			op.Rect.W = max(round(ed.caretWidth*p.scale), 1)
+		}
+	} else if focused && !ed.readOnly {
 		rt := e.c.rt
 		phase := e.c.now.Sub(rt.blinkStart)
 		const blink = 530 * time.Millisecond

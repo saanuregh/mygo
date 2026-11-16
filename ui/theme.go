@@ -58,6 +58,11 @@ type Theme struct {
 	// CaretBlink is how long a text input's caret shows, then hides, as
 	// it blinks; 0 is 530 milliseconds, the system's usual.
 	CaretBlink time.Duration
+	// SteadyTextAreaCaret has a text area's caret show steadily rather
+	// than blink, and none while text is selected, as a multiline field of
+	// nanoui's draws it; a one-line input's caret still blinks. Off, an
+	// area's caret blinks as an input's does.
+	SteadyTextAreaCaret bool
 	// Focus is the ring around the control with the keyboard focus,
 	// FocusRingWidth DIPs wide (2 by default; 0 is 2) and FocusRingOffset
 	// DIPs outside its edge (1 in LightTheme and DarkTheme): 0 puts the
