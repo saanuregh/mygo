@@ -4323,6 +4323,20 @@ func (_handle Element) ChildExit(m Motion) Element {
 	return wrapElement(_node.ChildExit(m))
 }
 
+// ClearsFocus has a press on the element, or on what is inside it, leave
+// the keyboard focus nowhere, though an element around it takes the
+// focus: a control that acts without taking the keyboard, as the buttons
+// of a find bar over a code editor.
+func (_handle Element) ClearsFocus() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.ClearsFocus())
+}
+
 // ClickModifiers returns the modifier keys held as the element was last
 // clicked, none for a click by the keyboard: with Clicked, a click with
 // Shift or Cmd does something else, as extending a choice.

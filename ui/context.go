@@ -777,6 +777,8 @@ type state struct {
 	// accessDisabled, that assistive technology reads it as unavailable
 	// (AccessDisabled).
 	ignoreInput, accessHidden, accessDisabled bool
+	// clearsFocus: a press on it focuses nothing (ClearsFocus).
+	clearsFocus bool
 	// handleDoubleClick tells that the element, a DragWindow handle,
 	// takes its double click (WindowDoubleClicked).
 	handleDoubleClick bool

@@ -471,6 +471,8 @@ type node struct {
 	// elements inside it by, which still show and read to assistive
 	// technology (IgnoreInput).
 	ignoreInput bool
+	// clearsFocus: a press on it focuses nothing (ClearsFocus).
+	clearsFocus bool
 	// handleDoubleClick marks a DragWindow handle whose double click the
 	// view takes (WindowDoubleClicked) rather than the window.
 	handleDoubleClick bool
@@ -2112,6 +2114,12 @@ func (e *node) disabled() bool {
 func (e *node) hasState() bool {
 	return e != nil && e.c != nil && e.c.rt != nil && e.st != nil && !e.c.rt.closed
 }
+
+// ClearsFocus has a press on the element, or on what is inside it, leave
+// the keyboard focus nowhere, though an element around it takes the
+// focus: a control that acts without taking the keyboard, as the buttons
+// of a find bar over a code editor.
+func (e *node) ClearsFocus() *node { e.clearsFocus = true; return e }
 
 // Focusable lets the element take the keyboard focus, by a click or Tab.
 func (e *node) Focusable() *node { e.flags |= flagFocusable; return e }
