@@ -5218,6 +5218,22 @@ func (_handle Element) Fit(f Fit) Element {
 	return wrapElement(_node.Fit(f))
 }
 
+// FitLines sizes the element, sized by its content and given a MaxWidth,
+// as wide as the widest line its content takes within that width: where
+// its text wraps, as wide as its longest line rather than the whole
+// width, as a tooltip or a hover card hugging a paragraph. A row, a grid
+// or a scroll container inside it counts its usual width, no wider than
+// the room. Without a MaxWidth it changes nothing.
+func (_handle Element) FitLines() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.FitLines())
+}
+
 // FixedLineHeight sets the height of lines of text in DIPs, whatever the
 // font size, as for rows of text that line up with a grid.
 func (_handle Element) FixedLineHeight(v float32) Element {

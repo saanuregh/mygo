@@ -319,6 +319,9 @@ type layoutStyle struct {
 	// baselines is set on the row of a field in a form, which lines up
 	// the first lines of its label and control.
 	baselines bool
+	// fitLines sizes it as wide as its widest line within its maximum
+	// width (FitLines).
+	fitLines bool
 	// absoluteChild is set on a container with a child out of its flow
 	// (Absolute, Attach), which layoutAbsolute places: without one it has
 	// no walk to make. It is set as the child is added or taken out of the
@@ -2079,6 +2082,14 @@ func (e *node) disabled() bool {
 func (e *node) hasState() bool {
 	return e != nil && e.c != nil && e.c.rt != nil && e.st != nil && !e.c.rt.closed
 }
+
+// FitLines sizes the element, sized by its content and given a MaxWidth,
+// as wide as the widest line its content takes within that width: where
+// its text wraps, as wide as its longest line rather than the whole
+// width, as a tooltip or a hover card hugging a paragraph. A row, a grid
+// or a scroll container inside it counts its usual width, no wider than
+// the room. Without a MaxWidth it changes nothing.
+func (e *node) FitLines() *node { e.fitLines = true; return e }
 
 // ClearsFocus has a press on the element, or on what is inside it, leave
 // the keyboard focus nowhere, though an element around it takes the
