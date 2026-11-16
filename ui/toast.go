@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strconv"
+	"sync/atomic"
 	"time"
 )
 
@@ -15,6 +16,37 @@ const (
 	// wait hidden, their time running, as with Base UI's limit.
 	toastLimit = 3
 )
+
+// SetToastLimit sets how many toasts show at once, the newest: 3 by
+// default, every one with 0. The others wait hidden, their time running.
+func SetToastLimit(n int) {
+	if n <= 0 {
+		n = -1
+	}
+	toastLimitSet.Store(int32(n))
+}
+
+// toastLimitSet is SetToastLimit's: 0 unset, -1 every toast.
+var toastLimitSet atomic.Int32
+
+// toastsShown is how many of the toasts held show at once.
+func toastsShown(held int) int {
+	switch n := toastLimitSet.Load(); {
+	case n < 0:
+		return held
+	case n > 0:
+		return min(int(n), held)
+	}
+	return min(toastLimit, held)
+}
+
+// SetToastsHeldEach makes the pointer resting on a toast, or the
+// keyboard focus in it, stop the time of that toast only, as a toast of
+// GPUI Kit's, rather than of every toast showing.
+func SetToastsHeldEach(on bool) { toastsHeldEach.Store(on) }
+
+// toastsHeldEach is SetToastsHeldEach's.
+var toastsHeldEach atomic.Bool
 
 // Toast is a toast that AddToast shows, and that the view builds with
 // ToastViewportBase to give toasts a look of its own.
@@ -64,6 +96,8 @@ type toast struct {
 	key   uint64
 	spent time.Duration
 	at    time.Time
+	// held tells that the user holds this toast alone (SetToastsHeldEach).
+	held bool
 }
 
 // Toast shows message near the bottom of the window for a few seconds, as
@@ -155,11 +189,15 @@ func (rt *engine) toastIndex(id string) int {
 
 // toastAge returns how long ts has shown.
 func (rt *engine) toastAge(ts *toast, now time.Time) time.Duration {
-	if rt.toastsPaused {
+	if rt.toastStopped(ts) {
 		return ts.spent
 	}
 	return ts.spent + now.Sub(ts.at)
 }
+
+// toastStopped reports whether the time of ts stops: the user holds the
+// toasts, or this one alone (SetToastsHeldEach).
+func (rt *engine) toastStopped(ts *toast) bool { return rt.toastsPaused || ts.held }
 
 // pauseToasts stops the time of the toasts, or lets it run again, while
 // held, as the pointer rests on them.
@@ -169,6 +207,10 @@ func (rt *engine) pauseToasts(held bool, now time.Time) {
 	}
 	for i := range rt.toasts {
 		ts := &rt.toasts[i]
+		if ts.held {
+			// Its own hold keeps its time stopped.
+			continue
+		}
 		if held {
 			ts.spent += now.Sub(ts.at)
 		} else {
@@ -176,6 +218,21 @@ func (rt *engine) pauseToasts(held bool, now time.Time) {
 		}
 	}
 	rt.toastsPaused = held
+}
+
+// holdToast stops the time of ts alone, or lets it run again.
+func (rt *engine) holdToast(ts *toast, held bool, now time.Time) {
+	if ts.held == held {
+		return
+	}
+	if !rt.toastsPaused {
+		if held {
+			ts.spent += now.Sub(ts.at)
+		} else {
+			ts.at = now
+		}
+	}
+	ts.held = held
 }
 
 // ToastViewportBase builds the window's toasts without a look, in place of
@@ -241,7 +298,7 @@ func toastViewport(c *context, keep bool, fn func(viewport *node, toasts []Toast
 		}
 	}
 	list := rt.toastList[:0]
-	for _, ts := range rt.toasts[max(0, len(rt.toasts)-toastLimit):] {
+	for _, ts := range rt.toasts[len(rt.toasts)-toastsShown(len(rt.toasts)):] {
 		list = append(list, ts.Toast)
 	}
 	rt.toastList = list
@@ -256,14 +313,16 @@ func toastViewport(c *context, keep bool, fn func(viewport *node, toasts []Toast
 		// The keyboard focus in the toasts holds them only while the
 		// window has it: left there as the window goes to the background,
 		// it would hold them until the user came back.
-		rt.pauseToasts(viewport.Hovered() || viewport.FocusWithin() && rt.windowFocus(), now)
+		// With SetToastsHeldEach, each toast holds its own (ToastBase).
+		held := viewport.Hovered() || viewport.FocusWithin() && rt.windowFocus()
+		rt.pauseToasts(held && !toastsHeldEach.Load(), now)
 		viewport.Children(func() { fn(viewport, list) })
 	})
 	// A frame closes the toast whose time is over next.
 	var next time.Duration
 	for i := range rt.toasts {
 		ts := &rt.toasts[i]
-		if life := ts.life(); life > 0 && !rt.toastsPaused {
+		if life := ts.life(); life > 0 && !rt.toastStopped(ts) {
 			if left := life - rt.toastAge(ts, now); next == 0 || left < next {
 				next = left
 			}
@@ -295,16 +354,23 @@ func coreToastBase(c *context, t Toast) toastParts {
 	rt := c.rt
 	p := toastParts{c: c, id: t.ID}
 	var key any = t.ID
-	if i := rt.toastIndex(t.ID); i >= 0 {
-		ts := &rt.toasts[i]
-		key, p.age, p.stopped = ts.key, rt.toastAge(ts, c.now), rt.toastsPaused
-		if life := ts.life(); life > 0 {
-			p.left = life - p.age
-		}
+	i := rt.toastIndex(t.ID)
+	if i >= 0 {
+		key = rt.toasts[i].key
 	}
 	p.Root = coreBox(c).Key(key).Role(RoleStatus)
 	// It takes the pointer, which stops the time resting on it.
 	p.Root.flags |= flagHover
+	if i >= 0 {
+		ts := &rt.toasts[i]
+		if toastsHeldEach.Load() {
+			rt.holdToast(ts, p.Root.Hovered() || p.Root.FocusWithin() && rt.windowFocus(), c.now)
+		}
+		p.age, p.stopped = rt.toastAge(ts, c.now), rt.toastStopped(ts)
+		if life := ts.life(); life > 0 {
+			p.left = life - p.age
+		}
+	}
 	if p.Root.Shortcut(0, KeyEscape) {
 		c.CloseToast(t.ID)
 	}
