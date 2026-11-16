@@ -503,6 +503,9 @@ type System struct {
 	ellipsized []rune
 	// marks caches the width of the ellipsis of each style.
 	marks map[markKey]float32
+	// digitCells caches the widest digit's advance of each style without
+	// features (DigitCells).
+	digitCells map[Style]float32
 	// justify is justifyLine once UseJustify was called, so that apps
 	// that never justify text do not link it.
 	justify func(line *Line, runes []rune, width float32) (left float32, ok bool)
@@ -1649,7 +1652,12 @@ func line(p Params, text []rune, sl shapedLine, offset int, rtl bool, m lineMetr
 				g.Cluster += offset
 			}
 			g.Size = runSize
-			x0 = min(x0, g.X)
+			// The line starts at the pen, before a digit centred in its cell.
+			if k < len(run.centres) {
+				x0 = min(x0, g.X-run.centres[k])
+			} else {
+				x0 = min(x0, g.X)
+			}
 			// Logical width follows the pen, not the glyphs' drawing
 			// offsets. Pango may kern "11" by offsetting its second glyph
 			// while keeping whole-pixel advances for line breaking.
@@ -1725,7 +1733,6 @@ func (s *System) ellipsize(text []rune, spans []Span, start int, p Params, width
 			return l
 		}
 	}
-	e := s.engine()
 	rest := text[start:]
 	restSpans := spansIn(spans, start, len(text))
 	mark := markOf(p)
@@ -1771,7 +1778,7 @@ func (s *System) ellipsize(text []rune, spans []Span, start int, p Params, width
 	if n := len(tSpans); n > 0 && tSpans[n-1].End == cut {
 		tSpans[n-1].End += len(mark)
 	}
-	for _, l := range e.shape(t, p.Style, tSpans, 0, rtl, false) {
+	for _, l := range s.shape(t, p.Style, tSpans, 0, rtl, false) {
 		for _, run := range l.runs {
 			run.start, run.end = start+min(run.start, cut), start+min(run.end, cut)
 			for i := range run.glyphs {
@@ -1885,7 +1892,7 @@ func (s *System) ellipsizeInside(text []rune, spans []Span, start int, p Params,
 		}
 		return start + resume + max(i-shift, 0)
 	}
-	for _, l := range s.engine().shape(t, p.Style, tSpans, 0, rtl, false) {
+	for _, l := range s.shape(t, p.Style, tSpans, 0, rtl, false) {
 		for _, run := range l.runs {
 			run.start, run.end = at(run.start), at(run.end)
 			for i := range run.glyphs {
@@ -1916,7 +1923,7 @@ func (s *System) markWidth(p Params, mark []rune, rtl bool) float32 {
 	key := markKey{style: p.Style, mark: p.Ellipsis, rtl: rtl}
 	w, ok := s.marks[key]
 	if !ok {
-		for _, l := range s.engine().shape(mark, p.Style, nil, 0, rtl, false) {
+		for _, l := range s.shape(mark, p.Style, nil, 0, rtl, false) {
 			w = max(w, advance(l))
 		}
 		if len(s.marks) >= 256 {
@@ -1933,7 +1940,7 @@ func (s *System) clusterAdvances(text []rune, spans []Span, p Params, rtl bool) 
 	s.advances = slices.Grow(s.advances[:0], len(text))[:len(text)]
 	advances := s.advances
 	clear(advances)
-	for _, l := range s.engine().shape(text, p.Style, spans, 0, rtl, false) {
+	for _, l := range s.shape(text, p.Style, spans, 0, rtl, false) {
 		for _, run := range l.runs {
 			for _, g := range run.glyphs {
 				if g.Cluster >= 0 && g.Cluster < len(text) {

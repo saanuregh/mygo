@@ -1931,13 +1931,20 @@ func (e *node) LetterSpacing(v float32) *node {
 	return e
 }
 
+// DigitCells, given to FontFeatures, sets each digit 0-9 in a cell as
+// wide as the font's widest digit, centred in it, with the font's own
+// glyphs, as nanoui's tabular text: numbers line up in fonts without
+// tabular figures, and keep the look of the proportional ones.
+const DigitCells = text.DigitCells
+
 // FontFeatures turns on OpenType features of the font, by tag, or sets
 // them with tag=value:
 //
 //	ui.Textf(c, "%d items", n).FontFeatures("tnum")   // digits of one width
 //	ui.Text(c, "office").FontFeatures("liga=0")       // no ligatures
 //
-// A font without a feature ignores it.
+// A font without a feature ignores it. DigitCells, among them, sets each
+// digit in a cell as wide as the font's widest, its own glyph centred.
 func (e *node) FontFeatures(features ...string) *node {
 	e.ts.features = strings.Join(features, ",")
 	e.ts.set |= setFeatures

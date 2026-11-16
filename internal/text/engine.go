@@ -144,6 +144,9 @@ type shapedRun struct {
 	// starts the glyph's cluster; Runes is set later. They are in visual
 	// order: a right-to-left run's clusters descend.
 	glyphs []Glyph
+	// centres are how far right of the pen each glyph is drawn to centre
+	// it in a cell (DigitCells), by index; nil when none is.
+	centres []float32
 }
 
 // bitmap is a rasterized glyph.
