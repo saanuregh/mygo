@@ -1450,6 +1450,7 @@ func (rt *engine) shortcut(id uint64, mods Modifiers, key Key) bool {
 // editEvent delivers text, a composition or an edit command to the focus,
 // and reports whether an element took it.
 func (rt *engine) editEvent(ev editEvent) bool {
+	rt.noteUnfocused(ev)
 	if rt.observers > 0 {
 		kind := InputText
 		if ev.kind == editCompose {

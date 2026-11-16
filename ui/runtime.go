@@ -303,6 +303,9 @@ type engine struct {
 	observers  int
 	observeBuf []uint64
 
+	// unfocused is what was typed with nothing focused (UnfocusedTyping).
+	unfocused unfocusedTyping
+
 	// focusOnly makes the key being pressed the focus's alone: no
 	// shortcut sees it (Tester.KeyToFocus).
 	focusOnly bool
@@ -1264,6 +1267,7 @@ func (rt *engine) endPass() {
 	// this frame built may take the key (settleKeys).
 	rt.unrouted = append(rt.unrouted, rt.delivered...)
 	rt.delivered = rt.delivered[:0]
+	rt.unfocused = unfocusedTyping{}
 	rt.downs = rt.downs[:0]
 	rt.passFocus()
 	// The next pass may not ask again, as when the view cleared what asked.
