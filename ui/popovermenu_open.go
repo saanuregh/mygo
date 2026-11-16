@@ -100,3 +100,23 @@ func (e *node) FocusedUnderMenu() bool {
 // Context.popovers_last: a view that rests while nothing needs it stays
 // awake under one.
 func (c *context) PopupShown() bool { return c.rt.tips.popupsLast }
+
+// FocusedUnderOverlay reports whether an overlay open over the window, as
+// a dialog, opened while the element had the keyboard focus, which it
+// gives back as it closes, and no text input in the overlay has taken the
+// focus since: an element that shows its focus as nanoui's did under a
+// dialog, whose buttons took no focus of their own.
+func (e *node) FocusedUnderOverlay() bool {
+	if !e.hasState() {
+		return false
+	}
+	rt := e.c.rt
+	for id, opener := range rt.openers {
+		if opener != e.id || rt.states[id] == nil {
+			continue
+		}
+		f := rt.states[rt.focused]
+		return f == nil || f.flags&flagEditable == 0
+	}
+	return false
+}
