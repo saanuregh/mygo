@@ -35,6 +35,9 @@ type Theme struct {
 	LinkWeight int
 	// LinkUnderline underlines links' text.
 	LinkUnderline bool
+	// LinkCodeColor keeps inline code in a link in Code, not the link's
+	// color.
+	LinkCodeColor bool
 
 	// Code colors code spans, with CodeBackground behind them; CodeSize is
 	// their size in ems: 0.875.
