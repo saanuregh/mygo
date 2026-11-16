@@ -418,6 +418,13 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				continue
 			}
 			a, z := runeAt(l.text, max(b.Start-l.start, 0)), runeAt(l.text, min(b.End-l.start, len(l.text)))
+			if b.Underline {
+				f.rects = v.rangeRects(l, row, l.toDisp(a, false), l.toDisp(z, false), f.rects[:0])
+				for _, rc := range f.rects {
+					ed.underline(p, ox+rc.X, y, rc.W, b.Color)
+				}
+				continue
+			}
 			ed.fillRange(p, f, l, row, ox, y, l.toDisp(a, false), l.toDisp(z, false), b.Color, 0)
 		}
 		// Words a diff changed.
@@ -713,6 +720,13 @@ func (ed *editor) paintWhitespace(p *ui.Painter, f *frame, l *lineLayout, row *r
 		path.MoveTo(x0+2+w-3, cy-3).LineTo(x0+2+w, cy).LineTo(x0+2+w-3, cy+3)
 		p.StrokePath(&path, 1, ct.Whitespace)
 	}
+}
+
+// underline draws a straight rounded line 2 DIPs thick under w DIPs (2
+// at least) from x, on the row at y.
+func (ed *editor) underline(p *ui.Painter, x, y, w float32, c ui.Color) {
+	w = max(w, 2)
+	p.Fill(ui.Rect{X: x, Y: y + ed.view.lineHeight - 4, W: w, H: 2}, c, 1)
 }
 
 // squiggle draws a wavy line under w DIPs from x, y.

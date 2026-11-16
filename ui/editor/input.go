@@ -432,7 +432,7 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 		if off >= 0 && off >= h.start && off <= h.end {
 			h.hideAt = time.Time{}
 		} else if h.hideAt.IsZero() {
-			h.hideAt = ed.frameNow.Add(hoverHideDelay)
+			h.hideAt = ed.frameNow.Add(ed.hoverHideDelay())
 			changed = true
 		}
 	}

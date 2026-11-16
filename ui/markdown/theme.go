@@ -33,6 +33,8 @@ type Theme struct {
 	// LinkWeight is the smallest weight of link text, so links stand out
 	// among prose without lifting strong text down to it: 0 for no floor.
 	LinkWeight int
+	// LinkUnderline underlines links' text.
+	LinkUnderline bool
 
 	// Code colors code spans, with CodeBackground behind them; CodeSize is
 	// their size in ems: 0.875.

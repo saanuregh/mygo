@@ -104,6 +104,10 @@ type State struct {
 	// a word is typed or Ctrl+Space pressed: answer with ShowCompletions,
 	// at once or later.
 	OnCompletion func(CompletionRequest)
+	// CompletionScore, when set, ranks the completions for the word typed
+	// in place of the editor's own matching: a higher score first, ties by
+	// their SortText; ok false leaves one out.
+	CompletionScore func(query, text string) (score int, ok bool)
 	// OnHover asks the app what to show for the text under the pointer
 	// once it rests there: answer with ShowHover.
 	OnHover func(HoverRequest)
@@ -142,6 +146,10 @@ type State struct {
 	// rather than above it (each goes to the other side where it would
 	// leave the window); RenderHover's margins keep it apart.
 	HoverBelow bool
+	// HoverAppOnly shows in the hover only what the app gives ShowHover:
+	// no diagnostics, and nothing before its answer. The hover goes as
+	// soon as the pointer leaves the text hovered, but into the hover.
+	HoverAppOnly bool
 	// GutterHoverMark is drawn on the line under the pointer while it is
 	// over the gutter, where the line has no mark of its own: where a
 	// click would put one (its Line is not read).
@@ -284,6 +292,9 @@ type LineBackground struct {
 type TextBackground struct {
 	Start, End int
 	Color      ui.Color
+	// Underline draws it as a bar 2 DIPs high under the text instead, as
+	// a diagnostic's straight underline.
+	Underline bool
 }
 
 func (st *State) options() options {
@@ -301,10 +312,10 @@ func (st *State) options() options {
 		keepScrollbars: st.KeepScrollbars, hideScrollbars: st.NoScrollbars, scrollbar: st.Scrollbar,
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, cursorShape: st.CursorShape, fitContent: st.FitContent,
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, gutterMarks: st.GutterMarks,
-		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
+		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, completionScore: st.CompletionScore, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
-		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
+		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard,
 	}

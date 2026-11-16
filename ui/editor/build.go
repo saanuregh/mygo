@@ -189,7 +189,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		case h.over || h.focused:
 			h.hideAt = time.Time{}
 		case outside && h.byPointer && h.hideAt.IsZero():
-			h.hideAt = c.Now().Add(hoverHideDelay)
+			h.hideAt = c.Now().Add(ed.hoverHideDelay())
 		}
 		if !h.hideAt.IsZero() {
 			if wait := h.hideAt.Sub(c.Now()); wait > 0 {
