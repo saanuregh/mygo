@@ -403,6 +403,11 @@ func (e *node) forgetIntrinsic() {
 // measureIntrinsic measures the max-content or min-content width of an
 // element sized by its content.
 func measureIntrinsic(e *node, maxContent bool) float32 {
+	if maxContent && e.fitLines {
+		if mw, ok := e.maxW.upper(-1); ok {
+			return fittedWidth(e, mw)
+		}
+	}
 	var w float32
 	switch {
 	case e.kind != kindBox:
@@ -465,6 +470,39 @@ func measureIntrinsic(e *node, maxContent bool) float32 {
 		}
 	}
 	return w + e.padX()
+}
+
+// fittedWidth returns the border-box width of e within w DIPs as FitLines
+// sizes it: a text's longest line wrapped there, a column's widest child;
+// a row, a grid, a scroll container or another leaf its max-content
+// width, no more than w.
+func fittedWidth(e *node, w float32) float32 {
+	if v, ok := e.width.resolve(-1); ok {
+		return e.clampW(v, inf)
+	}
+	if mw, ok := e.maxW.upper(-1); ok {
+		w = min(w, mw)
+	}
+	cw := max(w-e.padX(), 0)
+	var used float32
+	switch {
+	case e.kind == kindText:
+		if e.text != "" && !e.single && !e.noWrap {
+			used = float32(math.Ceil(float64(e.textLayout(max(cw, 1)).Width)))
+		} else {
+			used = intrinsic(e, true) - e.padX()
+		}
+	case e.kind != kindBox || e.row || e.grid || e.scrolls() || e.list != nil:
+		used = intrinsic(e, true) - e.padX()
+	default:
+		for ch := e.first; ch != nil; ch = ch.next {
+			if ch.flags&flagAbsolute != 0 || ch.hidden {
+				continue
+			}
+			used = max(used, fittedWidth(ch, cw-ch.marginX())+ch.marginX())
+		}
+	}
+	return e.clampW(min(used, cw)+e.padX(), inf)
 }
 
 // autoMinWidth returns the least width of an item of a row whose width
