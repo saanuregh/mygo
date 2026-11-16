@@ -157,6 +157,41 @@ func (rt *engine) restoreFocus() {
 	}
 }
 
+// forgetOpenersPast: a press on element id of a control that ClearsFocus
+// leaves the focus nowhere, so the overlays it is not in, which it closes,
+// give the focus back to nothing (restoreFocus), as a press on a control
+// of nanoui's cleared the focus whatever showed.
+func (rt *engine) forgetOpenersPast(id uint64) {
+	for overlay := range rt.openers {
+		if !rt.stateWithin(id, overlay) {
+			delete(rt.openers, overlay)
+		}
+	}
+}
+
+// stateWithin reports whether element id is element within or inside it,
+// a popover being where its anchor is.
+func (rt *engine) stateWithin(id, within uint64) bool {
+	s := rt.states[id]
+	for range 1000 { // against cycles of anchors
+		if s == nil {
+			return false
+		}
+		if s.id == within {
+			return true
+		}
+		next := s.parent
+		if s.anchor != 0 {
+			next = s.anchor
+		}
+		if next == 0 {
+			return false
+		}
+		s = rt.states[next]
+	}
+	return false
+}
+
 // insideModal reports whether the elements being built are in the dialog
 // on top of the last frame, or there is none: the window's shortcuts
 // built outside it wait.

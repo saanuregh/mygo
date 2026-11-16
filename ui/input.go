@@ -605,6 +605,9 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 		return s != nil && s.flags&flagKeepFocus != 0
 	})
 	if button == 0 && !keep {
+		if cleared && len(chain) > 0 {
+			rt.forgetOpenersPast(chain[0])
+		}
 		newFocus := uint64(0)
 		if focus != nil {
 			newFocus = focus.id
