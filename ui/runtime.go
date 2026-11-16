@@ -248,8 +248,11 @@ type engine struct {
 	modal       uint64
 	// modalLayer is the element at the top of the overlay holding the
 	// dialog on top, which assistive technology sees with what is above.
-	modalLayer  uint64
-	commitScope focusScope
+	modalLayer uint64
+	// modalPassesShortcuts: the dialog on top lets the window's shortcuts
+	// run (PassesWindowShortcuts).
+	modalPassesShortcuts bool
+	commitScope          focusScope
 	// webPlaces are where the frame shows web views (WebView), and webOut
 	// what the host got of them; webShown tells that the last frame
 	// showed some.
@@ -1565,6 +1568,7 @@ func (rt *engine) commit(root *node, w, h float32) {
 	rt.maxButton = Rect{}
 	rt.focusOrder, rt.focusScopes = rt.focusOrder[:0], rt.focusScopes[:0]
 	rt.modal, rt.modalLayer, rt.commitScope, rt.commitPage, rt.commitFade = 0, 0, focusScope{}, 0, 1
+	rt.modalPassesShortcuts = false
 	rt.observers = 0
 	if rt.groups == nil {
 		rt.groups = map[uint64]groupInfo{}

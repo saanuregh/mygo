@@ -25,6 +25,7 @@ func (rt *engine) enterScope(e *node) focusScope {
 		// A Hidden dialog scopes nothing.
 		rt.commitScope = focusScope{modal: e.id}
 		rt.modal, rt.modalLayer = e.id, 0
+		rt.modalPassesShortcuts = e.passesWindowShortcuts
 		for l := e; l.parent != nil; l = l.parent {
 			if l.parent.id == overlayID {
 				rt.modalLayer = l.id
@@ -184,6 +185,16 @@ func (c *context) insideModal() bool {
 // is behind it is inert. Build the dialog inside it.
 func (e *node) Modal() *node {
 	e.flags |= flagModal
+	return e
+}
+
+// PassesWindowShortcuts has the window's shortcuts (Context.OnShortcut
+// built outside any element) run while the element, a dialog's backdrop
+// (Modal), shows on top: a dialog that leaves the app's keys working, as
+// a settings sheet whose app still takes its menu keys. The focused
+// element inside it takes the keys it handles first.
+func (e *node) PassesWindowShortcuts() *node {
+	e.passesWindowShortcuts = true
 	return e
 }
 

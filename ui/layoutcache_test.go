@@ -454,7 +454,7 @@ func TestLayoutInputs(t *testing.T) {
 		"ownText merged spansKey collapsed rowMinW field hidden placed flips originAttached originX originY originSet edgeMargin edgeMarginSet " +
 		"hold"
 	// Fields the layout never reads.
-	other := "epoch key valueInput id depth track transform translatePct world content contentSet " +
+	other := "epoch key valueInput id depth track followEnd transform translatePct world content contentSet " +
 		"pose poseAnim poseSet poseM poseFade reposed ink noCull backface bg fill grad stripes borderC borderStyle radius " +
 		"shadows material effect effecting cache grads blur opacity opacitySet undimmed cursor paintFn hitFn objectFn styleFn paintAfterFn faces " +
 		"inputFn observeFn textClient caret takesText noIME copyData webView maximizeButton fit gray objectPos dismissed rotate label widget role " +
@@ -462,7 +462,7 @@ func TestLayoutInputs(t *testing.T) {
 		"listRow rowIndex rowsOf focusGroup groupSelects segment activeDescendant nameFrom nameJoin labelledBy focusTo " +
 		"keyShortcuts accGrid accSet " +
 		"setPos setSize choosesItems search description invalid readOnly multiline describedBy errorMessage followX sort level expandable " +
-		"chooseMany serial ignoreInput handleDoubleClick accessHidden accessDisabled themed lift ringOffset ringColor ringSet clipping zIndex zOrder " +
+		"chooseMany serial ignoreInput clearsFocus passesWindowShortcuts handleDoubleClick accessHidden accessDisabled themed lift ringOffset ringColor ringSet clipping zIndex zOrder " +
 		"roleDescription controls hasPopup popupSet"
 	known := map[string]bool{}
 	for _, f := range strings.Fields(read + " " + other) {
