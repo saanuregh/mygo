@@ -124,7 +124,11 @@ func (e *node) PopoverMenuButton(build func(m *Menu), options ...PopoverMenuButt
 	if len(options) > 0 {
 		o = options[0]
 	}
-	e.flags |= flagMenuButton | flagClickable | flagFocusable
+	if o.OnRelease {
+		e.flags |= flagClickable
+	} else {
+		e.flags |= flagMenuButton | flagClickable | flagFocusable
+	}
 	if e.role == RoleAuto || e.role == RoleButton {
 		e.role = RoleMenuButton
 	}
@@ -145,6 +149,11 @@ func (e *node) PopoverMenuButton(build func(m *Menu), options ...PopoverMenuButt
 			// place of: build again.
 			rt.consumed = true
 		}
+	}
+	if o.OnRelease && e.hasState() && e.Clicked() && !rt.drawsMenuOf(e) && !e.disabled() {
+		// Asked for before buildMenu, which opens it in this pass; once,
+		// as the frame's later passes see the same click.
+		rt.openMenuButton(e.st, false)
 	}
 	e.buildMenu(true, true, build)
 	if d := rt.menu.drawn; d != nil && d.id == e.id {
@@ -213,6 +222,12 @@ type PopoverMenuButtonOptions struct {
 	// The row keeps its content and the theme's highlight; Item adds no
 	// children.
 	Item func(item Element)
+	// OnRelease opens the menu as a click on the button ends, not as the
+	// pointer goes down on it, and the button takes no focus: a control
+	// the pointer alone opens, as a row's "⋯" whose menu opens once the
+	// click is done. Without the focus it has no keys; assistive
+	// technology still sees a menu button and opens its menu.
+	OnRelease bool
 }
 
 type menuOpenKey struct{}
