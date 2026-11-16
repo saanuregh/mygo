@@ -107,6 +107,14 @@ type Theme struct {
 	// another tip goes, as the pointer moves along a toolbar, the next one
 	// shows at once: 0.4 seconds by default.
 	TooltipDelay time.Duration
+	// TooltipAfterClick: a press hides a tooltip only while the pointer is
+	// down, and it shows again as the pointer comes up and stays, rather
+	// than staying hidden until the pointer leaves (Base UI's closeOnClick,
+	// the default). Escape still hides it.
+	TooltipAfterClick bool
+	// Tooltip is how Tooltip's tips look (TooltipStyle); its zero value is
+	// MyGo's look.
+	Tooltip TooltipStyle
 	// Menu is the look of the menus MyGo draws in the window: those of
 	// PopoverMenu and PopoverMenuButton, and of ContextMenu and Menu in a
 	// window that draws its menus (SetMenuPresentation). Its zero value
@@ -122,6 +130,46 @@ type Theme struct {
 type InputSelectionStyle struct {
 	Radius  float32
 	NoCaret bool
+}
+
+// TooltipStyle is how tooltips look; a zero field keeps MyGo's.
+type TooltipStyle struct {
+	// FontSize is the text's: the theme's FontSize less 1 by default.
+	FontSize float32
+	// PaddingX and PaddingY are the room around the text: 2 and 1.25
+	// units of Spacing by default.
+	PaddingX, PaddingY float32
+	// Radius rounds the corners: 1.25 units of Spacing by default.
+	Radius float32
+	// Gap is the room between the tip and its element: 1.5 units.
+	Gap float32
+	// Background and Text are its colors: the theme's Inverse and
+	// InverseText by default.
+	Background, Text Color
+}
+
+// TooltipLook returns the theme's Tooltip with MyGo's values in its zero
+// fields, for a tip of one's own (TooltipBase) that looks as Tooltip's.
+func (t *Theme) TooltipLook() TooltipStyle {
+	s := t.Tooltip
+	or := func(v *float32, d float32) {
+		if *v <= 0 {
+			*v = d
+		}
+	}
+	or(&s.FontSize, t.FontSize-1)
+	or(&s.PaddingX, t.Space(2))
+	or(&s.PaddingY, t.Space(1.25))
+	or(&s.Radius, t.Space(1.25))
+	or(&s.Gap, t.Space(1.5))
+	fill, text := t.inverse()
+	if s.Background == Transparent {
+		s.Background = fill
+	}
+	if s.Text == Transparent {
+		s.Text = text
+	}
+	return s
 }
 
 // followedTheme is a theme before and after following the desktop's
