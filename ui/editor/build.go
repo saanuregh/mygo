@@ -96,7 +96,9 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		e.Cursor(ui.CursorDefault)
 	}
 	e.Draw(ed.paint)
-	e.ContextMenu(ed.menu)
+	if !o.noContextMenu {
+		e.ContextMenu(ed.menu)
+	}
 	if o.fitContent {
 		// As high as the lines, at the width of the last frame.
 		ed.layout(ed.fitWidth(), ed.viewH, max(1, ed.view.scale))
@@ -136,7 +138,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		} else {
 			h.pending = false
 			ed.requestHover(h.restOff)
-			h.byPointer = true
+			h.byPointer, h.pointerX = true, ed.pointer.X
 		}
 	}
 	e.Children(func() {
@@ -155,6 +157,10 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		}
 		if h.shown {
 			hoverAnchor, hasHover = anchor("code hover anchor", h.start)
+			// Below the line, where the pointer was across it.
+			if hasHover && ed.o.hoverBelow && h.byPointer {
+				hoverAnchor.Left(h.pointerX)
+			}
 		}
 		ed.buildReplacements(c)
 		if ds, ok := ed.o.decor.(*diffSide); ok {
@@ -236,6 +242,10 @@ func (ed *editor) accessibility(n *platform.AccessNode) {
 // menu is the editor's context menu: the editing commands and folding,
 // or the app's Menu in their place, and the app's items.
 func (ed *editor) menu(m *ui.Menu) {
+	if ed.onGutterMenu && ed.o.gutterMenu != nil {
+		ed.o.gutterMenu(m, ed.gutterMenuLine)
+		return
+	}
 	if ed.o.menu != nil {
 		ed.o.menu(m)
 	} else {
