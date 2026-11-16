@@ -146,6 +146,12 @@ func (ed *editor) insert(text string) {
 	if ed.o.readOnly {
 		return
 	}
+	if ed.o.onType != nil {
+		if edits, after, ok := ed.o.onType(text); ok {
+			ed.typed(text, edits, after)
+			return
+		}
+	}
 	if ed.o.autoClose && utf8.RuneCountInString(text) == 1 && ed.autoPair(text) {
 		return
 	}
@@ -155,6 +161,37 @@ func (ed *editor) insert(text string) {
 	}
 	if ed.replaceEach(kind, false, func(int, sel) string { return text }) {
 		ed.outdentTyped(text)
+	}
+	ed.afterTyping(text)
+}
+
+// typed makes the edits of State.OnType for text, putting the
+// selections after.
+func (ed *editor) typed(text string, edits []Edit, after []Selection) {
+	kind := editTyping
+	if strings.ContainsAny(text, " \n\t") {
+		kind = editOther
+	}
+	// The text's length after the edits, as the selections are placed
+	// before the editor follows them.
+	n := ed.view.text.Len()
+	for _, e := range edits {
+		n += len(e.Text) - (e.End - e.Start)
+	}
+	place := func(func(int, bias) int) []sel {
+		sels := make([]sel, len(after))
+		for i, s := range after {
+			sels[i] = ed.newSel(max(0, min(s.Anchor, n)), max(0, min(s.Head, n)))
+		}
+		return sels
+	}
+	if len(edits) == 0 {
+		// Only the selections move, as a closer typed steps over one.
+		if len(after) > 0 {
+			ed.setSels(place(nil), revealFit)
+		}
+	} else {
+		ed.apply(edits, kind, place)
 	}
 	ed.afterTyping(text)
 }

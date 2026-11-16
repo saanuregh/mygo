@@ -147,6 +147,14 @@ type State struct {
 	// of press and hold, goes to the editor alone. The key after the
 	// first of a chord of Bindings, as Cmd+K Cmd+0, is the chord's.
 	OnInput func(ev ui.InputEvent) bool
+	// OnType, when set, types the text typed at the carets (InputText,
+	// and what an input method commits) in place of the editor's own
+	// typing, which closes brackets and outdents a line its text closes:
+	// it returns the edits, in the text as it is, and the selections
+	// after them; the editor makes them as typing, one step of undo with
+	// the typing around it, and asks for completions as it would. ok
+	// false leaves the text to the editor.
+	OnType func(text string) (edits []Edit, after []Selection, ok bool)
 	// NoInputMethod turns the system's input methods off while the
 	// editor has the keyboard (ui's InputMethod): keys type the
 	// characters of the keyboard's layout, which come to OnInput as
@@ -166,6 +174,13 @@ type State struct {
 	RenderGoToLine    func(c *ui.Context, bar ui.Element, g *GoToLineBar)
 	RenderCompletions func(c *ui.Context, panel ui.Element, m *CompletionMenu)
 	RenderHover       func(c *ui.Context, panel ui.Element, h *HoverCard)
+	// CaretCard, when set, builds a card the app shows at the newest
+	// caret, as a language server's signature help: given the element
+	// the editor places, its bottom left 4 DIPs above the caret's line
+	// (4 below it while completions show, or where the window has no room
+	// above), to style and fill. Its end margin moves it as AttachTo's
+	// margins do: MarginEnd(40) starts it 40 DIPs left of the caret.
+	CaretCard func(c *ui.Context, card ui.Element)
 
 	ed editor
 }
@@ -251,9 +266,9 @@ func (st *State) options() options {
 		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
-		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, onInput: st.OnInput, noInputMethod: st.NoInputMethod, minDigits: 3,
+		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
-		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover,
+		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard,
 	}
 }
 
