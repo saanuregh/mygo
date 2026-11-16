@@ -1015,6 +1015,10 @@ type drawnMenu struct {
 	// item styles the rows of its items after the theme's look
 	// (PopoverMenuButtonOptions.Item).
 	item func(item Element)
+	// back is the element that had the keyboard focus as it opened: a
+	// text input there keeps showing its caret while the menu shows
+	// (caretUnderMenu).
+	back uint64
 }
 
 // drawnIcon is an icon of a drawn menu in a color: the color of the text
@@ -1075,9 +1079,18 @@ func (rt *engine) openDrawnMenu(e *node) {
 	if !e.hasState() {
 		return
 	}
-	d := &drawnMenu{id: e.id, text: rt.menu.text}
+	d := &drawnMenu{id: e.id, text: rt.menu.text, back: rt.focused}
 	d.menu.openAt(rt, e.Bounds())
 	rt.menu.drawn = d
+}
+
+// caretUnderMenu reports whether id, a text input, had the keyboard focus
+// as the drawn menu that shows opened (another element's: a list's row
+// under a search field), so that it shows its caret as an app's menus
+// leave it.
+func (rt *engine) caretUnderMenu(id uint64) bool {
+	d := rt.menu.drawn
+	return d != nil && id != 0 && d.back == id && d.id != id
 }
 
 // drawMenu builds the menu drawn for e while it shows, as MenuBase or
