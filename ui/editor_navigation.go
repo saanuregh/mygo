@@ -348,6 +348,9 @@ func (ed *editor) command(c *context, name string) {
 	case "cut":
 		if a != b && !ed.password {
 			h.writeClipboard(ed.selectedText())
+			if ed.onCut != nil {
+				ed.onCut()
+			}
 			ed.insert("")
 		}
 	case "paste", "pasteAndMatchStyle":

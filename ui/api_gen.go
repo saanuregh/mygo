@@ -6654,6 +6654,20 @@ func (_handle Element) ObserveInput(fn func(ev InputEvent)) Element {
 	return wrapElement(_node.ObserveInput(fn))
 }
 
+// OnCut has fn see a cut from the text input, by Cmd+X, Ctrl+X or a Cut
+// menu item, on the main thread as it is made, before the selection goes:
+// an app keeping its own undo history makes it a step of its own. Like
+// OnPaste, it holds for the input that comes until the next frame.
+func (_handle Element) OnCut(fn func()) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.OnCut(fn))
+}
+
 // OnPaste has fn see a paste into a text input, by Cmd+V, Ctrl+V or a
 // Paste menu item, before it is inserted, on the main thread as the paste
 // comes: text is the clipboard's text, empty when it holds none, as with
