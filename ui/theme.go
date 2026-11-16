@@ -51,6 +51,10 @@ type Theme struct {
 	// InputNoHover keeps a text input's border as it is under the
 	// pointer, as nanoui's text field, rather than darkening it.
 	InputNoHover bool
+	// InputSelection is how a one-line text input shows its selection,
+	// as nanoui's text field: its rectangles' corners rounded by Radius,
+	// and, with NoCaret, no caret while text is selected.
+	InputSelection InputSelectionStyle
 	// Focus is the ring around the control with the keyboard focus,
 	// FocusRingWidth DIPs wide (2 by default; 0 is 2) and FocusRingOffset
 	// DIPs outside its edge (1 in LightTheme and DarkTheme): 0 puts the
@@ -93,6 +97,13 @@ type Theme struct {
 
 	// followed is what WithPreferences changed, nil where it has not.
 	followed *followedTheme
+}
+
+// InputSelectionStyle is how a one-line text input shows its selection
+// (Theme.InputSelection).
+type InputSelectionStyle struct {
+	Radius  float32
+	NoCaret bool
 }
 
 // followedTheme is a theme before and after following the desktop's
