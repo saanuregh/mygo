@@ -214,6 +214,10 @@ type State struct {
 	// above), to style and fill. Its end margin moves it as AttachTo's
 	// margins do: MarginEnd(40) starts it 40 DIPs left of the caret.
 	CaretCard func(c *ui.Context, card ui.Element)
+	// CaretCardShift places CaretCard's card as at a caret this many DIPs
+	// right of the caret (zode's view.zig measured its popups' caret from
+	// 6 points past the text's left edge).
+	CaretCardShift float32
 
 	ed editor
 }
@@ -317,7 +321,7 @@ func (st *State) options() options {
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
 		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
-		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard,
+		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift,
 	}
 }
 

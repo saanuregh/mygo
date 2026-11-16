@@ -74,6 +74,7 @@ type options struct {
 	renderCompletions func(*ui.Context, ui.Element, *CompletionMenu)
 	renderHover       func(*ui.Context, ui.Element, *HoverCard)
 	caretCard         func(*ui.Context, ui.Element)
+	caretCardShift    float32 // State.CaretCardShift
 	// decor shows a diff in the editor.
 	decor decor
 	// noScrollbar draws no vertical scroll bar, as the old side of a split
