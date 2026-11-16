@@ -3,6 +3,8 @@ package editor
 import (
 	"slices"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -222,15 +224,17 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 	ed.wholeWord = false
 	ed.gesture = gesture{active: true, origin: ed.newSel(off, off)}
 	switch {
+	case ed.clickGoesToDefinition(mods) && ev.Clicks == 1:
+		// Before the other modifiers' clicks, which Cmd held with them
+		// leaves (as zode's view.zig).
+		ed.gesture.active = false
+		ed.setSels([]sel{ed.newSel(off, off)}, revealNone)
+		ed.o.onDefinition(off)
+		return true
 	case mods&ui.Alt != 0 && mods&ui.Shift != 0 && ev.Clicks == 1:
 		ed.gesture.mode = 3
 		ed.gesture.colStart = ui.Point{X: cx, Y: float32(cy)}
 		ed.columnSelect(cx, cy)
-		return true
-	case ed.clickGoesToDefinition(mods) && ev.Clicks == 1:
-		ed.gesture.active = false
-		ed.setSels([]sel{ed.newSel(off, off)}, revealNone)
-		ed.o.onDefinition(off)
 		return true
 	case mods&ui.Alt != 0:
 		ed.gesture.add = true
@@ -288,9 +292,10 @@ func (ed *editor) textAt(x, y float32) int {
 }
 
 // clickGoesToDefinition reports whether a click with mods goes to the
-// definition of the word under it, which the press and the link both ask.
+// definition of the word under it, which the press and the link both ask:
+// with Cmd held, alone or with other modifiers.
 func (ed *editor) clickGoesToDefinition(mods ui.Modifiers) bool {
-	return mods == ui.Cmd && ed.o.onDefinition != nil && !ed.o.noDefinitionClick
+	return mods&ui.Cmd != 0 && ed.o.onDefinition != nil && !ed.o.noDefinitionClick
 }
 
 // linkAt returns the word under the pointer that a click with mods would
@@ -443,11 +448,57 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 			changed = true
 		}
 	}
-	if off >= 0 && !onHint && !ed.o.noPointerHover && (ed.o.onHover != nil || len(ed.diags) > 0) && off != h.restOff {
-		h.restOff, h.restAt, h.pending = off, ed.frameNow, true
-		changed = true
+	if off >= 0 && !onHint && !ed.o.noPointerHover && (ed.o.onHover != nil || len(ed.diags) > 0) {
+		rest := off
+		if ed.o.hoverAppOnly {
+			// zode's (hover_card.zig): the pointer rests on a name only,
+			// its wait starting again on another name alone.
+			rest = ed.hoverWordAt(off)
+		}
+		switch {
+		case rest < 0:
+			h.pending, h.restOff = false, -1
+		case rest != h.restOff:
+			h.restOff, h.restAt, h.pending = rest, ed.frameNow, true
+			changed = true
+		}
 	}
 	return changed
+}
+
+// hoverWordAt is where the word at off starts when it is a name's (its
+// characters letters, digits, _, $ or past ASCII), else -1. As zode's
+// chars.zig wordAround: at punctuation, its run, no name; at a space or
+// a line's end, the word before.
+func (ed *editor) hoverWordAt(off int) int {
+	r := &ed.view.text
+	line := r.LineOf(off)
+	ls, le := r.LineStart(line), r.LineEnd(line)
+	s := r.Slice(ls, le)
+	i := off - ls
+	at := rune(0)
+	if i < len(s) {
+		at, _ = utf8.DecodeRuneInString(s[i:])
+	}
+	if i >= len(s) || unicode.IsSpace(at) {
+		if i == 0 {
+			return -1
+		}
+		at, _ = utf8.DecodeLastRuneInString(s[:min(i, len(s))])
+	}
+	if !nameChar(at) {
+		return -1
+	}
+	a, z := wordAt(*r, off, "")
+	if z <= a {
+		return -1
+	}
+	return a
+}
+
+// nameChar: a character of a name (language_popups.zig isWordChar).
+func nameChar(r rune) bool {
+	return r == '_' || r == '$' || r >= 0x80 || r < 0x80 && (unicode.IsLetter(r) || unicode.IsDigit(r))
 }
 
 func (ed *editor) wheel(ev ui.InputEvent) bool {

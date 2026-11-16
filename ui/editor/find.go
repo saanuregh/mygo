@@ -42,6 +42,26 @@ type finder struct {
 	// origin is where the selection started as the bar opened
 	// (FindFromOrigin).
 	origin int
+	// chosen is the query, options and text the match after origin was
+	// last chosen for (FindFromOrigin): a change of any chooses again.
+	chosen findKey
+	// focusReplace: the replacement's field takes the focus at the next
+	// frame (FindFromOrigin's FindReplace over a query).
+	focusReplace bool
+	// seeded: show put the selection in the query; selectQuery: the
+	// query is selected as it takes the focus, had it or not (FocusQuery).
+	seeded, selectQuery bool
+}
+
+// findKey is what FindFromOrigin's choice of a match follows.
+type findKey struct {
+	query   string
+	options [4]bool
+	version uint64
+}
+
+func (f *finder) key(ed *editor) findKey {
+	return findKey{f.query, [4]bool{f.caseSens, f.wholeWord, f.regex, f.inSelection}, ed.view.version}
 }
 
 // maxMatches bounds the matches a search finds.
@@ -53,11 +73,19 @@ func (f *finder) show(ed *editor, replace bool) {
 	if replace {
 		f.replacing = true
 	}
-	// The selection, or the word at the caret, seeds the query.
+	if ed.o.findFromOrigin {
+		// Find hides replacing, as zode's bar.
+		f.replacing = replace
+	}
+	// The selection, or the word at the caret, seeds the query
+	// (FindFromOrigin's: a selection under 1000 bytes only).
 	p := ed.primary()
 	f.origin = p.start()
-	if !p.empty() && ed.view.text.LineOf(p.start()) == ed.view.text.LineOf(p.end()) {
+	seed := !ed.o.findFromOrigin || p.end()-p.start() < 1000
+	f.seeded = false
+	if !p.empty() && seed && ed.view.text.LineOf(p.start()) == ed.view.text.LineOf(p.end()) {
 		f.query = ed.slice(p.start(), p.end())
+		f.seeded = true
 	} else if p.empty() && !ed.o.findFromOrigin {
 		if a, z := wordAt(ed.view.text, p.head, ed.wordChars()); z > a && f.query == "" {
 			f.query = ed.slice(a, z)
@@ -67,9 +95,18 @@ func (f *finder) show(ed *editor, replace bool) {
 		f.scope = nil
 	}
 	f.focusQuery = true
+	ed.needsBuild = true
+	if ed.o.findFromOrigin {
+		if replace && f.query != "" {
+			// Replacing what is found: the replacement takes the keyboard.
+			f.focusQuery, f.focusReplace = false, true
+		}
+		// A match is chosen again as the query, options or text change
+		// (update).
+		return
+	}
 	f.stale = true
 	f.scrollTo = true
-	ed.needsBuild = true
 }
 
 // update searches again when the text, the query or the options
@@ -79,6 +116,14 @@ func (f *finder) update(ed *editor) {
 	if f.query != f.typed {
 		f.typed = f.query
 		f.scrollTo = true
+	}
+	if ed.o.findFromOrigin {
+		// Any change of the query, the options or the text chooses the
+		// first match from the origin again (zode's find.zig draw).
+		if k := f.key(ed); k != f.chosen {
+			f.chosen = k
+			f.scrollTo = true
+		}
 	}
 	f.search(ed)
 	if !f.scrollTo || len(f.matches) == 0 {
@@ -91,8 +136,7 @@ func (f *finder) update(ed *editor) {
 	}
 	f.current = f.nearest(from)
 	m := f.matches[f.current]
-	// In the middle of the view when out of it, either way, and out of a
-	// fold.
+	// In the middle of the view, and out of a fold.
 	ed.setSels([]sel{ed.newSel(m.start, m.end)}, revealCenter)
 	if ed.o.sharedScroll == nil {
 		ed.doReveal()
@@ -176,7 +220,8 @@ func (f *finder) scan(ed *editor, text, lower string, base int, found func(m dif
 			return
 		}
 		for _, m := range re.FindAllStringSubmatchIndex(text, maxMatches) {
-			if m[1] == m[0] || !keep(m[0], m[1]) {
+			// Empty matches count as FindFromOrigin's (zode's rure) do.
+			if m[1] == m[0] && !ed.o.findFromOrigin || !keep(m[0], m[1]) {
 				continue
 			}
 			if !found(diffRange{base + m[0], base + m[1]}, m) {
@@ -290,6 +335,7 @@ func (f *finder) nearest(off int) int {
 // step selects the next match (or previous) after the newest caret.
 func (f *finder) step(ed *editor, dir int) bool {
 	f.search(ed)
+	f.chosen = f.key(ed)
 	if len(f.matches) == 0 {
 		return false
 	}

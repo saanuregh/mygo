@@ -142,3 +142,29 @@ func TestTrailingInlaysAreNotHintsToThePointer(t *testing.T) {
 		t.Fatalf("over the hint after a trailing inlay in the list: told %+v", told)
 	}
 }
+
+// A hint's room is its label's glyphs and 2 past each side, not the spaces
+// around them (zode's view.zig inlaysOnRow): "b: " ends at its colon.
+func TestInlayHoverIsTheLabelsGlyphs(t *testing.T) {
+	st := &State{Buffer: NewBuffer("f(1, 2)\n")}
+	var told []InlayHover
+	st.OnInlayHover = func(h InlayHover) { told = append(told, h) }
+	tt := ui.NewTester(func(c *ui.Context) { View(c, st).Fill() }, 600, 200)
+	st.SetInlays([]Inlay{{Offset: 5, Text: "b: "}})
+	tt.Frame()
+	ed := &st.ed
+	y := float32(ed.view.heights.geometry(0).rows-ed.scrollY) + ed.view.lineHeight/2
+	cw := ed.view.charWidth
+	// "f(1, " is five characters; the hint's space is the eighth.
+	tt.Move(ed.textX+cw*7.5, y)
+	if len(told) != 0 {
+		t.Fatalf("on the hint's trailing space: told %+v", told)
+	}
+	tt.Move(ed.textX+cw*6.5, y)
+	if len(told) != 1 || told[0].Index != 0 {
+		t.Fatalf("on its colon: told %+v", told)
+	}
+	if b := told[0].Box; b.X > ed.textX+cw*5-1.5 || b.X+b.W < ed.textX+cw*7+1.5 {
+		t.Fatalf("box %+v", b)
+	}
+}
