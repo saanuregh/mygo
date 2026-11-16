@@ -347,6 +347,37 @@ func (st *State) Insert(text string) {
 	st.ed.retry(func() bool { st.ed.paste(text); return true })
 }
 
+// Apply makes edits, in order and not overlapping, in the text as it is,
+// as one step of undo, and puts the selections after them, the last the
+// newest: undo takes the step back and puts the selections back where
+// they were before it, and redo where Apply put them, as the editor's
+// own Enter does. It reports whether it edited; a read-only editor
+// does not.
+func (st *State) Apply(edits []Edit, after []Selection) bool {
+	st.ensure()
+	ed := &st.ed
+	return ed.retry(func() bool { return ed.applyWith(edits, after) })
+}
+
+// applyWith makes edits as one step of undo, placing the selections
+// after, as given in the text the edits make.
+func (ed *editor) applyWith(edits []Edit, after []Selection) bool {
+	if len(edits) == 0 || len(after) == 0 {
+		return false
+	}
+	n := ed.view.text.Len()
+	for _, e := range edits {
+		n += len(e.Text) - (e.End - e.Start)
+	}
+	return ed.apply(edits, editOther, func(func(int, bias) int) []sel {
+		sels := make([]sel, len(after))
+		for i, s := range after {
+			sels[i] = ed.newSel(max(0, min(s.Anchor, n)), max(0, min(s.Head, n)))
+		}
+		return sels
+	})
+}
+
 // Run runs a command as its key would, and reports whether it did
 // something.
 func (st *State) Run(cmd Command) bool {
