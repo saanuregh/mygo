@@ -6130,6 +6130,19 @@ func (_handle Element) KeepScrollbars(keep bool) Element {
 	return wrapElement(_node.KeepScrollbars(keep))
 }
 
+// KeepSide keeps an element AttachTo placed on the side of target it was
+// put, though it overflows the window there: a list that chose its side
+// by a rule of its own, as a code editor's completions do.
+func (_handle Element) KeepSide() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.KeepSide())
+}
+
 // KeyShortcuts tells assistive technology a key, with exactly the
 // modifiers mods, that presses or focuses the element, as ARIA's
 // aria-keyshortcuts: the window's shortcut that runs a toolbar button's
