@@ -82,3 +82,56 @@ func TestANextMenuUnderAStillPointerHighlightsTheItemThere(t *testing.T) {
 		t.Fatalf("highlighted %+v; items %+v", d.highlighted, tt.PopoverMenu())
 	}
 }
+
+// A NextMenu laid out unlike the menu it replaces (separators above the
+// item clicked, none in the new one) highlights the item under the still
+// pointer in its own layout, not the row the old one had there.
+func TestANextMenuOfAnotherLayoutHighlightsTheItemUnderThePointer(t *testing.T) {
+	open := false
+	next := func(m *Menu) {
+		for _, s := range []string{"N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8"} {
+			m.Item(s)
+		}
+	}
+	build := func(m *Menu) {
+		m.Item("One")
+		m.Separator()
+		m.Separator()
+		m.Separator()
+		m.Separator()
+		m.NextMenu("Next", next)
+	}
+	tt := coreNewTester(func(c *context) {
+		th := LightTheme()
+		th.Menu = MenuStyle{SeparatorSpace: 6}
+		c.SetTheme(th)
+		b := coreBox(c).Size(400, 400)
+		b.PopoverMenu(build)
+		if open {
+			open = false
+			b.OpenPopoverMenu(20, 20, build)
+		}
+	}, 400, 400)
+	tt.Frame()
+	open = true
+	tt.Frame()
+	tt.Frame()
+	r, _ := tt.Find("Next")
+	if err := tt.Click("Next"); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		tt.Frame()
+	}
+	y := r.Y + r.H/2
+	want := ""
+	for _, s := range []string{"N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8"} {
+		if b, ok := tt.Find(s); ok && b.Y <= y && y < b.Y+b.H {
+			want = s
+		}
+	}
+	d := tt.rt.menu.drawn
+	if want == "" || d == nil || len(d.highlighted) == 0 || d.highlighted[0].label != want {
+		t.Fatalf("under the pointer %q; highlighted %+v of %+v", want, d, tt.PopoverMenu())
+	}
+}

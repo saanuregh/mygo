@@ -650,6 +650,14 @@ func (m *menuParts) item(role Role, sub bool) *node {
 	if row.disabled() || m.closed {
 		return row
 	}
+	if m.moved && s.pointer == menuPointerNotYet && s.opened == rt.frame {
+		// Opened under a pointer that has not moved: not in the frame it
+		// opened, whose hover is what was under the pointer before it was
+		// laid out (a row of a menu a NextMenu took the place of), but in
+		// the next.
+		m.moved = false
+		rt.requestFrame()
+	}
 	if m.moved && row.Hovered() && !m.aiming(level, row.id) {
 		// The pointer moved onto it: it is highlighted, and its submenu
 		// opens while those of the others close. The keys go on from it,
