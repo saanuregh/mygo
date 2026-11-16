@@ -118,8 +118,12 @@ type State struct {
 	// breakpoint.
 	OnGutterClick func(line int)
 	// ContextMenu adds items to the editor's context menu, after its
-	// own.
+	// own (or Menu's).
 	ContextMenu func(m *ui.Menu)
+	// Menu builds the editor's context menu in place of its own items,
+	// which DefaultMenu adds, as an app with commands of its own for
+	// code builds its menu; ContextMenu's items follow it.
+	Menu func(m *ui.Menu)
 	// GutterMarks marks lines in the gutter, as breakpoints or
 	// bookmarks: a dot of their color.
 	GutterMarks []GutterMark
@@ -247,7 +251,7 @@ func (st *State) options() options {
 		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
-		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, onInput: st.OnInput, noInputMethod: st.NoInputMethod, minDigits: 3,
+		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, onInput: st.OnInput, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover,
 	}

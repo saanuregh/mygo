@@ -228,9 +228,22 @@ func (ed *editor) accessibility(n *platform.AccessNode) {
 	}
 }
 
-// menu is the editor's context menu: the editing commands, folding, and
-// the app's items.
+// menu is the editor's context menu: the editing commands and folding,
+// or the app's Menu in their place, and the app's items.
 func (ed *editor) menu(m *ui.Menu) {
+	if ed.o.menu != nil {
+		ed.o.menu(m)
+	} else {
+		ed.defaultMenu(m)
+	}
+	if ed.o.contextMenu != nil {
+		m.Separator()
+		ed.o.contextMenu(m)
+	}
+}
+
+// defaultMenu is the editor's own items of its context menu.
+func (ed *editor) defaultMenu(m *ui.Menu) {
 	tx := ed.texts
 	has := slices.ContainsFunc(ed.sels, func(s sel) bool { return !s.empty() })
 	ro := ed.o.readOnly
@@ -307,8 +320,12 @@ func (ed *editor) menu(m *ui.Menu) {
 			}
 		})
 	}
-	if ed.o.contextMenu != nil {
-		m.Separator()
-		ed.o.contextMenu(m)
-	}
+}
+
+// DefaultMenu adds the editor's own items of its context menu to m, as
+// Menu builds it: Cut, Copy and Paste, Select All, Toggle Comment, and
+// the submenus of selections, transformations and folding.
+func (st *State) DefaultMenu(m *ui.Menu) {
+	st.ensure()
+	st.ed.defaultMenu(m)
 }
