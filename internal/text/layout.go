@@ -1767,9 +1767,8 @@ func (s *System) ellipsize(text []rune, spans []Span, start int, p Params, width
 			cut = next
 		}
 	}
-	for cut > 0 && unicode.IsSpace(rest[cut-1]) {
-		cut--
-	}
+	// A space before the ellipsis stays, as nanoui's truncation keeps it
+	// ("with …").
 	t := append(append(s.ellipsized[:0], rest[:cut]...), mark...)
 	s.ellipsized = t
 	out := shapedLine{start: start, end: start + cut, mark: start + cut}
