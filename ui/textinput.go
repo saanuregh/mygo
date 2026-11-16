@@ -272,6 +272,36 @@ func (k TextKey) SetText(s string) {
 	}
 }
 
+// Selection returns the selection of the input as the key comes, as
+// offsets in runes into Text, from where it was started to its caret
+// (the anchor is after the caret when it was made backwards), with the
+// keys and clicks before the key applied, which TextAnchorCaret reads
+// only as the next frame is built: a composer's key acts at the caret
+// it has now.
+func (k TextKey) Selection() (anchor, caret int) {
+	ed := k.valid()
+	return ed.anchor, ed.caret
+}
+
+// SetSelection selects the runes of the input from anchor to caret, or
+// puts the caret at anchor when they are equal, and scrolls it into
+// view, as SetTextSelection does as the view is built: the caret after
+// a list's marker a composer's Enter put in with SetText. The offsets
+// are kept within the text.
+func (k TextKey) SetSelection(anchor, caret int) {
+	ed := k.valid()
+	n := ed.buf.n
+	anchor, caret = min(max(anchor, 0), n), min(max(caret, 0), n)
+	ed.editorSelection = editorSelection{anchor: anchor, caret: caret}
+	ed.hasDesired = false
+	if ed.area != nil {
+		ed.area.reveal = true
+	}
+	if w := ed.client; w != nil {
+		w.rt.requestFrame()
+	}
+}
+
 // Lines makes a text area as high as its text, wrapped at its width, from
 // min lines up to max, past which it scrolls, as a message field grows with
 // what is typed: TextArea(c, &draft).Lines(1, 8). Without it, a text area is
