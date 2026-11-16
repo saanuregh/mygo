@@ -415,7 +415,7 @@ func inputBorder(t *Theme, box, in *node) {
 		box.borderC = t.Danger
 	case in.Focused():
 		box.borderC = t.Accent
-	case box.Hovered():
+	case !t.InputNoHover && box.Hovered():
 		box.borderC = t.Border.Mix(t.Text, 0.25)
 	}
 }
