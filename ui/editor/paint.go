@@ -403,9 +403,10 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 		if style.bg.A > 0 {
 			p.Fill(ui.Rect{X: textRect.X, Y: y, W: textRect.W, H: lh}, style.bg, 0)
 		}
+		// The app's start at the text's column, as a diff's tints.
 		for _, b := range ed.o.backgrounds {
 			if line >= b.First && line <= b.Last && b.Color.A > 0 {
-				p.Fill(ui.Rect{X: textRect.X, Y: y, W: textRect.W, H: lh}, b.Color, 0)
+				p.Fill(ui.Rect{X: r.X + ed.textX, Y: y, W: r.W - ed.textX, H: lh}, b.Color, 0)
 			}
 		}
 		if active && !lineSelected {
@@ -778,6 +779,9 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 				}
 			}
 			active := f.activeLines[line]
+			// numLeft is where the line's number starts (its right edge
+			// without one), for the marks beside it.
+			numLeft := numRight
 			if numbersOn {
 				n := line + 1
 				if ed.o.decor != nil {
@@ -798,13 +802,19 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 						col = style.number
 					}
 					v.paintRow(p, &lineLayout{disp: s}, &row, numRight-lay.Width, ny, &cc, func(int, ui.Color) ui.Color { return col })
+					numLeft = numRight - lay.Width
 				}
 			}
+			marked := false
 			for _, m := range ed.o.gutterMarks {
 				if m.Line == line {
-					d := lh * 0.45
-					p.Fill(ui.Rect{X: r.X + 3, Y: ny + (lh-d)/2, W: d, H: d}, m.Color, d/2)
+					marked = true
+					ed.paintGutterMark(p, m, r.X, numLeft, ny, lh)
 				}
+			}
+			// Where a click would put a mark, under the pointer.
+			if hm := ed.o.gutterHoverMark; hm.Color.A > 0 && !marked && ed.pointerIn && ed.pointer.X < ed.gutterW && line == ed.hoverGutterLine() {
+				ed.paintGutterMark(p, hm, r.X, numLeft, ny, lh)
 			}
 			// Change bars.
 			barX := r.X + ed.gutterW - 4 - 3

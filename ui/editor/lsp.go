@@ -349,6 +349,9 @@ type hover struct {
 	// byPointer marks a hover the resting pointer asked for, which goes
 	// as the pointer leaves, rather than the keyboard.
 	byPointer bool
+	// pointerX is where the pointer was across the editor as it asked
+	// (byPointer): HoverBelow places the hover there.
+	pointerX float32
 	// hideAt is when the hover goes, the pointer having left the text
 	// hovered, unless it goes into the hover first; focused reports the
 	// keyboard in the hover, as its text is selected and copied, which

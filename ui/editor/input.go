@@ -172,8 +172,15 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 	ed.region = ed.regionAt(ev.X, ev.Y)
 	ed.hover.close()
 	if ev.Button != 0 {
-		// The secondary button keeps a selection under it for the menu.
+		// The secondary button keeps a selection under it for the menu;
+		// on a line's number, the gutter's menu is of that line.
 		if ev.Button == 1 {
+			ed.onGutterMenu = ed.region == regionGutter && ed.o.gutterMenu != nil
+			if ed.onGutterMenu {
+				_, cy := ed.toContent(ev.X, ev.Y)
+				ed.gutterMenuLine = ed.view.heights.lineAt(cy)
+				return false
+			}
 			cx, cy := ed.toContent(ev.X, ev.Y)
 			off := ed.offsetAt(cx, cy)
 			for _, s := range ed.sels {

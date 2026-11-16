@@ -55,9 +55,14 @@ type options struct {
 	onGutterClick func(int)
 	contextMenu   func(m *ui.Menu)
 	menu          func(m *ui.Menu)
-	onInput       func(ui.InputEvent) bool
-	onType        func(string) ([]Edit, []Selection, bool)
-	noInputMethod bool
+	gutterMenu    func(m *ui.Menu, line int)
+	noContextMenu bool
+	hoverBelow    bool
+	// gutterHoverMark is State.GutterHoverMark.
+	gutterHoverMark GutterMark
+	onInput         func(ui.InputEvent) bool
+	onType          func(string) ([]Edit, []Selection, bool)
+	noInputMethod   bool
 	// The parts' render functions, nil for the editor's own.
 	renderFindBar     func(*ui.Context, ui.Element, *FindBar)
 	renderGoToLine    func(*ui.Context, ui.Element, *GoToLineBar)
@@ -141,6 +146,10 @@ type editor struct {
 	view  view
 	o     options
 	theme *Theme
+	// onGutterMenu: the last right click was on a line's number, line
+	// gutterMenuLine, with a GutterMenu: the menu is the gutter's.
+	onGutterMenu   bool
+	gutterMenuLine int
 	// barStyle is how the editor's scroll bars look, its Scrollbar with
 	// the theme's zero fields filled in.
 	barStyle ui.ScrollbarStyle

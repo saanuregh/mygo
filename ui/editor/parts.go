@@ -580,8 +580,8 @@ func DefaultHover(c *ui.Context, panel ui.Element, h *HoverCard) {
 	})
 }
 
-// buildHover places the hover above the text hovered, above the window's
-// content, and builds it.
+// buildHover places the hover above the text hovered (below it with
+// HoverBelow), above the window's content, and builds it.
 func (ed *editor) buildHover(c *ui.Context, anchor ui.Element) {
 	h := &ed.hover
 	if !h.shown || h.build == nil && h.text == "" && len(h.diags) == 0 {
@@ -590,8 +590,12 @@ func (ed *editor) buildHover(c *ui.Context, anchor ui.Element) {
 	ui.Overlay(c, func() {
 		// The hover takes the keyboard as it is pressed, for its text to
 		// be selected and copied; Escape gives it back to the editor.
-		panel := ui.Box(c).Key("code hover").AttachTo(anchor, ui.AnchorTopLeft, ui.AnchorBottomLeft).
-			Role(ui.RoleTooltip).HandleInput(shield)
+		panel := ui.Box(c).Key("code hover").Role(ui.RoleTooltip).HandleInput(shield)
+		if ed.o.hoverBelow {
+			panel.AttachTo(anchor, ui.AnchorBottomLeft, ui.AnchorTopLeft)
+		} else {
+			panel.AttachTo(anchor, ui.AnchorTopLeft, ui.AnchorBottomLeft)
+		}
 		h.over, h.focused = panel.Hovered(), panel.FocusWithin()
 		if panel.Shortcut(0, ui.KeyEscape) {
 			ed.closeHover()

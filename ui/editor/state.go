@@ -124,12 +124,27 @@ type State struct {
 	// which DefaultMenu adds, as an app with commands of its own for
 	// code builds its menu; ContextMenu's items follow it.
 	Menu func(m *ui.Menu)
+	// GutterMenu builds the menu of a right click on a line's number in
+	// place of the editor's, for that line, as a debugger's breakpoint
+	// menu; the selections stay as they are.
+	GutterMenu func(m *ui.Menu, line int)
+	// HoverBelow places the hover below the line of the text hovered,
+	// rather than above it (each goes to the other side where it would
+	// leave the window); RenderHover's margins keep it apart.
+	HoverBelow bool
+	// GutterHoverMark is drawn on the line under the pointer while it is
+	// over the gutter, where the line has no mark of its own: where a
+	// click would put one (its Line is not read).
+	GutterHoverMark GutterMark
+	// NoContextMenu leaves the editor without a menu of its own: a right
+	// click goes to the nearest element around it that has one.
+	NoContextMenu bool
 	// GutterMarks marks lines in the gutter, as breakpoints or
 	// bookmarks: a dot of their color.
 	GutterMarks []GutterMark
 	// LineBackgrounds fill the rows of lines with colors, under the
-	// text and the selections, as the statement a key runs: not the
-	// gutter, nor the lines folds hide. They keep their line numbers as
+	// text and the selections, as the statement a key runs, from the
+	// text's column: not the gutter, nor the lines folds hide. They keep their line numbers as
 	// the text is edited, unlike diagnostics and inlays, which move with
 	// it: compute them again when the buffer's Version changes.
 	LineBackgrounds []LineBackground
@@ -236,6 +251,12 @@ const (
 type GutterMark struct {
 	Line  int
 	Color ui.Color
+	// Shape is a dot, a square or an arrow; Size its width and height
+	// (0.45 of a line's height when 0). Beside puts it 4 left of the
+	// line's number rather than at the gutter's left edge.
+	Shape  GutterShape
+	Size   float32
+	Beside bool
 }
 
 // LineBackground fills lines First to Last, from 0, with Color. The lines
@@ -266,7 +287,7 @@ func (st *State) options() options {
 		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
-		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
+		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard,
 	}
