@@ -1081,8 +1081,18 @@ func (rt *engine) openDrawnMenu(e *node) {
 	}
 	d := &drawnMenu{id: e.id, text: rt.menu.text, back: rt.focused}
 	d.menu.openAt(rt, e.Bounds())
+	if !rt.menu.key && !rt.menu.below {
+		// Opened by the pointer where it rests: the item under it takes
+		// the highlight at once, as nanoui's menus did.
+		d.menu.pointer = menuPointerNotYet
+	}
 	rt.menu.drawn = d
 }
+
+// menuPointerNotYet is a drawn menu's pointer (menuShown.pointer) before
+// the pointer highlighted an item: no place the pointer is, so that the
+// item under a pointer that does not move is highlighted at once.
+var menuPointerNotYet = [2]float32{float32(math.Inf(-1)), float32(math.Inf(-1))}
 
 // caretUnderMenu reports whether id, a text input, had the keyboard focus
 // as the drawn menu that shows opened (another element's: a list's row

@@ -29,12 +29,17 @@ func (m *Menu) NextMenu(label string, build func(m *Menu)) *MenuItem {
 
 // openNextMenu opens the menu build fills where the drawn menu d was, as d
 // closes for the NextMenu item chosen from it: on its first item when the
-// keys chose it, as they show the focus.
+// keys chose it, as they show the focus, and else on the item under the
+// pointer, which has not moved.
 func (rt *engine) openNextMenu(d *drawnMenu, build func(m *Menu)) {
 	// Built in this pass, as d was: it stays once the pass is done.
 	next := &drawnMenu{id: d.id, text: d.text, built: rt.frame, pass: rt.pass, build: build}
+	pointer := menuPointerNotYet
+	if rt.focusVisible {
+		pointer = [2]float32{rt.pointerX, rt.pointerY}
+	}
 	next.menu = menuShown{below: d.menu.below, dx: d.menu.dx, dy: d.menu.dy, attach: d.menu.attach, opened: rt.frame,
-		levels: []menuLevel{{first: rt.focusVisible}}, pointer: [2]float32{rt.pointerX, rt.pointerY}}
+		levels: []menuLevel{{first: rt.focusVisible}}, pointer: pointer}
 	rt.menu.drawn = next
 	rt.consumed = true
 }
@@ -57,7 +62,7 @@ func (e *node) OpenPopoverMenu(x, y float32, build func(m *Menu)) {
 	rt := e.c.rt
 	b := e.Bounds()
 	d := &drawnMenu{id: e.id, built: rt.frame, pass: rt.pass, build: build, back: rt.focused}
-	d.menu = menuShown{dx: x - b.X, dy: y - b.Y, opened: rt.frame, levels: []menuLevel{{}}, pointer: [2]float32{rt.pointerX, rt.pointerY}}
+	d.menu = menuShown{dx: x - b.X, dy: y - b.Y, opened: rt.frame, levels: []menuLevel{{}}, pointer: menuPointerNotYet}
 	rt.menu.drawn = d
 	rt.consumed = true
 }
@@ -73,7 +78,7 @@ func (e *node) OpenPopoverMenuBelow(build func(m *Menu)) {
 	}
 	rt := e.c.rt
 	d := &drawnMenu{id: e.id, built: rt.frame, pass: rt.pass, build: build, back: rt.focused}
-	d.menu = menuShown{below: true, opened: rt.frame, levels: []menuLevel{{}}, pointer: [2]float32{rt.pointerX, rt.pointerY}}
+	d.menu = menuShown{below: true, opened: rt.frame, levels: []menuLevel{{}}, pointer: menuPointerNotYet}
 	rt.menu.drawn = d
 	rt.consumed = true
 }
