@@ -121,6 +121,14 @@ type Options struct {
 	// with Conn), for an app that says so itself or closes the view.
 	// OnExit, Done and ExitCode are the same either way.
 	NoExitMessage bool
+	// AnsweredByConn leaves the program's questions (a cursor report,
+	// device attributes, the colors) to the other end of Conn: the
+	// terminal writes no answers of its own, only what is typed, pasted
+	// and reported of the pointer and the focus. A client fed the raw
+	// output of a program whose server keeps a terminal of its own that
+	// answers, as zode's host, sets it, so that the program does not get
+	// each answer twice.
+	AnsweredByConn bool
 
 	// Font is the font of the text: the system's monospaced font at 13
 	// DIPs when zero.
@@ -549,6 +557,9 @@ type Terminal struct {
 	// the main thread writes hold t.mu too (view.finishRead).
 	offer    *pasteOffer
 	replying bool
+	// pasting: WritePTY gets a paste's event, which AnsweredByConn
+	// still sends; t.mu guards it.
+	pasting bool
 	// binds are the keys bound to actions; fontSize is the size zooms
 	// set, 0 for the font's.
 	binds    []Keybind
@@ -619,6 +630,9 @@ func New(opts Options) (*Terminal, error) {
 	t.term, err = vt.NewTerminal(80, 24, vt.Effects{
 		WritePTY: func(p []byte) {
 			if !t.replying {
+				if t.opts.AnsweredByConn && t.opts.Conn != nil && !t.pasting {
+					return
+				}
 				t.in.push(append([]byte(nil), p...))
 				return
 			}
