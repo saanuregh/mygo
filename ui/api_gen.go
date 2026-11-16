@@ -6948,6 +6948,21 @@ func (_handle Element) OpenPopoverMenu(x float32, y float32, build func(m *Menu)
 	_node.OpenPopoverMenu(x, y, build)
 }
 
+// OpenPopoverMenuBelow opens the element's menu drawn in the window below
+// the element, or above it where the window has no room, lined up with its
+// start, as a menu button's: for a menu anchored on a box, as a code
+// editor's actions on the caret's, which never covers the box. As
+// OpenPopoverMenu, build fills it in place of the element's own function.
+func (_handle Element) OpenPopoverMenuBelow(build func(m *Menu)) {
+	_node := _handle.node()
+	if _node == nil {
+		return
+	}
+	_ctx := _node.c
+	_ = _ctx
+	_node.OpenPopoverMenuBelow(build)
+}
+
 // Orientation tells assistive technology which way the element runs, as
 // ARIA's aria-orientation: Vertical for a slider, separator, splitter,
 // toolbar, tab list or menu of your own going up and down, which screen
