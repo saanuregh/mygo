@@ -1049,6 +1049,17 @@ func (t *Tester) Key(mods Modifiers, key Key) {
 	t.send(platform.SurfaceEvent{Kind: platform.KeyReleased, Key: platform.Key(key), Mods: platform.Modifiers(mods)})
 }
 
+// KeyToFocus presses a key for the focused element alone: no shortcut,
+// the window's or an element's, sees it, as nanoui's Tester.key, which
+// skipped the shortcut pass a real window makes first.
+func (t *Tester) KeyToFocus(mods Modifiers, key Key) {
+	t.rt.focusOnly = true
+	t.rt.event(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: platform.Key(key), Mods: platform.Modifiers(mods)})
+	t.rt.focusOnly = false
+	t.settle()
+	t.send(platform.SurfaceEvent{Kind: platform.KeyReleased, Key: platform.Key(key), Mods: platform.Modifiers(mods)})
+}
+
 // KeyDown presses a key and holds it, as a player holds a key that walks,
 // until KeyUp.
 func (t *Tester) KeyDown(key Key) {
