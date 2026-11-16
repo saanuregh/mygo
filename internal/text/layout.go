@@ -123,6 +123,10 @@ type Params struct {
 	// KeepSpaces keeps the advance of whitespace at the end of wrapped
 	// lines, as text editors do.
 	KeepSpaces bool
+	// TrimLineStarts leaves out the spaces that start a line after the
+	// first, as nanoui's wrapped text did: an indented line of output
+	// starts at the left.
+	TrimLineStarts bool
 	// NoBreakWords only breaks lines between words, letting a long word
 	// overflow the width instead of breaking it.
 	NoBreakWords bool
@@ -1288,8 +1292,14 @@ func (s *System) layout(p Params) *cached {
 		if p.MaxLines > 0 {
 			maxLines = p.MaxLines - len(l.Lines)
 		}
+		from := start
+		if p.TrimLineStarts && start > 0 {
+			for from < end && runes[from] == ' ' {
+				from++
+			}
+		}
 		var truncated bool
-		l.Lines, truncated = s.paragraph(l.Lines, p, spans, runes, start, end, maxLines, end < len(runes), m, &y)
+		l.Lines, truncated = s.paragraph(l.Lines, p, spans, runes, from, end, maxLines, end < len(runes), m, &y)
 		if truncated {
 			l.Truncated = true
 			break

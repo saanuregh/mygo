@@ -222,6 +222,9 @@ func (e *node) textParams(width float32) text.Params {
 		style.LineHeight = ts.lineHeight / style.FontSize()
 	}
 	p := text.Params{Text: e.text, Width: width, MaxLines: e.maxLines, Style: style, Spans: e.textSpans(), NoWrap: e.noWrap, Balance: e.balance, Pretty: e.pretty, KeepSpaces: e.keepSpaces, Ellipsis: e.ellipsis, TruncateMiddle: e.middle, TruncateStart: e.cutStart, RTL: e.rtl()}
+	// Wrapped text to read, not to edit, starts each line at the left, as
+	// nanoui's wrapped text: its spaces there are left out.
+	p.TrimLineStarts = width > 0 && !e.noWrap && e.flags&flagEditable == 0
 	switch {
 	case ts.align == Center:
 		p.Align = text.Center
