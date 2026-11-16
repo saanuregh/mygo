@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/internal/l10n"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
 	"github.com/egoist/mygo/ui/markdown/parser"
 )
 
@@ -102,6 +103,13 @@ type Options struct {
 	// WrapCode wraps the lines of code blocks rather than scrolling them
 	// sideways.
 	WrapCode bool
+	// CodeTokens, when set, colors code blocks in place of the editor's
+	// lexers (editor.LanguageNamed), as an app's own parser does: it
+	// returns the tokens of each line of code, a block's text, as an
+	// editor.Tokenizer gives a line's, for the language its fence names,
+	// or false to leave the block to the lexers. It is asked again when
+	// the block's text changes.
+	CodeTokens func(language, code string) ([][]editor.Token, bool)
 	// Math, when set, builds blocks of display math from their TeX, which
 	// show as their TeX without it; math within text shows as its TeX.
 	Math func(c *ui.Context, tex string)

@@ -202,6 +202,42 @@ func (st *viewState) highlight(cs *codeState, i int) {
 	if k0 == n && len(cs.lines) == n && len(cs.chunks) == (n+chunkLines-1)/chunkLines {
 		return
 	}
+	if st.appTokens(cs, i, n) {
+		k0 = 0
+	} else {
+		st.lexLines(cs, i, k0, n)
+	}
+	st.chunkSpans(cs, k0, n)
+}
+
+// appTokens takes the tokens of code block i's n lines from
+// Options.CodeTokens; whether it gave them.
+func (st *viewState) appTokens(cs *codeState, i, n int) bool {
+	if st.o.CodeTokens == nil || cs.lang == "" {
+		return false
+	}
+	toks, ok := st.o.CodeTokens(cs.lang, st.doc.Lines(i))
+	if !ok {
+		return false
+	}
+	cs.lines, cs.ends, cs.toks = cs.lines[:0], cs.ends[:0], cs.toks[:0]
+	for k := range n {
+		line, _ := st.doc.Line(i, k)
+		var lt []editor.Token
+		if k < len(toks) {
+			lt = toks[k]
+		}
+		cs.lines = append(cs.lines, line)
+		cs.ends = append(cs.ends, 0)
+		cs.toks = append(cs.toks, lt)
+	}
+	return true
+}
+
+// lexLines tokenizes lines k0 to n of code block i with the lexer, from
+// the state line k0 starts in.
+func (st *viewState) lexLines(cs *codeState, i, k0, n int) {
+	d := st.doc
 	cs.lines, cs.ends, cs.toks = cs.lines[:k0], cs.ends[:k0], cs.toks[:k0]
 	state := uint64(0)
 	if k0 > 0 {
@@ -217,6 +253,11 @@ func (st *viewState) highlight(cs *codeState, i int) {
 		cs.ends = append(cs.ends, state)
 		cs.toks = append(cs.toks, toks)
 	}
+}
+
+// chunkSpans makes the spans of the chunks of a block's n lines anew from
+// line k0.
+func (st *viewState) chunkSpans(cs *codeState, k0, n int) {
 	chunks := (n + chunkLines - 1) / chunkLines
 	if n == 0 {
 		chunks = 1
