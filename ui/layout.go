@@ -1661,8 +1661,9 @@ func reattach(ov *node) {
 func attachedAt(c, e *node, t Rect, pw, ph, w, h float32) (x, y float32) {
 	ax, ay, sx, sy := c.attachFractions()
 	edge := c.windowEdge()
-	x, fx := alongTarget(t.X, t.W, ax, sx, w, c.m(3)-c.m(1), c.c.w, edge)
-	y, fy := alongTarget(t.Y, t.H, ay, sy, h, c.m(0)-c.m(2), c.c.h, edge)
+	keep := c.c.window != nil && c.c.window.OverlaysKeepAlignment
+	x, fx := alongTarget(t.X, t.W, ax, sx, w, c.m(3)-c.m(1), c.c.w, edge, keep)
+	y, fy := alongTarget(t.Y, t.H, ay, sy, h, c.m(0)-c.m(2), c.c.h, edge, keep)
 	c.placed, c.flips = c.attach.flipped(fx, fy), 0
 	if fx {
 		c.flips |= flipAcross
@@ -1733,14 +1734,16 @@ func beside(at, self float32) bool { return at == 1 && self == 0 || at == 0 && s
 // window, limit long, with its point at fraction self on target's point at
 // fraction at, moved by off: on the other side of target, or the other way
 // along it, where that overflows the window, less edge at each end, less
-// (flipped), then moved into it along target.
-func alongTarget(t0, tsize, at, self, size, off, limit, edge float32) (p float32, flipped bool) {
+// (flipped), then moved into it along target. With keep, only an element
+// beside target, or at a point, goes to its other side; one along it keeps
+// its alignment and is moved into the window (Theme.OverlaysKeepAlignment).
+func alongTarget(t0, tsize, at, self, size, off, limit, edge float32, keep bool) (p float32, flipped bool) {
 	pos := func(at, self, off float32) float32 { return t0 + at*tsize - self*size + off }
 	over := func(p float32) float32 {
 		return max(0, edge-p) + max(0, p+size-(limit-edge))
 	}
 	p = pos(at, self, off)
-	if over(p) > 0 {
+	if (beside(at, self) || tsize == 0 || !keep) && over(p) > 0 {
 		if q := pos(1-at, 1-self, -off); over(q) < over(p) {
 			p, flipped = q, true
 		}

@@ -1124,3 +1124,28 @@ func TestReviewedEdges(t *testing.T) {
 		t.Error("Enter pressed an invisible button")
 	}
 }
+
+// With OverlaysKeepAlignment, an overlay below its target that passes the
+// window's end keeps below and is moved into the window, as nanoui's
+// kit.place does; without, it lines up with the target's other end.
+func TestOverlaysKeepAlignment(t *testing.T) {
+	for _, keep := range []bool{false, true} {
+		tt := coreNewTester(func(c *context) {
+			th := *c.Theme()
+			th.OverlaysKeepAlignment = keep
+			c.SetTheme(&th)
+			b := coreBox(c).Margin(0, 0, 0, 300).Size(40, 20).Label("button")
+			coreOverlay(c, func() {
+				coreBox(c).Size(150, 30).AttachTo(b, AnchorBottomStart, AnchorTopStart).Label("panel")
+			})
+		}, 400, 200)
+		p, _ := tt.Find("panel")
+		want := Rect{400 - windowMargin - 150, 20, 150, 30}
+		if !keep {
+			want.X = 340 - 150
+		}
+		if !nearRect(p, want) {
+			t.Errorf("keep %v: the panel at %v, want %v", keep, p, want)
+		}
+	}
+}

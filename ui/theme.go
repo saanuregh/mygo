@@ -67,6 +67,11 @@ type Theme struct {
 	Focus           Color
 	FocusRingWidth  float32
 	FocusRingOffset float32
+	// OverlaysKeepAlignment keeps an overlay that passes the window's
+	// end along its target (a menu below its button, wider than the room
+	// right of it) aligned as asked and moves it into the window, as
+	// nanoui's kit.place does, rather than aligning it the other way.
+	OverlaysKeepAlignment bool
 	// Inverse fills tooltips and toasts, the theme turned over so that
 	// they stand out from what they are over: dark in a light theme, light
 	// in a dark one. InverseText is text on it. Left zero, they are Text
