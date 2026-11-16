@@ -473,16 +473,17 @@ func (ed *editor) wheel(ev ui.InputEvent) bool {
 	return moved
 }
 
-// trackWidth is the room the scroll bar's track takes at the right edge:
-// none when the editor fits its content, as it then never scrolls, or
-// hides its scroll bars (NoScrollbars). The old side of a split diff,
+// trackWidth is the room the scroll bar's track takes at the right edge,
+// with the app's (MarginRight): only the app's when the editor fits its
+// content, as it then never scrolls, or hides its scroll bars
+// (NoScrollbars). The old side of a split diff,
 // which draws no scroll bar of its own (noScrollbar), keeps the room all
 // the same, so that both sides wrap their lines at the same width.
 func (ed *editor) trackWidth() float32 {
 	if ed.o.fitContent || ed.o.hideScrollbars {
-		return 0
+		return ed.o.marginRight
 	}
-	return ed.barWidth()
+	return ed.barWidth() + ed.o.marginRight
 }
 
 // barWidth is how wide the editor's scroll bars are, as State.Scrollbar
@@ -588,7 +589,11 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 			return true
 		}
 	}
-	if ed.o.folding && ed.o.decor == nil && ev.X >= ed.foldX() {
+	inFolds := ev.X >= ed.foldX()
+	if g := ed.gutterLayout(); g != nil {
+		inFolds = ev.X < g.Left
+	}
+	if ed.o.folding && ed.o.decor == nil && inFolds {
 		if ed.foldable(line) || ed.isFolded(line) {
 			ed.toggleFoldLine(line)
 			return true

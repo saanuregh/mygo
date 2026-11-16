@@ -1497,10 +1497,19 @@ func (v *view) colorsOf(l *lineLayout, out *runColors) {
 		out.ends = append(out.ends, l.toDisp(t.End, false))
 		out.colors = append(out.colors, v.theme.TokenColor(t.Kind))
 	}
+	var inlays []inlay
+	if v.theme.InlayHint.A > 0 {
+		inlays = v.inlaysIn(l.start, l.start+len(l.text))
+	}
 	for i, sg := range l.segs {
 		switch sg.kind {
 		case segInlay:
-			out.overlay(sg.disp, sg.disp+segLen(l, i), v.theme.LineNumber)
+			c := v.theme.LineNumber
+			if sg.inlay < len(inlays) && inlays[sg.inlay].kind == 0 {
+				// A hint's own color (Theme.InlayHint).
+				c = v.theme.InlayHint
+			}
+			out.overlay(sg.disp, sg.disp+segLen(l, i), c)
 		case segReplace:
 			if n := segLen(l, i); n > 0 && l.reps[sg.rep].Content == nil {
 				c := l.reps[sg.rep].Color

@@ -227,7 +227,7 @@ var startDiff = func(job func()) { go job() }
 // compare returns the hunks between the whole texts, from any goroutine:
 // it reads only eol of d.
 func (d *diffModel) compare(oldText, newText rope.Text) []diff.Hunk {
-	return diff.Lines(d.lines(oldText, 0, oldText.LineCount()), d.lines(newText, 0, newText.LineCount()))
+	return offFinalLine(newText, diff.Lines(d.lines(oldText, 0, oldText.LineCount()), d.lines(newText, 0, newText.LineCount())))
 }
 
 // ropeLines returns lines from to to of r: none of an empty text, which
@@ -370,9 +370,27 @@ func (d *diffModel) redo(from, to int, touched []bool) {
 		h.A0, h.A1, h.B0, h.B1 = h.A0+shift, h.A1+shift, h.B0+shift, h.B1+shift
 	}
 	hunks := append(append(append([]diff.Hunk{}, before...), mid...), after...)
-	d.hunks = mergeHunks(hunks)
+	d.hunks = offFinalLine(d.newText, mergeHunks(hunks))
 	d.version++
 	d.words = nil
+}
+
+// offFinalLine moves lines added at the end of a text with a final
+// newline up a line where they can show there too (the line before them
+// is empty): the empty line after the last newline begins no line in git,
+// which marks them there, not one line low.
+func offFinalLine(t rope.Text, hunks []diff.Hunk) []diff.Hunk {
+	n := t.LineCount()
+	if n < 2 || t.Line(n-1) != "" {
+		return hunks
+	}
+	if k := len(hunks); k > 0 {
+		h := &hunks[k-1]
+		if h.A0 == h.A1 && h.B1 == n && h.B0 > 0 && h.A0 > 0 && t.Line(h.B0-1) == "" {
+			h.A0, h.A1, h.B0, h.B1 = h.A0-1, h.A1-1, h.B0-1, h.B1-1
+		}
+	}
+	return hunks
 }
 
 func overlap(a0, a1, b0, b1 int) int { return max(0, min(a1, b1)-max(a0, b0)) }

@@ -100,6 +100,18 @@ type options struct {
 	// noDefinitionClick and noDefinitionLink are State's
 	// NoDefinitionClick and NoDefinitionLink.
 	noDefinitionClick, noDefinitionLink bool
+	// gutter, lineNotes, noteFont, straightUnderlines and marginRight are
+	// State's Gutter, LineNotes, NoteFont, StraightUnderlines and
+	// MarginRight.
+	gutter             *GutterLayout
+	lineNotes          []LineNote
+	noteFont           ui.Font
+	straightUnderlines bool
+	marginRight        float32
+	// findFromOrigin, noOccurrences, filledBrackets and caretBeforeInlays
+	// are State's FindFromOrigin, NoOccurrences, FilledBrackets and
+	// CaretBeforeInlays.
+	findFromOrigin, noOccurrences, filledBrackets, caretBeforeInlays bool
 }
 
 // sharedScroll is the vertical scroll several editors share.
@@ -224,6 +236,8 @@ type editor struct {
 	// inlayHovered is the hint the app was told the pointer is on, -1
 	// for none (OnInlayHover).
 	inlayHovered int
+	// note is the last note drawn, shaped (State.LineNotes).
+	note noteGlyphs
 	// region is the part of the editor under the pointer, which its
 	// cursor and the scroll bars' highlight show.
 	region region
@@ -767,6 +781,13 @@ func (ed *editor) numbersOn() bool {
 
 func (ed *editor) gutterWidth() float32 {
 	v := &ed.view
+	if g := ed.gutterLayout(); g != nil {
+		if !ed.numbersOn() {
+			return g.Left + g.Right
+		}
+		digits := max(g.MinDigits, len(strconv.Itoa(v.text.LineCount())))
+		return g.Left + float32(digits)*v.charWidth + g.Right
+	}
 	w := float32(0)
 	if ed.numbersOn() {
 		digits := max(ed.o.minDigits, len(strconv.Itoa(v.text.LineCount())))
