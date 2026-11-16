@@ -55,6 +55,7 @@ type options struct {
 	onDefinition  func(int)
 	onGutterClick func(int)
 	contextMenu   func(m *ui.Menu)
+	menu          func(m *ui.Menu)
 	onInput       func(ui.InputEvent) bool
 	noInputMethod bool
 	// The parts' render functions, nil for the editor's own.
