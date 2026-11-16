@@ -266,9 +266,11 @@ type ListState struct {
 	followFrame     uint64
 	laidOut         bool
 	// wroteY is the offset the list set, to tell it from scrolling.
-	wroteY  float64
-	req     listRequest
-	heights listHeights
+	wroteY float64
+	// scrolledDown: the last frame's offset was past the top (Scrolled).
+	scrolledDown bool
+	req          listRequest
+	heights      listHeights
 
 	// scrolled tells that the app asked the list to scroll (ScrollTo,
 	// ScrollIntoView, ScrollToEnd): a mouse wheel's notches on their way
@@ -454,6 +456,14 @@ func (s *ListState) Visible() (first, last int) {
 func (s *ListState) AtEnd() bool {
 	s.read = true
 	return s.atEnd
+}
+
+// Scrolled reports whether the list was scrolled down from its top in
+// the last frame, as Visible does its rows: by any amount, its first row
+// cut, or above the view.
+func (s *ListState) Scrolled() bool {
+	s.read = true
+	return s.scrolledDown
 }
 
 // Focused reports whether the List, Table or Outline using s has
@@ -1883,10 +1893,11 @@ func (e *node) relayoutList(ch *node, y float64) {
 // for a view that read where it was.
 func (s *ListState) remember(e *node, first, last int, atEnd bool, scroll float64) {
 	f, n := e.list, e.list.n
-	if s.read && (first != s.first || last != s.last || atEnd != s.atEnd) {
+	if s.read && (first != s.first || last != s.last || atEnd != s.atEnd || (scroll > 0) != s.scrolledDown) {
 		e.c.rt.animating = true
 	}
 	s.laidOut, s.wroteY, s.req, s.read = true, scroll, listRequest{}, false
+	s.scrolledDown = scroll > 0
 	s.first, s.last, s.atEnd = first, last, atEnd
 	s.reachEnd(e.c.rt, first, last, n)
 	s.following = atEnd
