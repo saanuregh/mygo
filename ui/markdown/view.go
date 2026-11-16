@@ -232,6 +232,8 @@ type viewState struct {
 	notes         map[string]int
 	sb            spanBuilder
 	fade          func(src int) float32
+	// placed are the top-level blocks built in the frame (Blocks).
+	placed []placed
 	// nested are the views with ShareSelection built within this one's
 	// blocks, whose text this one's selection holds, for copying it as
 	// Markdown; cur is the block being built, which a nested view is
@@ -352,6 +354,7 @@ func build(c *ui.Context, src string, o *Options, streaming bool) ui.Element {
 		}
 	}
 	st.elems = st.elems[:0]
+	st.placed = st.placed[:0]
 	clear(st.nested)
 	st.nested, st.cur = st.nested[:0], 0
 	st.numberNotes()
@@ -427,6 +430,9 @@ func (st *viewState) blocks(c *ui.Context, parent int, tight bool, base spanStyl
 			}
 		}
 		el := st.block(c, j, tight, base)
+		if parent == 0 {
+			st.placed = append(st.placed, placed{j, el.Bounds()})
+		}
 		st.fadeIn(el, b)
 		if top > 0 {
 			el.Margin(top, 0, 0, 0)
