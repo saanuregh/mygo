@@ -31,13 +31,15 @@ func (ed *editor) paintGutterMark(p *ui.Painter, m GutterMark, x, numLeft, y, lh
 	case GutterSquare:
 		p.Fill(ui.Rect{X: at, Y: top, W: d, H: d}, m.Color, 2)
 	case GutterArrow:
-		// A bold arrow, its shaft a third of its height, its head half
-		// its width.
+		// A line arrow in bold strokes with round ends, as SF Symbols'
+		// arrow.right at a bold weight (zode's editor/view.zig), 1 point
+		// further right than a box of its size.
 		var path ui.Path
-		mid, half := top+d/2, d/2
-		path.MoveTo(at, mid-d/6).LineTo(at+half, mid-d/6).LineTo(at+half, top).LineTo(at+d, mid).
-			LineTo(at+half, top+d).LineTo(at+half, mid+d/6).LineTo(at, mid+d/6).Close()
-		p.FillPath(&path, m.Color)
+		at++
+		mid, w := top+d/2, d*0.13
+		path.MoveTo(at+d*0.1, mid).LineTo(at+d*0.9, mid)
+		path.MoveTo(at+d*0.52, top+d*0.16).LineTo(at+d*0.9, mid).LineTo(at+d*0.52, top+d*0.84)
+		p.StrokePath(&path, w, m.Color)
 	default:
 		p.Fill(ui.Rect{X: at, Y: top, W: d, H: d}, m.Color, d/2)
 	}
