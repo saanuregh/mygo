@@ -112,6 +112,15 @@ type options struct {
 	// are State's FindFromOrigin, NoOccurrences, FilledBrackets and
 	// CaretBeforeInlays.
 	findFromOrigin, noOccurrences, filledBrackets, caretBeforeInlays bool
+	// roundRanges, caretRowOnly and guidesFromBelow are State's
+	// RoundRanges, CaretRowOnly and GuidesFromBelow.
+	roundRanges, caretRowOnly, guidesFromBelow bool
+	// caretSolidFor is State's CaretSolidFor.
+	caretSolidFor time.Duration
+	// fontCarets is State's FontCarets.
+	fontCarets bool
+	// hintsFollowText is State's HintsFollowText.
+	hintsFollowText bool
 }
 
 // sharedScroll is the vertical scroll several editors share.

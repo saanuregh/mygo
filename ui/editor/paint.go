@@ -55,6 +55,7 @@ func (ed *editor) layout(w, h, scale float32) {
 	if ed.o.wrapColumn > 0 {
 		ww = min(ww, float32(ed.o.wrapColumn)*v.charWidth)
 	}
+	v.hintsFollowText = ed.o.hintsFollowText
 	v.setWrap(wrap, max(ww, v.charWidth*8))
 	if wrap {
 		// Wrapped lines fit: nothing is sideways.
@@ -143,11 +144,17 @@ func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 	ed.prepare(&f)
 	if ed.focused {
 		phase := ed.frameNow.Sub(ed.blinkStart)
-		f.caretsOn = (phase/blinkInterval)%2 == 0 || ed.gesture.active
-		if !ed.gesture.active {
-			p.After(blinkInterval - phase%blinkInterval)
+		if solid := ed.o.caretSolidFor; solid > 0 && phase < solid {
+			f.caretsOn = true
+			p.After(solid - phase)
+		} else {
+			phase -= solid
+			f.caretsOn = (phase/blinkInterval)%2 == 0 || ed.gesture.active
+			if !ed.gesture.active {
+				p.After(blinkInterval - phase%blinkInterval)
+			}
 		}
-	} else if ed.o.cursorShape == CursorBlock {
+	} else if ed.o.cursorShape == CursorBlock && !ed.o.fontCarets {
 		// Outlined, not blinking, as Vim's and Zed's blocks without the
 		// keyboard.
 		f.caretsOn = true
@@ -262,6 +269,14 @@ func (ed *editor) lineIndent(line int) int {
 	s := t.Line(line)
 	if strings.TrimSpace(s) != "" {
 		return indentWidth(s, tab)
+	}
+	if ed.o.guidesFromBelow {
+		for i := line + 1; i < t.LineCount() && i-line < 64; i++ {
+			if s := t.Line(i); strings.TrimSpace(s) != "" {
+				return indentWidth(s, tab)
+			}
+		}
+		return 0
 	}
 	before, after := 0, 0
 	for i := line - 1; i >= 0 && line-i < 50; i-- {
@@ -422,7 +437,7 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				p.Fill(ui.Rect{X: r.X + ed.textX, Y: y, W: r.W - ed.textX, H: lh}, b.Color, 0)
 			}
 		}
-		if active && !lineSelected {
+		if active && !lineSelected && (!ed.o.caretRowOnly || ed.caretRowAt(l, ri)) {
 			p.Fill(ui.Rect{X: textRect.X, Y: y, W: textRect.W, H: lh}, ct.ActiveLine, 0)
 		}
 		// The app's ranges of text, at characters' edges.
@@ -436,6 +451,10 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				for _, rc := range f.rects {
 					ed.underline(p, ox+rc.X, y, rc.W, b.Color)
 				}
+				continue
+			}
+			if ed.o.roundRanges {
+				ed.fillRangeInset(p, f, l, row, ox, y, l.toDisp(a, false), l.toDisp(z, false), b.Color)
 				continue
 			}
 			ed.fillRange(p, f, l, row, ox, y, l.toDisp(a, false), l.toDisp(z, false), b.Color, 0)
@@ -456,6 +475,10 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				c = ct.CurrentMatch
 			}
 			a, b := max(m.start-l.start, 0), min(m.end-l.start, len(l.text))
+			if ed.o.roundRanges {
+				ed.fillRangeInset(p, f, l, row, ox, y, l.toDisp(a, false), l.toDisp(b, false), c)
+				continue
+			}
 			ed.fillRange(p, f, l, row, ox, y, l.toDisp(a, false), l.toDisp(b, false), c, 2)
 		}
 		if f.occurrence != "" {
@@ -476,14 +499,23 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 		if !ed.focused {
 			selColor = ct.InactiveSelection
 		}
+		var selRadius float32
+		if ed.o.roundRanges {
+			selRadius = 3
+		}
 		for _, s := range ed.sels {
 			if s.empty() || s.end() < l.start || s.start() > l.start+len(l.text) {
 				continue
 			}
 			a, b := max(s.start()-l.start, 0), min(s.end()-l.start, len(l.text))
 			da, db := l.toDisp(a, false), l.toDisp(b, true)
-			ed.fillRange(p, f, l, row, ox, y, da, db, selColor, 0)
 			// Past the end of the line, the newline.
+			if s.end() > l.start+len(l.text) && ri == len(l.rows)-1 && ed.o.roundRanges {
+				// One range with it, as rounded.
+				ed.fillRangePast(p, f, l, row, ox, y, da, db, v.charWidth*0.6, selColor, selRadius)
+				continue
+			}
+			ed.fillRange(p, f, l, row, ox, y, da, db, selColor, selRadius)
 			if s.end() > l.start+len(l.text) && ri == len(l.rows)-1 {
 				x := ox + row.indent + row.width
 				p.Fill(ui.Rect{X: x, Y: y, W: v.charWidth * 0.6, H: lh}, selColor, 0)
@@ -550,7 +582,9 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				squiggle(p, ox+rc.X, y+lh-2.5, rc.W, ct.SeverityColor(d.Severity))
 			}
 		}
-		if ri == len(l.rows)-1 && ed.isFolded(line) {
+		if ri == len(l.rows)-1 && ed.isFolded(line) && ct.FoldChip.A > 0 {
+			ed.paintFoldChip(p, ox+row.indent+row.width, y, lh)
+		} else if ri == len(l.rows)-1 && ed.isFolded(line) {
 			x := ox + row.indent + row.width + 4
 			w := v.charWidth*3 + 8
 			p.Fill(ui.Rect{X: x, Y: y + 3, W: w, H: lh - 6}, ct.Occurrence, 4)
@@ -571,6 +605,10 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 					continue
 				}
 				x := ox + v.xOf(l, row, d)
+				if ed.o.fontCarets {
+					ed.paintFontCaret(p, l, row, s.head, x, ox, y)
+					continue
+				}
 				switch ed.o.cursorShape {
 				case CursorBlock:
 					r := ui.Rect{X: x, Y: y, W: ed.caretWidth(l, row, s.head, x-ox), H: lh}
@@ -635,6 +673,88 @@ func (ed *editor) fillRange(p *ui.Painter, f *frame, l *lineLayout, row *rowLayo
 	}
 }
 
+// paintFontCaret draws a caret at x of a row at y as FontCarets has it.
+func (ed *editor) paintFontCaret(p *ui.Painter, l *lineLayout, row *rowLayout, at int, x, ox, y float32) {
+	v := &ed.view
+	lh := l.rowHeight
+	h := min(lh, v.ascent+v.descent+4)
+	top := y + (lh-h)/2
+	if ed.o.cursorShape == CursorBlock {
+		w := max(2, ed.caretWidth(l, row, at, x-ox))
+		p.Fill(ui.Rect{X: x, Y: top, W: w, H: h}, ed.theme.Cursor.Alpha(0.55), 1)
+		return
+	}
+	p.Fill(ui.Rect{X: x - 1, Y: top, W: 2, H: h}, ed.theme.Cursor, 1)
+}
+
+// paintFoldChip draws Theme.FoldChip's chip after a folded line's text,
+// which ends at x, on a row at y lh high.
+func (ed *editor) paintFoldChip(p *ui.Painter, x, y, lh float32) {
+	v := &ed.view
+	ct := ed.theme
+	space := v.charWidth
+	ph := v.shaped.get("⋯", v.style)
+	w := 2*space + ph.Width
+	h := lh * 0.62
+	p.Fill(ui.Rect{X: x + space, Y: y + (lh-h)/2, W: w, H: h}, ct.FoldChip, 4)
+	pc := rowLayout{pieces: []rowPiece{{to: len("⋯"), l: ph, width: ph.Width}}, to: len("⋯")}
+	color := ct.FoldText
+	if color.A == 0 {
+		color = ct.LineNumber
+	}
+	var cc runColors
+	v.paintRow(p, &lineLayout{disp: "⋯"}, &pc, x+space*1.5, y, &cc, func(int, ui.Color) ui.Color { return color })
+}
+
+// fillRangeInset fills displayed bytes a to b of a row a DIP short of
+// its top and bottom, rounded by 3, at least 2 DIPs wide (RoundRanges).
+func (ed *editor) fillRangeInset(p *ui.Painter, f *frame, l *lineLayout, row *rowLayout, ox, y float32, a, b int, c ui.Color) {
+	if b < a {
+		return
+	}
+	f.rects = mergeRects(ed.view.rangeRects(l, row, a, b, f.rects[:0]))
+	if len(f.rects) == 0 && a == b {
+		f.rects = ed.view.rangeRects(l, row, a, a, f.rects[:0])
+	}
+	for _, rc := range f.rects {
+		p.Fill(ui.Rect{X: ox + rc.X, Y: y + 1, W: max(rc.W, 2), H: l.rowHeight - 2}, c, 3)
+	}
+}
+
+// fillRangePast is fillRange with extra DIPs past the range's end (a
+// selected newline), as one rectangle.
+func (ed *editor) fillRangePast(p *ui.Painter, f *frame, l *lineLayout, row *rowLayout, ox, y float32, a, b int, extra float32, c ui.Color, radius float32) {
+	f.rects = mergeRects(ed.view.rangeRects(l, row, a, b, f.rects[:0]))
+	if len(f.rects) == 0 {
+		x := ox + row.indent + row.width
+		p.Fill(ui.Rect{X: x, Y: y, W: extra, H: l.rowHeight}, c, radius)
+		return
+	}
+	for i, rc := range f.rects {
+		w := rc.W
+		if i == len(f.rects)-1 {
+			w += extra
+		}
+		p.Fill(ui.Rect{X: ox + rc.X, Y: y, W: w, H: l.rowHeight}, c, radius)
+	}
+}
+
+// caretRowAt reports whether row ri of l holds the only caret, which
+// has no selection (CaretRowOnly).
+func (ed *editor) caretRowAt(l *lineLayout, ri int) bool {
+	if len(ed.sels) != 1 || !ed.sels[0].empty() {
+		return false
+	}
+	h := ed.sels[0].head - l.start
+	if h < 0 || h > len(l.text) {
+		return false
+	}
+	d := l.toDisp(h, !ed.o.caretBeforeInlays)
+	r := l.rows[ri]
+	// At a break the caret is the next row's.
+	return d >= r.from && (d < r.to || ri == len(l.rows)-1)
+}
+
 // paintMarked rules a line under what an input method composes in a row, as
 // the app's text inputs underline theirs until they are committed.
 func (ed *editor) paintMarked(p *ui.Painter, f *frame, l *lineLayout, row *rowLayout, ox, y float32) {
@@ -665,13 +785,17 @@ func (ed *editor) paintGuides(p *ui.Painter, f *frame, line int, ox, y float32, 
 	tab := ed.tabSize()
 	in := ed.lineIndent(line)
 	h := v.rowHeight(line) * float32(rows)
+	gh := h
+	if ed.o.guidesFromBelow {
+		gh = v.rowHeight(line)
+	}
 	for level := 0; level*tab < in; level++ {
 		x := float32(math.Round(float64(ox + float32(level*tab)*v.charWidth)))
 		c := ct.IndentGuide
 		if level == f.activeGuide.level && line >= f.activeGuide.from && line <= f.activeGuide.to {
 			c = ct.ActiveIndentGuide
 		}
-		p.Fill(ui.Rect{X: x, Y: y, W: 1, H: h}, c, 0)
+		p.Fill(ui.Rect{X: x, Y: y, W: 1, H: gh}, c, 0)
 	}
 	for _, col := range ed.o.wrapGuides {
 		x := float32(math.Round(float64(ox + float32(col)*v.charWidth)))

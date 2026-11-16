@@ -37,8 +37,10 @@ type view struct {
 	tabSize    int
 	wrap       bool
 	wrapWidth  float32
-	scale      float32
-	theme      *Theme
+	// hintsFollowText: State.HintsFollowText.
+	hintsFollowText bool
+	scale           float32
+	theme           *Theme
 	// sys is the text system of the window the editor draws in, which
 	// build sets of the context each frame: a Tester's window shapes
 	// apart from the others' shared system (#1722). A view styled before
@@ -519,9 +521,7 @@ func (v *view) sync(moved func(cs []change)) bool {
 		v.heights.setLines(text.LineCount())
 		v.heights.wraps.reset(text.LineCount(), v.wrap)
 		v.wrapAt = 0
-		for i := range v.inlays {
-			v.inlays[i].at = mapOffset(v.inlays[i].at, cs, biasRight)
-		}
+		v.moveInlays(cs)
 		v.moveRepls(cs)
 		v.moveLineStyles(cs)
 		v.settleLineStyles()
@@ -536,9 +536,7 @@ func (v *view) sync(moved func(cs []change)) bool {
 			v.heights.wraps.splice(c.newLine, c.oldEndLine-c.oldLine+1, c.newEndLine-c.newLine+1)
 			v.wrapAt = min(v.wrapAt, c.newLine)
 		}
-		for i := range v.inlays {
-			v.inlays[i].at = mapOffset(v.inlays[i].at, cs, biasRight)
-		}
+		v.moveInlays(cs)
 		v.moveRepls(cs)
 		v.moveLineStyles(cs)
 		if moved != nil {
@@ -881,6 +879,43 @@ func spaces(n int) string {
 		return s[:n]
 	}
 	return strings.Repeat(" ", n)
+}
+
+// moveInlays moves the inlays through changes: after text inserted at
+// them; with hintsFollowText, a hint stays before text inserted at it and
+// goes when the text around it is replaced, while the other inlays
+// (suggestions, trailing inlays) move as without it.
+func (v *view) moveInlays(cs []change) {
+	if !v.hintsFollowText {
+		for i := range v.inlays {
+			v.inlays[i].at = mapOffset(v.inlays[i].at, cs, biasRight)
+		}
+		return
+	}
+	v.inlays = slices.DeleteFunc(v.inlays, func(in inlay) bool { return in.kind == 0 && insideChange(in.at, cs) })
+	for i := range v.inlays {
+		b := biasRight
+		if v.inlays[i].kind == 0 {
+			b = biasLeft
+		}
+		v.inlays[i].at = mapOffset(v.inlays[i].at, cs, b)
+	}
+	// A hint kept before an inlay at its offset, which went on.
+	sortInlays(v.inlays)
+}
+
+// insideChange reports whether off is inside text a change replaced,
+// past its start and before its end.
+func insideChange(off int, cs []change) bool {
+	for _, c := range cs {
+		if c.oldStart >= off {
+			break
+		}
+		if off < c.oldEnd {
+			return true
+		}
+	}
+	return false
 }
 
 func (v *view) inlaysIn(a, b int) []inlay {
