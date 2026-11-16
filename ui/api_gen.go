@@ -4025,6 +4025,8 @@ func (_handle Element) Bold() Element {
 // Border draws a border of width DIPs inside the element's edges, on every
 // side; BorderWidth sets different widths. As in CSS, the border takes room
 // within the element's size: the padding and the children are inside it.
+// Under a theme with BordersTakeNoRoom it takes none: it draws over the
+// edges, the padding counts from them and the children may reach them.
 func (_handle Element) Border(width float32, c Color) Element {
 	_node := _handle.node()
 	if _node == nil {

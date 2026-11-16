@@ -1204,7 +1204,10 @@ func (rt *engine) drawnMenuBuilt(e *node, d *drawnMenu, m *Menu) *platform.MenuI
 		panel.widget = "PopoverMenu"
 		pad := t.Space(1)
 		if st.Padding > 0 {
-			pad = max(st.Padding-1, 0) // from the panel's edge, past its border
+			pad = st.Padding // from the panel's edge, past its border unless it takes no room
+			if !t.BordersTakeNoRoom {
+				pad = max(pad-1, 0)
+			}
 		}
 		panel.MinWidth(t.Space(45)).Padding(pad).Radius(or(st.Radius, t.Radius+2)).Background(or(st.Background, t.Background)).Border(1, t.Border)
 		if st.Shadow != (Color{}) {

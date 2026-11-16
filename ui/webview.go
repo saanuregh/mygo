@@ -275,7 +275,7 @@ func snapPixels(r Rect, scale float32) Rect {
 // view of e, in pixels at scale pixels per DIP: its border's inner edge
 // less its padding.
 func holeRadii(e *node, scale float32) [4]float32 {
-	in := [4]float32{e.border[0] + e.pad[0], e.border[1] + e.pad[1], e.border[2] + e.pad[2], e.border[3] + e.pad[3]}
+	in := [4]float32{e.room()[0] + e.pad[0], e.room()[1] + e.pad[1], e.room()[2] + e.pad[2], e.room()[3] + e.pad[3]}
 	box := snapPixels(Rect{e.x, e.y, e.w, e.h}, scale)
 	px := func(r [4]float32) [4]float32 {
 		return [4]float32{r[0] * scale, r[1] * scale, r[2] * scale, r[3] * scale}

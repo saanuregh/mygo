@@ -93,8 +93,8 @@ func (e *node) stickyShift(x, y float32, at func(*node) (float32, float32)) (dx,
 	}
 	ax, _ := at(vx)
 	_, ay := at(vy)
-	v0x, v1x := ax+vx.border[3], ax+vx.w-vx.border[1]
-	v0y, v1y := ay+vy.border[0], ay+vy.h-vy.border[2]
+	v0x, v1x := ax+vx.room()[3], ax+vx.w-vx.room()[1]
+	v0y, v1y := ay+vy.room()[0], ay+vy.h-vy.room()[2]
 
 	top, tok := e.inset[0].resolve(max(v1y-v0y, 0))
 	right, rok := e.inset[1].resolve(max(v1x-v0x, 0))

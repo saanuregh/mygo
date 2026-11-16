@@ -1540,9 +1540,9 @@ func (e *node) layoutList(w, h float32) {
 		s.width = cw
 	}
 	gap := float64(max(e.gapY, 0))
-	padTop, padBottom := float64(e.contentY()), float64(e.pad[2]+e.border[2])
+	padTop, padBottom := float64(e.contentY()), float64(e.pad[2]+e.room()[2])
 	H := float64(h)
-	top, bottom := float64(e.border[0]), H-float64(e.border[2])
+	top, bottom := float64(e.room()[0]), H-float64(e.room()[2])
 	s.gap, s.padTop, s.border = gap, padTop, top
 	st.list = s
 	if s.req.set {

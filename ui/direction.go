@@ -199,13 +199,13 @@ func (e *node) MarginEnd(v float32) *node {
 // side lines start and on the other, as PaddingStart does: a line
 // between a sidebar and the content is BorderEndWidth(1) on the sidebar.
 func (e *node) BorderStartWidth(v float32) *node {
-	e.border[e.startSide()] = v
+	e.border[e.startSide()], e.borderOver = v, false
 	e.logical |= logBorderStart
 	return e
 }
 
 func (e *node) BorderEndWidth(v float32) *node {
-	e.border[e.endSide()] = v
+	e.border[e.endSide()], e.borderOver = v, false
 	e.logical |= logBorderEnd
 	return e
 }

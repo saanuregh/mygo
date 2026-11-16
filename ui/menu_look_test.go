@@ -416,3 +416,28 @@ func TestMenuOffset(t *testing.T) {
 		t.Errorf("the menu %v below the point with the style's Offset 6, %v with its own 7", style, own)
 	}
 }
+
+// MenuStyle.Padding counts from the panel's edge: past its 1 DIP border,
+// or from the edge itself where borders take no room (BordersTakeNoRoom).
+func TestMenuStylePaddingUnderBordersTakeNoRoom(t *testing.T) {
+	for _, noRoom := range []bool{false, true} {
+		tt := coreNewTester(func(c *context) {
+			th := LightTheme()
+			th.Menu = MenuStyle{Width: 200, Padding: 5}
+			th.BordersTakeNoRoom = noRoom
+			c.SetTheme(th)
+			coreColumn(c).Fill().Padding(20).Children(func() {
+				coreRow(c).Padding(8).Children(func() { coreText(c, "Report.pdf") }).
+					PopoverMenu(func(m *Menu) { m.Item("Rename…") })
+			})
+		}, 600, 400)
+		r, _ := tt.Find("Report.pdf")
+		tt.RightClickAt(r.X+10, r.Y+r.H/2)
+		p := menuPanel(t, tt)
+		for _, row := range menuRows(tt) {
+			if row.X != p.X+5 || row.W != 190 {
+				t.Errorf("BordersTakeNoRoom %v: an item at %+v, want 5 inside the panel at %+v", noRoom, row, p)
+			}
+		}
+	}
+}
