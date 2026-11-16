@@ -115,7 +115,10 @@ func (t *Terminal) pasteData(d transfer.Data, held []transfer.Format) {
 	}
 	var data []byte
 	var status PasteStatus = -1
-	if len(o.mimes) > 0 && t.term.PasteEvent(o.mimes) {
+	t.pasting = true
+	evented := len(o.mimes) > 0 && t.term.PasteEvent(o.mimes)
+	t.pasting = false
+	if evented {
 		// The event went to the input queue; the offer waits for the
 		// program's read.
 		t.offer = o
