@@ -8318,6 +8318,20 @@ func (_handle Element) TextBackground(c Color) Element {
 	return wrapElement(_node.TextBackground(c))
 }
 
+// TextBlocks decorates paragraphs of a text area, in the frames that call
+// it, behind their text. Where blocks given meet the same paragraph, the
+// last one setting an Indent sets its indent; each paints its box. A
+// single-line input shows none.
+func (_handle Element) TextBlocks(blocks ...TextBlock) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.TextBlocks(blocks...))
+}
+
 // TextCaret has the element take text from the system's input methods
 // while it has the keyboard focus, with their composition at r, the caret,
 // relative to the element's box: candidate windows show there. Its
@@ -8345,11 +8359,12 @@ func (_handle Element) TextColor(c Color) Element {
 
 // TextRanges styles runs of a text input's text, in the frames that call
 // it. Ranges may overlap and nest, as the attributes of an attributed
-// string do: where they do, each of Color and Weight is that of the last
-// range given that sets it, across the calls of the frame. They follow the
-// text as it is: an app that finds them in the text finds them again as it
-// changes. A password shows none; an input method's composition shows
-// unstyled between them.
+// string do: where they do, each of Color, Weight, Font, Size, Italic,
+// Strikethrough, Background (with its Radius) and Hidden (with its
+// reveal range) is that of the last range given that sets it, across the
+// calls of the frame. They follow the text as it is: an app that finds
+// them in the text finds them again as it changes. A password shows none;
+// an input method's composition shows unstyled between them.
 func (_handle Element) TextRanges(ranges ...TextRange) Element {
 	_node := _handle.node()
 	if _node == nil {
@@ -8410,6 +8425,21 @@ func (_handle Element) TextStroke(width float32, c Color) Element {
 	_ctx := _node.c
 	_ = _ctx
 	return wrapElement(_node.TextStroke(width, c))
+}
+
+// TextWidgets draws runs of a text input's text as boxes of the app's, in
+// the frames that call it, over the TextRanges that meet them. Widgets
+// should not overlap; where they do, the last one given draws the runes
+// they share. They follow the text as TextRanges do. A password shows
+// none.
+func (_handle Element) TextWidgets(widgets ...TextWidget) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.TextWidgets(widgets...))
 }
 
 // Timeline returns the timeline the element keeps under key, playing it

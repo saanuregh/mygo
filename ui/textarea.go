@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"encoding/binary"
+	"math"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -45,15 +47,22 @@ type area struct {
 	wrappedParams  text.Params
 	wrappedVersion uint64
 	wrappedCompose string
+	// wrappedStyle is what the paragraphs of the wrapped height were
+	// styled and indented with, while ranges or blocks shape them.
+	wrappedStyle string
+	// rtl: the area is laid out right to left, its indents at the right.
+	rtl bool
 }
 
 // wrappedHeight returns the height of the text, with an input method's
 // composition, wrapped at the content width cw.
 func (a *area) wrappedHeight(e *node, ed *editor, cw float32) float32 {
 	params := e.textParams(max(cw, 1))
-	if ed.buf.indexed {
+	if ed.buf.indexed || len(ed.blocks) > 0 {
+		// A paragraph at a time: each with its own indent.
 		params.KeepSpaces, params.MaxLines = true, 0
-		if params != a.wrappedParams || a.wrappedVersion != ed.buf.version || a.wrappedCompose != ed.compose {
+		style := a.paragraphStyles(ed)
+		if params != a.wrappedParams || a.wrappedVersion != ed.buf.version || a.wrappedCompose != ed.compose || style != a.wrappedStyle {
 			empty := params
 			empty.Text = ""
 			limit := float32(ed.lines[1]) * ed.sys.Layout(empty).Lines[0].Height
@@ -66,10 +75,13 @@ func (a *area) wrappedHeight(e *node, ed *editor, cw float32) float32 {
 					part.Text = part.Text[:at] + ed.compose + part.Text[at:]
 				}
 				part.Spans = ed.rangeKey(ed.buf.start(p), ed.buf.end(p))
+				if indent := ed.paraIndent(p); indent > 0 {
+					part.Width = max(part.Width-indent, 1)
+				}
 				height += ed.sys.Shape(part).Height
 			}
 			a.wrapped, a.wrappedParams, a.wrappedVersion = height, params, ed.buf.version
-			a.wrappedCompose = ed.compose
+			a.wrappedCompose, a.wrappedStyle = ed.compose, style
 		}
 		return a.wrapped
 	}
@@ -158,7 +170,8 @@ func (a *area) paraLayout(ed *editor, p int) *text.Layout {
 		compose = ed.compose
 	}
 	spans := ed.rangeKey(b.start(p), b.end(p))
-	if pr.layout != nil && pr.compose == compose && pr.spans == spans {
+	indent := ed.paraIndent(p)
+	if pr.layout != nil && pr.compose == compose && pr.spans == spans && pr.indent == indent {
 		return pr.layout
 	}
 	t := b.text(p)
@@ -173,6 +186,9 @@ func (a *area) paraLayout(ed *editor, p int) *text.Layout {
 		t = strings.Clone(t)
 	}
 	params.Text, params.Spans = t, spans
+	if indent > 0 && params.Width > 0 {
+		params.Width = max(params.Width-indent, 1)
+	}
 	l := ed.sys.Shape(params)
 	if pr.layout == nil {
 		a.laid++
@@ -182,8 +198,32 @@ func (a *area) paraLayout(ed *editor, p int) *text.Layout {
 	} else {
 		a.hs.add(p, float64(l.Height), -1)
 	}
-	pr.layout, pr.compose, pr.spans, pr.h = l, compose, spans, l.Height
+	pr.layout, pr.compose, pr.spans, pr.indent, pr.h = l, compose, spans, indent, l.Height
 	return l
+}
+
+// offsetX returns how far right of the content's left the lines of
+// paragraph p start: its indent, which goes at the right of an area laid
+// out right to left, as its lines end before it.
+func (a *area) offsetX(ed *editor, p int) float32 {
+	if a.rtl {
+		return 0
+	}
+	return ed.paraIndent(p)
+}
+
+// paragraphStyles returns what styles and indents the paragraphs, for
+// the wrapped height to follow: "" without ranges or blocks.
+func (a *area) paragraphStyles(ed *editor) string {
+	if len(ed.ranges) == 0 && len(ed.blocks) == 0 {
+		return ""
+	}
+	var out []byte
+	for p := range ed.buf.paras {
+		out = append(out, ed.rangeKey(ed.buf.start(p), ed.buf.end(p))...)
+		out = binary.LittleEndian.AppendUint32(append(out, 0), math.Float32bits(ed.paraIndent(p)))
+	}
+	return string(out)
 }
 
 // local returns where rune i of paragraph p is in its layout, which holds
@@ -222,7 +262,7 @@ func (a *area) caretAt(ed *editor, i, extra int) (x float32, y float64, h float3
 		affinity = ed.caretAffinity
 	}
 	x, ly, h := l.CaretAt(text.CaretPosition{Index: a.local(ed, p, i) + extra, Affinity: affinity})
-	return x, a.hs.top(p) + float64(ly), h
+	return x + a.offsetX(ed, p), a.hs.top(p) + float64(ly), h
 }
 
 // lineEdges returns the edges of the visual line holding rune i.
@@ -276,7 +316,7 @@ func (a *area) hitPosition(ed *editor, x float32, y float64, virtual bool) text.
 		case y >= top+float64(l.Height) && p < n-1:
 			p++
 		default:
-			position := l.PositionAt(x, float32(y-top))
+			position := l.PositionAt(x-a.offsetX(ed, p), float32(y-top))
 			if virtual {
 				position.Index += ed.buf.start(p)
 				if ed.compose != "" && p > ed.buf.para(ed.caret) {
@@ -307,6 +347,7 @@ func (a *area) layout(e *node, cw, ch float32) {
 	b := &ed.buf
 	params := e.textParams(cw)
 	params.KeepSpaces, params.MaxLines = true, 0
+	a.rtl = e.rtl()
 	a.sync(ed, b, params)
 
 	st := e.st
@@ -396,12 +437,16 @@ func (a *area) paint(e *node, p *Painter, ox, oy float32) {
 	ts := e.resolvedText()
 	focused := e.Focused()
 	last := len(b.paras) - 1
+	if len(ed.blocks) > 0 {
+		a.paintBlocks(ed, p, ox, oy)
+	}
 	for i := a.first; i <= a.last; i++ {
 		l := a.paraLayout(ed, i)
 		y := oy + float32(a.hs.top(i)-a.scroll)
 		start, end := b.start(i), b.end(i)
 		_, sp := ed.rangeSpans(start, end)
-		p.textBackgrounds(l, ox, y, ts, sp)
+		px := ox + a.offsetX(ed, i)
+		p.textBackgrounds(l, px, y, ts, sp)
 		if focused {
 			for _, selected := range ed.selectedRanges() {
 				sa, sz := selected.Start, selected.End
@@ -410,15 +455,18 @@ func (a *area) paint(e *node, p *Painter, ox, oy float32) {
 				}
 				from, to := a.local(ed, i, max(sa, start)), a.local(ed, i, min(sz, end))
 				for _, r := range l.SelectionVisual(from, to, sz > end && i < last) {
-					p.Fill(Rect{ox + r.X, y + r.Y, r.W, r.H}, ts.selectionColor(t), 0)
+					p.Fill(Rect{px + r.X, y + r.Y, r.W, r.H}, ts.selectionColor(t), 0)
 				}
 			}
 		}
-		p.textForeground(l, ox, y, ts.color, ts, sp)
+		p.textForeground(l, px, y, ts.color, ts, sp)
+		if len(ed.widgets) > 0 {
+			ed.paintWidgets(p, l, px, y, func(l int) int { return a.global(ed, i, l) })
+		}
 		if ed.compose != "" && b.para(ed.caret) == i {
 			c := ed.caret - start
 			for _, r := range l.Selection(c, c+utf8.RuneCountInString(ed.compose)) {
-				p.Fill(Rect{ox + r.X, y + r.Y + r.H - 2, r.W, 1}, ts.color, 0)
+				p.Fill(Rect{px + r.X, y + r.Y + r.H - 2, r.W, 1}, ts.color, 0)
 			}
 		}
 	}

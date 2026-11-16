@@ -39,6 +39,7 @@ func (ed *editor) selectedText() string {
 }
 
 func (ed *editor) movePosition(p text.CaretPosition, extend bool) {
+	p.Index = ed.outsideAtom(p.Index, p.Index-ed.caret)
 	if !extend {
 		ed.move(p.Index, false)
 		ed.caretAffinity, ed.anchorAffinity = p.Affinity, p.Affinity
@@ -48,6 +49,9 @@ func (ed *editor) movePosition(p text.CaretPosition, extend bool) {
 	ed.coalesce = false
 	ed.visualSelection = true
 	ed.selected = ed.visualRanges()
+	if len(ed.ranges) > 0 {
+		ed.selectAtomsWhole()
+	}
 	if ed.area != nil {
 		ed.area.reveal = true
 	}
@@ -143,14 +147,20 @@ func (ed *editor) caretParagraphRTL() bool {
 }
 
 func (ed *editor) hitPosition(x, y float32) text.CaretPosition {
-	if a := ed.area; a != nil {
-		return a.positionAt(ed, x-ed.originX, float64(y-ed.originY)+a.scroll)
-	}
-	if ed.layout == nil {
+	var p text.CaretPosition
+	switch a := ed.area; {
+	case a != nil:
+		p = a.positionAt(ed, x-ed.originX, float64(y-ed.originY)+a.scroll)
+	case ed.layout == nil:
 		return text.CaretPosition{}
+	default:
+		p = ed.layout.PositionAt(x-ed.originX+ed.scrollX, y-ed.originY)
+		p.Index = ed.textIndex(p.Index)
 	}
-	p := ed.layout.PositionAt(x-ed.originX+ed.scrollX, y-ed.originY)
-	p.Index = ed.textIndex(p.Index)
+	// A click among runes the caret does not stop in puts it at the nearer edge.
+	if i := ed.outsideAtom(p.Index, 0); i != p.Index {
+		p = text.CaretPosition{Index: i}
+	}
 	return p
 }
 

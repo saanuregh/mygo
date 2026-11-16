@@ -1899,6 +1899,10 @@ func (rt *engine) updateCursor() {
 			if s == nil {
 				continue
 			}
+			if ed := s.editor; ed != nil && len(ed.widgets)+len(ed.blocks) > 0 && ed.clickableAt(s.local(rt.pointerX, rt.pointerY)) >= 0 {
+				c = CursorPointer // a TextWidget's OnClick, a TextBlock's OnMarkerClick
+				break
+			}
 			if s.cursor != 0 {
 				c = s.cursor - 1
 				break

@@ -56,7 +56,7 @@ func textInputBase(c *context, value *string, multiline bool) *node {
 		ed.compose = ""
 	}
 	ed.rebuild()
-	ed.ranges = ed.ranges[:0]
+	ed.staleDecorations()
 	e.onValueInput(stringInput)
 
 	return e
@@ -535,27 +535,55 @@ func (e *node) Unselectable() *node {
 
 // TextRange styles runes Start up to End of a text input's text: their
 // color, when its alpha is not zero, and their weight, when Weight is set,
-// as a message field shows the mentions in what is typed.
+// as a message field shows the mentions in what is typed; their font,
+// size and slant, a strikethrough and a background, as a Markdown editor
+// draws code in the code font, headings larger and a task done struck
+// through; or none of them (Hidden), as such an editor hides the marks of
+// what it styles while the caret is away from them.
 type TextRange struct {
 	Start, End int
 	Color      Color
 	Weight     int
+	// Font is a family, as for Element.Font, and Size a size in DIPs;
+	// Italic and Strikethrough only turn those on.
+	Font          string
+	Size          float32
+	Italic        bool
+	Strikethrough bool
+	// Background highlights the runes, and Radius rounds its corners,
+	// which then hug the glyphs, as Span's do: code within text.
+	Background Color
+	Radius     float32
+	// Hidden draws the runes with no width, unless the caret or an end of
+	// the selection is within or at an edge of runes RevealStart up to
+	// RevealEnd: the asterisks around a word shown bold, shown while the
+	// caret is at the word. An empty reveal range never shows them. The
+	// text keeps them: while hidden, the caret stops only at their edges,
+	// and a click on them puts it at an edge.
+	Hidden                 bool
+	RevealStart, RevealEnd int
+
+	// widget is 1 + the index of the TextWidget drawn over the runes.
+	widget int
 }
 
 // TextRanges styles runs of a text input's text, in the frames that call
 // it. Ranges may overlap and nest, as the attributes of an attributed
-// string do: where they do, each of Color and Weight is that of the last
-// range given that sets it, across the calls of the frame. They follow the
-// text as it is: an app that finds them in the text finds them again as it
-// changes. A password shows none; an input method's composition shows
-// unstyled between them.
+// string do: where they do, each of Color, Weight, Font, Size, Italic,
+// Strikethrough, Background (with its Radius) and Hidden (with its
+// reveal range) is that of the last range given that sets it, across the
+// calls of the frame. They follow the text as it is: an app that finds
+// them in the text finds them again as it changes. A password shows none;
+// an input method's composition shows unstyled between them.
 func (e *node) TextRanges(ranges ...TextRange) *node {
 	ed := e.st.editor
 	if ed == nil || e.flags&flagEditable == 0 {
 		return e
 	}
+	ed.freshDecorations()
 	for _, r := range ranges {
 		if r.End > r.Start {
+			r.widget = 0
 			ed.ranges = append(ed.ranges, r)
 			ed.apart = false
 		}
@@ -563,23 +591,98 @@ func (e *node) TextRanges(ranges ...TextRange) *node {
 	return e
 }
 
+// The attributes of a TextRange that ranges set apart.
+const (
+	attrColor = iota
+	attrWeight
+	attrFont
+	attrSize
+	attrItalic
+	attrStrike
+	attrBackground
+	attrHidden
+	attrWidget
+	attrCount
+)
+
+// sets reports whether r sets attribute a.
+func (r *TextRange) sets(a int) bool {
+	switch a {
+	case attrColor:
+		return r.Color.A > 0
+	case attrWeight:
+		return r.Weight != 0
+	case attrFont:
+		return r.Font != ""
+	case attrSize:
+		return r.Size > 0
+	case attrItalic:
+		return r.Italic
+	case attrStrike:
+		return r.Strikethrough
+	case attrBackground:
+		return r.Background.A > 0
+	case attrHidden:
+		return r.Hidden
+	case attrWidget:
+		return r.widget != 0
+	}
+	return false
+}
+
+// take sets attribute a of r as from sets it.
+func (r *TextRange) take(from *TextRange, a int) {
+	switch a {
+	case attrColor:
+		r.Color = from.Color
+	case attrWeight:
+		r.Weight = from.Weight
+	case attrFont:
+		r.Font = from.Font
+	case attrSize:
+		r.Size = from.Size
+	case attrItalic:
+		r.Italic = true
+	case attrStrike:
+		r.Strikethrough = true
+	case attrBackground:
+		r.Background, r.Radius = from.Background, from.Radius
+	case attrHidden:
+		r.Hidden, r.RevealStart, r.RevealEnd = true, from.RevealStart, from.RevealEnd
+	case attrWidget:
+		r.widget = from.widget
+	}
+}
+
+// sameStyle reports whether a and b style their runes alike.
+func sameStyle(a, b TextRange) bool {
+	a.Start, a.End, b.Start, b.End = 0, 0, 0, 0
+	return a == b
+}
+
 // rangeMerge is what sortRanges reuses from frame to frame.
 type rangeMerge struct {
 	given          []TextRange
 	points, starts []int
-	all, colors    rangeHeap
-	weights        rangeHeap
+	all            rangeHeap
+	attrs          [attrCount]rangeHeap
 }
 
 // sortRanges splits the ranges into runs apart, sorted by start, where
-// each of Color and Weight is that of the last range given setting it, as
+// each attribute is that of the last range given setting it, as
 // TextRanges says, once the frame has given them all: a frame calling
-// TextRanges for each range merges them once. It takes O(n log n) for n
+// TextRanges for each range merges them once. The runes of each
+// TextWidget come last, over all of them. It takes O(n log n) for n
 // ranges: a sweep over their ends, with the ranges covering it on heaps
 // by the order they were given in.
 func (ed *editor) sortRanges() {
 	m := &ed.merge
 	given := append(m.given[:0], ed.ranges...)
+	for i, w := range ed.widgets {
+		if w.End > w.Start {
+			given = append(given, TextRange{Start: w.Start, End: w.End, widget: i + 1})
+		}
+	}
 	points, starts := m.points[:0], m.starts[:0]
 	for i, r := range given {
 		points = append(points, r.Start, r.End)
@@ -588,31 +691,32 @@ func (ed *editor) sortRanges() {
 	slices.Sort(points)
 	points = slices.Compact(points)
 	slices.SortFunc(starts, func(a, b int) int { return given[a].Start - given[b].Start })
-	m.all, m.colors, m.weights = m.all[:0], m.colors[:0], m.weights[:0]
+	m.all = m.all[:0]
+	for a := range m.attrs {
+		m.attrs[a] = m.attrs[a][:0]
+	}
 	out, next := ed.ranges[:0], 0
 	for k := 0; k+1 < len(points); k++ {
 		from, to := points[k], points[k+1]
 		for ; next < len(starts) && given[starts[next]].Start <= from; next++ {
 			i := starts[next]
 			m.all.push(i)
-			if given[i].Color.A > 0 {
-				m.colors.push(i)
-			}
-			if given[i].Weight != 0 {
-				m.weights.push(i)
+			for a := range m.attrs {
+				if given[i].sets(a) {
+					m.attrs[a].push(i)
+				}
 			}
 		}
 		if _, ok := m.all.top(given, from); !ok {
 			continue // between ranges
 		}
 		r := TextRange{Start: from, End: to}
-		if i, ok := m.colors.top(given, from); ok {
-			r.Color = given[i].Color
+		for a := range m.attrs {
+			if i, ok := m.attrs[a].top(given, from); ok {
+				r.take(&given[i], a)
+			}
 		}
-		if i, ok := m.weights.top(given, from); ok {
-			r.Weight = given[i].Weight
-		}
-		if n := len(out); n > 0 && out[n-1].End == from && out[n-1].Color == r.Color && out[n-1].Weight == r.Weight {
+		if n := len(out); n > 0 && out[n-1].End == from && sameStyle(out[n-1], r) {
 			out[n-1].End = to // a run as one, as an attributed string's
 			continue
 		}

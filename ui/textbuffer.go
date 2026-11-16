@@ -73,7 +73,9 @@ type paragraph struct {
 	// spans are the weights of the TextRanges in the paragraph, as its
 	// layout took them.
 	spans string
-	h     float32
+	// indent is the TextBlock indent its layout took, narrower by it.
+	indent float32
+	h      float32
 }
 
 func (b *buffer) set(s string) {

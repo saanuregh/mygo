@@ -793,7 +793,7 @@ func (rt *engine) pointerUp(button, clicks int, canceled bool) {
 			// selection's does, before the keys that come after.
 			ed.drag(s.local(rt.pointerX, rt.pointerY))
 		}
-		ed.release()
+		ed.release(s.local(rt.pointerX, rt.pointerY))
 	}
 	inside := rt.contains(s, Rect{s.x, s.y, s.w, s.h}, rt.pointerX, rt.pointerY)
 	if inside && s.flags&flagDisabled == 0 && !canceled {

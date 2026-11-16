@@ -72,6 +72,7 @@ func (ed *editor) wants(k keyEvent) bool {
 
 func (ed *editor) move(to int, extend bool) {
 	to = max(0, min(to, ed.buf.n))
+	to = ed.outsideAtom(to, to-ed.caret)
 	ed.caret = to
 	ed.caretAffinity = text.Downstream
 	ed.visualSelection, ed.selected = false, nil
@@ -204,9 +205,9 @@ func (ed *editor) key(c *context, st *state, k editEvent) {
 		case a != z && !shift:
 			ed.movePosition(ed.collapseVisual(1), false)
 		case left:
-			ed.movePosition(ed.visualNext(-1), shift)
+			ed.movePosition(ed.stepOverAtoms(-1), shift)
 		default:
-			ed.movePosition(ed.visualNext(1), shift)
+			ed.movePosition(ed.stepOverAtoms(1), shift)
 		}
 		ed.hasDesired = false
 		return
@@ -256,14 +257,14 @@ func (ed *editor) key(c *context, st *state, k editEvent) {
 			s, _ := ed.lineEdges(ed.caret)
 			ed.deleteRange(s, ed.caret)
 		case word:
-			ed.deleteRange(b.prevWord(ed.caret), ed.caret)
+			ed.deleteRange(ed.outsideAtom(b.prevWord(ed.caret), -1), ed.caret)
 		case ed.caret > 0:
 			ed.record(true)
 			from := ed.graphemes.prev(b, ed.caret)
 			if text.IsCombiningMark(b.runeAt(ed.caret - 1)) {
 				from = ed.caret - 1
 			}
-			ed.replace(from, ed.caret, "")
+			ed.replace(ed.outsideAtom(from, -1), ed.caret, "")
 		}
 		ed.hasDesired = false
 		return
@@ -272,9 +273,9 @@ func (ed *editor) key(c *context, st *state, k editEvent) {
 		case a != z:
 			ed.insert("")
 		case word:
-			ed.deleteRange(ed.caret, b.nextWord(ed.caret))
+			ed.deleteRange(ed.caret, ed.outsideAtom(b.nextWord(ed.caret), 1))
 		case ed.caret < b.n:
-			ed.deleteRange(ed.caret, ed.graphemes.next(b, ed.caret))
+			ed.deleteRange(ed.caret, ed.outsideAtom(ed.graphemes.next(b, ed.caret), 1))
 		}
 		return
 	case KeyEnter:
@@ -384,7 +385,13 @@ func (ed *editor) command(c *context, name string) {
 // press puts the caret where the pointer went down, at (x, y) relative to
 // the element; double and triple clicks select words and lines.
 func (ed *editor) press(x, y float32, clicks, button int) {
+	ed.pressedWidget = 0
 	if button != 0 || !ed.laidOut() {
+		return
+	}
+	if w := ed.clickableAt(x, y); w >= 0 {
+		// A widget's or a marker's: the caret stays, and the release clicks it.
+		ed.pressedWidget = w + 1
 		return
 	}
 	ed.commitCompose()
@@ -401,7 +408,7 @@ func (ed *editor) press(x, y float32, clicks, button int) {
 		ed.movePosition(p, ed.pressMods&Shift != 0)
 	case 2:
 		s, e := ed.buf.wordAt(i)
-		ed.anchor, ed.caret = s, e
+		ed.anchor, ed.caret = ed.outsideAtom(s, -1), ed.outsideAtom(e, 1)
 	default:
 		if ed.multiline {
 			s, e := ed.lineEdges(i)
@@ -416,7 +423,16 @@ func (ed *editor) press(x, y float32, clicks, button int) {
 	}
 }
 
-func (ed *editor) release() { ed.dragging = false }
+// release ends a press let go at (x, y), relative to the element: over
+// the widget it went down on, a click on it.
+func (ed *editor) release(x, y float32) {
+	ed.dragging = false
+	w := ed.pressedWidget - 1
+	ed.pressedWidget = 0
+	if w >= 0 && ed.clickableAt(x, y) == w {
+		ed.click(w)
+	}
+}
 
 // laidOut reports whether a frame laid the editor's text out.
 func (ed *editor) laidOut() bool { return ed.layout != nil || ed.area != nil && ed.area.version != 0 }
@@ -443,6 +459,7 @@ func (ed *editor) drag(x, y float32) {
 	switch ed.dragUnit {
 	case 2:
 		s, e := ed.buf.wordAt(i)
+		s, e = ed.outsideAtom(s, -1), ed.outsideAtom(e, 1)
 		if i < ed.dragStart[0] {
 			ed.anchor, ed.caret = ed.dragStart[1], s
 		} else {
