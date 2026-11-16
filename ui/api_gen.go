@@ -5503,6 +5503,21 @@ func (_handle Element) FocusedUnderMenu() bool {
 	return _node.FocusedUnderMenu()
 }
 
+// FocusedUnderOverlay reports whether an overlay open over the window, as
+// a dialog, opened while the element had the keyboard focus, which it
+// gives back as it closes, and no text input in the overlay has taken the
+// focus since: an element that shows its focus as nanoui's did under a
+// dialog, whose buttons took no focus of their own.
+func (_handle Element) FocusedUnderOverlay() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.FocusedUnderOverlay()
+}
+
 // FollowEnd starts a scroll container (Scroll) at the end of its content,
 // and keeps the end in view as the content grows while it shows it, as a
 // log does: scrolling away from the end stops following it, and scrolling
