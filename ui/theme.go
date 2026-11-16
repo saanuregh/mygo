@@ -146,6 +146,9 @@ type TooltipStyle struct {
 	// Background and Text are its colors: the theme's Inverse and
 	// InverseText by default.
 	Background, Text Color
+	// OneLine keeps the text on one line, however long, where it wraps
+	// at 80 units of Spacing by default.
+	OneLine bool
 }
 
 // TooltipLook returns the theme's Tooltip with MyGo's values in its zero

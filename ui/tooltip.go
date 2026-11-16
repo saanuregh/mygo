@@ -133,10 +133,18 @@ func (e *node) Tooltip(s string) *node {
 	t := c.theme
 	look := t.TooltipLook()
 	tooltipBase(c, e, func(tip *node) {
-		tip.MaxWidth(t.Space(80)).Padding(look.PaddingY, look.PaddingX).Radius(look.Radius).
+		tip.Padding(look.PaddingY, look.PaddingX).Radius(look.Radius).
 			Background(look.Background).TextColor(look.Text).FontSize(look.FontSize)
+		if !look.OneLine {
+			tip.MaxWidth(t.Space(80))
+		}
 		tip.Shadow(0, 2, 8, 0, RGBA(0, 0, 0, 0.2))
-		tip.Children(func() { coreText(c, s) })
+		tip.Children(func() {
+			text := coreText(c, s)
+			if look.OneLine {
+				text.SingleLine()
+			}
+		})
 		tip.AttachTo(e, AnchorTop, AnchorBottom).Margin(0, 0, look.Gap, 0)
 	})
 	return e
