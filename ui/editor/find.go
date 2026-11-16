@@ -39,6 +39,9 @@ type finder struct {
 	lowerVer uint64
 	scrollTo bool
 	builtW   float32 // the editor's width the bar was built for
+	// origin is where the selection started as the bar opened
+	// (FindFromOrigin).
+	origin int
 }
 
 // maxMatches bounds the matches a search finds.
@@ -52,9 +55,10 @@ func (f *finder) show(ed *editor, replace bool) {
 	}
 	// The selection, or the word at the caret, seeds the query.
 	p := ed.primary()
+	f.origin = p.start()
 	if !p.empty() && ed.view.text.LineOf(p.start()) == ed.view.text.LineOf(p.end()) {
 		f.query = ed.slice(p.start(), p.end())
-	} else if p.empty() {
+	} else if p.empty() && !ed.o.findFromOrigin {
 		if a, z := wordAt(ed.view.text, p.head, ed.wordChars()); z > a && f.query == "" {
 			f.query = ed.slice(a, z)
 		}
@@ -81,7 +85,11 @@ func (f *finder) update(ed *editor) {
 		return
 	}
 	f.scrollTo = false
-	f.current = f.nearest(ed.primary().start())
+	from := ed.primary().start()
+	if ed.o.findFromOrigin {
+		from = f.origin
+	}
+	f.current = f.nearest(from)
 	m := f.matches[f.current]
 	// In the middle of the view when out of it, either way, and out of a
 	// fold.

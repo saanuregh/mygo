@@ -222,8 +222,59 @@ type State struct {
 	// right of the caret (zode's view.zig measured its popups' caret from
 	// 6 points past the text's left edge).
 	CaretCardShift float32
+	// Gutter, when set, lays the gutter out by its sizes in place of the
+	// editor's own (GutterLayout).
+	Gutter *GutterLayout
+	// LineNotes are short texts drawn after their lines' text, as a
+	// diagnostic's message or who last changed the line: in NoteFont
+	// (italic), cut at the editor's edge, and no part of the line, which
+	// they neither lengthen nor wrap. A line shows its first note.
+	LineNotes []LineNote
+	// NoteFont is the notes' font: the editor's, a DIP smaller, when
+	// zero. They are drawn italic.
+	NoteFont ui.Font
+	// MarginRight is room at the right edge the text leaves to the app,
+	// as for a minimap drawn over it: lines wrap and scroll short of it.
+	// The scroll bars stay at the edge, over it (NoScrollbars hides them).
+	MarginRight float32
+	// FindFromOrigin has the find bar's query seeded by the selection
+	// alone (not the word at the caret), and typing it select the match
+	// at or after where the selection started as the bar opened, rather
+	// than after the match last selected.
+	FindFromOrigin bool
+	// FilledBrackets marks the bracket next to the caret (after it, else
+	// before it) and its partner, filled with Theme.MatchingBracket,
+	// rather than outlining the brackets around the caret.
+	FilledBrackets bool
+	// CaretBeforeInlays draws a caret at an inlay hint's offset before
+	// the hint rather than after it.
+	CaretBeforeInlays bool
+	// NoOccurrences stops highlighting the other occurrences of the
+	// selected text.
+	NoOccurrences bool
+	// StraightUnderlines underlines diagnostics with a straight rounded
+	// line, 2 DIPs thick, rather than a wavy one.
+	StraightUnderlines bool
 
 	ed editor
+}
+
+// GutterLayout sizes the gutter: Left DIPs, the line numbers
+// right-aligned in MinDigits digits at least, then Right DIPs, the text
+// starting TextGap DIPs after the gutter. The change bars against
+// DiffBase are 3 DIPs wide, BarRight DIPs left of the gutter's right edge,
+// and fold markers sit at the gutter's left edge.
+type GutterLayout struct {
+	Left, Right, TextGap, BarRight float32
+	MinDigits                      int
+}
+
+// LineNote is a note drawn after line Line's text (State.LineNotes), in
+// Color, else in Theme.Note.
+type LineNote struct {
+	Line  int
+	Text  string
+	Color ui.Color
 }
 
 // IndentStyle is what indenting inserts.
@@ -319,6 +370,7 @@ func (st *State) options() options {
 		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift,
+		gutter: st.Gutter, lineNotes: st.LineNotes, noteFont: st.NoteFont, straightUnderlines: st.StraightUnderlines, marginRight: st.MarginRight, findFromOrigin: st.FindFromOrigin, noOccurrences: st.NoOccurrences, filledBrackets: st.FilledBrackets, caretBeforeInlays: st.CaretBeforeInlays,
 	}
 }
 
@@ -466,6 +518,7 @@ func (st *State) Find(query string) {
 	st.ensure()
 	f := &st.ed.find
 	f.open, f.query, f.stale = true, query, true
+	f.origin = st.ed.primary().start()
 	f.step(&st.ed, 1)
 }
 

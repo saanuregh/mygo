@@ -40,7 +40,9 @@ func (ed *editor) layout(w, h, scale float32) {
 	v.setStyle(ed.o.font, ed.o.lineHeight, scale, ed.tabSize())
 	ed.gutterW = ed.gutterWidth()
 	pad := float32(4)
-	if ed.gutterW == 0 {
+	if g := ed.gutterLayout(); g != nil {
+		pad = g.TextGap
+	} else if ed.gutterW == 0 {
 		pad = 8
 	}
 	ed.textX = ed.gutterW + pad
@@ -195,13 +197,24 @@ func (ed *editor) prepare(f *frame) {
 		}
 	}
 	p := ed.primary()
-	if !p.empty() && p.end()-p.start() <= 200 && t.LineOf(p.start()) == t.LineOf(p.end()) {
+	if !ed.o.noOccurrences && !p.empty() && p.end()-p.start() <= 200 && t.LineOf(p.start()) == t.LineOf(p.end()) {
 		if s := t.Slice(p.start(), p.end()); strings.TrimSpace(s) != "" {
 			f.occurrence = s
 		}
 	}
 	if p.empty() && len(ed.sels) == 1 {
-		if o, c, ok := ed.enclosingBrackets(p.head); ok {
+		if ed.o.filledBrackets {
+			// The bracket after the caret, else the one before it.
+			for _, at := range []int{p.head, p.head - 1} {
+				if at < 0 || at >= t.Len() {
+					continue
+				}
+				if o, c, ok := ed.matchBracket(at); ok {
+					f.brackets, f.bracketsOK = [2]Range{{o, o + 1}, {c, c + 1}}, true
+					break
+				}
+			}
+		} else if o, c, ok := ed.enclosingBrackets(p.head); ok {
 			f.brackets, f.bracketsOK = [2]Range{o, c}, true
 		}
 	}
@@ -482,6 +495,10 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				if b.Start >= l.start && b.Start < l.start+len(l.text) {
 					f.rects = v.rangeRects(l, row, l.toDisp(b.Start-l.start, false), l.toDisp(min(b.End, l.start+len(l.text))-l.start, false), f.rects[:0])
 					for _, rc := range f.rects {
+						if ed.o.filledBrackets {
+							p.Fill(ui.Rect{X: ox + rc.X, Y: y + 2, W: rc.W, H: lh - 4}, ct.MatchingBracket, 2)
+							continue
+						}
 						p.Stroke(ui.Rect{X: ox + rc.X, Y: y + 1, W: rc.W, H: lh - 2}, ct.MatchingBracket, 2, 1)
 					}
 				}
@@ -495,6 +512,7 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				ds.paintSign(p, ed, style.sign, r.X+ed.textX-v.charWidth*1.5, y, style.number)
 			}
 		}
+		ed.paintInlayChips(p, l, row, ox, y)
 		// The word Cmd+click goes from, as a link.
 		var link func(int, ui.Color) ui.Color
 		if a, z := ed.link[0], ed.link[1]; z > a && a >= l.start && z <= l.start+len(l.text) {
@@ -509,6 +527,9 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 			ed.ruleRange(p, f, l, row, ox, y, da, dz, c)
 		}
 		v.paintRow(p, l, row, ox, y, &f.colors, link)
+		if ri == len(l.rows)-1 && len(ed.o.lineNotes) > 0 {
+			ed.paintNote(p, line, ox+row.indent+row.width, y, lh)
+		}
 		ed.paintWhitespace(p, f, l, row, ox, y)
 		ed.paintMarked(p, f, l, row, ox, y)
 		// Diagnostics under the text.
@@ -522,6 +543,10 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				f.rects = append(f.rects, ui.Rect{X: row.indent, W: v.charWidth})
 			}
 			for _, rc := range f.rects {
+				if ed.o.straightUnderlines {
+					ed.underline(p, ox+rc.X, y, rc.W, ct.SeverityColor(d.Severity))
+					continue
+				}
 				squiggle(p, ox+rc.X, y+lh-2.5, rc.W, ct.SeverityColor(d.Severity))
 			}
 		}
@@ -541,7 +566,7 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				if s.head < l.start || s.head > l.start+len(l.text) {
 					continue
 				}
-				d := l.toDisp(s.head-l.start, true)
+				d := l.toDisp(s.head-l.start, !ed.o.caretBeforeInlays)
 				if l.rowOf(d, s.head > s.anchor) != ri {
 					continue
 				}
@@ -769,6 +794,10 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 		if ed.gitDiff != nil {
 			numRight -= 6
 		}
+		gl := ed.gutterLayout()
+		if gl != nil {
+			numRight = r.X + ed.gutterW - gl.Right
+		}
 		var cc runColors
 		for line := f.first; line <= f.last; line++ {
 			g := h.geometry(line)
@@ -835,7 +864,9 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 			if ed.o.folding && ed.o.decor == nil {
 				barX -= lh * 0.8
 			}
-			if ed.gitDiff != nil {
+			if gl != nil {
+				ed.paintChangeBar(p, r.X+ed.gutterW-gl.BarRight, y, rowsH, line)
+			} else if ed.gitDiff != nil {
 				switch ed.gitDiff.status(line) {
 				case 1:
 					p.Fill(ui.Rect{X: barX, Y: y, W: 3, H: rowsH}, ct.Added, 0)
@@ -858,6 +889,9 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 				if folded || hovered && ed.foldable(line) {
 					cx, cy := r.X+ed.gutterW-4-lh*0.4, ny+lh/2
 					d := lh * 0.16
+					if gl != nil {
+						cx, d = r.X+9, 3
+					}
 					var path ui.Path
 					if folded {
 						path.MoveTo(cx-d/2, cy-d).LineTo(cx+d/2, cy).LineTo(cx-d/2, cy+d)

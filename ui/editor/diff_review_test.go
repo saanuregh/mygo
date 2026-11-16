@@ -194,6 +194,34 @@ func TestReviewDiffDeletionAtEnd(t *testing.T) {
 	}
 }
 
+// Lines added after a text's final newline are marked where git marks
+// them, not one line low: the empty line after the last newline begins
+// no line in git, compared at once or after typing.
+func TestGitDiffLinesAddedAtTheEnd(t *testing.T) {
+	marks := func(st *State) []int {
+		var out []int
+		for line := range st.Buffer.LineCount() {
+			out = append(out, st.ed.gitDiff.status(line))
+		}
+		return out
+	}
+	st := &State{Buffer: NewBuffer("a\n}\n\n// changed\n"), DiffBase: NewBuffer("a\n}\n")}
+	tt := ui.NewTester(func(c *ui.Context) { View(c, st).Fill().AutoFocus() }, 400, 200)
+	tt.Frame()
+	tt.Frame()
+	if got, want := marks(st), []int{0, 0, 1, 1, 0}; !slices.Equal(got, want) {
+		t.Fatalf("marks %v, want %v", got, want)
+	}
+	typed := &State{Buffer: NewBuffer("a\n}\n"), DiffBase: NewBuffer("a\n}\n")}
+	tt = ui.NewTester(func(c *ui.Context) { View(c, typed).Fill().AutoFocus() }, 400, 200)
+	tt.Frame()
+	typed.Buffer.Edit(Edit{Start: 4, End: 4, Text: "\n// changed\n"})
+	tt.Frame()
+	if got, want := marks(typed), []int{0, 0, 1, 1, 0}; !slices.Equal(got, want) {
+		t.Fatalf("typed: marks %v, want %v", got, want)
+	}
+}
+
 // Annotations on one line go one after the other, with keys or without.
 func TestReviewDiffAnnotationsStack(t *testing.T) {
 	d := &DiffState{Old: NewBuffer("a\nb\n"), New: NewBuffer("a\nB\n"), Annotations: []DiffAnnotation{

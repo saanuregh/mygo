@@ -41,6 +41,13 @@ type Theme struct {
 	// Added, Deleted and Modified are the colors of changes, which tint
 	// the lines of diffs, their gutters and the words changed in them.
 	Added, Deleted, Modified ui.Color
+	// InlayHint colors inlay hints' text (LineNumber when zero), and
+	// InlayHintBackground the rounded chip behind each, its spaces left
+	// out (none when zero).
+	InlayHint, InlayHintBackground ui.Color
+	// Note colors the notes after lines (State.LineNotes) that have no
+	// color of their own: LineNumber when zero.
+	Note ui.Color
 	// Tokens styles the kinds of tokens; a zero color is Text.
 	Tokens [tokenKinds]TokenStyle
 }
