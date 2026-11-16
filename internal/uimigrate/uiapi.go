@@ -262,6 +262,7 @@ var elementChains = map[string]bool{
 	"KeepFocus":             true,
 	"KeepOpen":              true,
 	"KeepScrollbars":        true,
+	"KeepSide":              true,
 	"Key":                   true,
 	"KeyShortcuts":          true,
 	"Label":                 true,

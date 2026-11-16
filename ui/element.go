@@ -733,6 +733,8 @@ type node struct {
 	// element from the window's edges (AttachEdgeMargin), in place of
 	// windowMargin.
 	edgeMargin float32
+	// keepSide: AttachTo never moves it to target's other side (KeepSide).
+	keepSide bool
 	// zIndex orders the element's painting and its hits among its
 	// siblings (ZIndex); zOrder is set on an element with a child having
 	// one, which paints and commits its children in that order alone
@@ -1399,6 +1401,11 @@ func (e *node) AttachEdgeMargin(v float32) *node {
 	e.edgeMargin, e.edgeMarginSet = max(v, 0), true
 	return e
 }
+
+// KeepSide keeps an element AttachTo placed on the side of target it was
+// put, though it overflows the window there: a list that chose its side
+// by a rule of its own, as a code editor's completions do.
+func (e *node) KeepSide() *node { e.keepSide = true; return e }
 
 // AttachedOrigin sets the transform origin on the element's own point
 // that AttachTo puts on its target, on whichever side of it the layout
