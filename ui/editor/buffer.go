@@ -86,6 +86,9 @@ type change struct {
 	oldStart, oldEnd, newStart, newEnd int
 	oldLine, oldEndLine                int
 	newLine, newEndLine                int
+	// reset: the whole text was replaced by Reset (a file loaded, not
+	// typed), so offsets keep their place instead of moving past it.
+	reset bool
 }
 
 type logEntry struct {
@@ -780,7 +783,7 @@ func (b *Buffer) invalidate() {
 
 // wholeChange is the change replacing all of old with new.
 func wholeChange(old, new rope.Text) change {
-	return change{oldEnd: old.Len(), newEnd: new.Len(), oldEndLine: old.LineCount() - 1, newEndLine: new.LineCount() - 1}
+	return change{oldEnd: old.Len(), newEnd: new.Len(), oldEndLine: old.LineCount() - 1, newEndLine: new.LineCount() - 1, reset: true}
 }
 
 // span is a range of a text an edit outside the history replaced, bytes
@@ -967,6 +970,9 @@ func mapOffset(off int, changes []change, b bias) int {
 		}
 	}
 	c := changes[i-1]
+	if c.reset {
+		return min(off, c.newEnd)
+	}
 	switch {
 	case off > c.oldEnd || off == c.oldEnd && c.oldEnd > c.oldStart:
 		return off + c.newEnd - c.oldEnd
