@@ -62,6 +62,14 @@ type MenuStyle struct {
 	// all, its label in its usual color; 0 grays its text and dims it as
 	// any disabled element.
 	DisabledOpacity float32
+	// ClickLeavesFocusNowhere has an item chosen by a click leave the
+	// keyboard focus nowhere, unless the item gave it to something, as a
+	// press on a control of nanoui's did: the element that had it as the
+	// menu opened takes it back neither as the menu closes nor after a
+	// NextMenu the click opened, under which it shows no focus. An item
+	// the keys chose gives it back as before. Off, the menu gives the focus
+	// back as it closes, however the item was chosen.
+	ClickLeavesFocusNowhere bool
 }
 
 // Offset sets the room between the menu, as PopoverMenu and

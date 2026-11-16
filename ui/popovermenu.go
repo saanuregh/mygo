@@ -272,6 +272,9 @@ type menuParts struct {
 	// shift moves a menu opened at a point back toward the window's start
 	// by as much (MenuStyle.ShiftIntoWindow).
 	shift float32
+	// point is the box a menu opened at a point is attached to, as last
+	// built.
+	point *node
 }
 
 // menuBuilt is a menu, or a submenu, built in a pass: its panel, its items
@@ -472,6 +475,7 @@ func (m *menuParts) Popup(fn func(panel *node)) *node {
 		anchor := m.Trigger
 		if !s.below {
 			anchor = coreBox(c).Key(mix(m.Trigger.id, 0)).Size(0, 0).AttachTo(m.Trigger, AnchorTopLeft, AnchorTopLeft).Margin(s.dy, 0, 0, s.dx-m.shift)
+			m.point = anchor
 		}
 		root = m.panel(0, anchor, fn)
 		for level := 1; level < len(s.levels) && !m.closed; level++ {
@@ -820,6 +824,19 @@ func (m *menuParts) finish(level int) {
 	}
 }
 
+// forgetOpeners has the overlays of the menu, as last built, give the
+// focus back to nothing as they go (restoreFocus), nor tell an element it
+// had it as they opened (FocusedUnderOverlay).
+func (m *menuParts) forgetOpeners() {
+	rt := m.c.rt
+	for _, b := range m.built {
+		delete(rt.openers, b.panel.id)
+	}
+	if m.point != nil {
+		delete(rt.openers, m.point.id)
+	}
+}
+
 // menuItemName returns the name of a menu item: its Label, else its text.
 func menuItemName(it *node) string {
 	if it.label != "" {
@@ -1023,6 +1040,9 @@ type drawnMenu struct {
 	// item styles the rows of its items after the theme's look
 	// (PopoverMenuButtonOptions.Item).
 	item func(item Element)
+	// clicked is set once an item chosen by a click is to leave the focus
+	// nowhere (MenuStyle.ClickLeavesFocusNowhere).
+	clicked bool
 	// back is the element that had the keyboard focus as it opened: a
 	// text input there keeps showing its caret while the menu shows
 	// (caretUnderMenu).
@@ -1280,6 +1300,11 @@ func (rt *engine) drawnMenuBuilt(e *node, d *drawnMenu, m *Menu) *platform.MenuI
 			rt.consumed = true
 		}
 	}
+	if chosen != nil && st.ClickLeavesFocusNowhere && !rt.focusVisible {
+		// Chosen by a click, as the pointer shows no focus.
+		parts.forgetOpeners()
+		d.clicked = true
+	}
 	return chosen
 }
 
@@ -1326,9 +1351,13 @@ func (rt *engine) drawnChoice(d *drawnMenu, run *menuRun, build func(m *Menu), i
 		rt.requestFrame()
 	} else {
 		choice := &menuRun{choice: it.ID, label: it.Label, key: run.keys[it.ID-1], drawn: true}
+		before := rt.focused
 		rt.menuChoice(build, choice, d.text)
 		if choice.next != nil {
 			rt.openNextMenu(d, choice.next)
+		} else if d.clicked && rt.focused == before {
+			// Unless the item gave the focus to something.
+			rt.focused, rt.focusVisible = 0, false
 		}
 	}
 }
