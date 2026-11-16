@@ -177,6 +177,12 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		// The secondary button keeps a selection under it for the menu;
 		// on a line's number, the gutter's menu is of that line.
 		if ev.Button == 1 {
+			// The fold strip has no menu, as zode's editor's.
+			g := ed.gutterLayout()
+			ed.onFoldStrip = g != nil && g.FoldStripClicksText && ed.region == regionGutter && ev.X < g.Left
+			if ed.onFoldStrip {
+				return false
+			}
 			ed.onGutterMenu = ed.region == regionGutter && ed.o.gutterMenu != nil
 			if ed.onGutterMenu {
 				_, cy := ed.toContent(ev.X, ev.Y)
@@ -210,7 +216,7 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		}
 	}
 	// The fold placeholder unfolds.
-	if line, ok := ed.foldPlaceholderAt(cx, cy); ok {
+	if line, ok := ed.foldPlaceholderAt(cx, cy); ok && !ed.o.plainClicks {
 		ed.toggleFoldLine(line)
 		return true
 	}
@@ -223,6 +229,10 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 	ed.endGroup()
 	ed.wholeWord = false
 	ed.gesture = gesture{active: true, origin: ed.newSel(off, off)}
+	if ed.o.plainClicks && mods&ui.Alt != 0 && mods&ui.Shift != 0 && ev.Clicks == 1 {
+		// Shift's, as Shift+click.
+		mods &^= ui.Alt
+	}
 	switch {
 	case ed.clickGoesToDefinition(mods) && ev.Clicks == 1:
 		// Before the other modifiers' clicks, which Cmd held with them
@@ -240,7 +250,7 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		ed.gesture.add = true
 		ed.gesture.others = slices.Clone(ed.sels)
 		// Alt-clicking a caret takes it away.
-		if ev.Clicks == 1 && len(ed.sels) > 1 {
+		if ev.Clicks == 1 && len(ed.sels) > 1 && !ed.o.plainClicks {
 			for i, s := range ed.sels {
 				if s.empty() && s.head == off {
 					ed.sels = slices.Delete(slices.Clone(ed.sels), i, i+1)
@@ -647,6 +657,15 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 	if ed.o.folding && ed.o.decor == nil && inFolds {
 		if ed.foldable(line) || ed.isFolded(line) {
 			ed.toggleFoldLine(line)
+			return true
+		}
+		if g := ed.gutterLayout(); g != nil && g.FoldStripClicksText {
+			// The text's press, at the line's start.
+			off := ed.view.text.LineStart(line)
+			ed.endGroup()
+			ed.wholeWord = false
+			ed.gesture = gesture{active: true, origin: ed.newSel(off, off)}
+			ed.extendGesture(off)
 			return true
 		}
 	}

@@ -71,7 +71,7 @@ func (ed *editor) run(cmd Command) bool {
 			}
 			s.goal = goal
 		}
-		if rows != 1 && rows != -1 {
+		if rows != 1 && rows != -1 && !ed.o.pageMovesCarets {
 			ed.scrollBy(float64(rows) * float64(ed.view.lineHeight))
 		}
 		ed.setSels(sels, revealFit)

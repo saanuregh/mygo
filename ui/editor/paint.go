@@ -434,11 +434,18 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 		// The app's start at the text's column, as a diff's tints.
 		for _, b := range ed.o.backgrounds {
 			if line >= b.First && line <= b.Last && b.Color.A > 0 {
-				p.Fill(ui.Rect{X: r.X + ed.textX, Y: y, W: r.W - ed.textX, H: lh}, b.Color, 0)
+				band := ui.Rect{X: r.X + ed.textX, Y: y, W: r.W - ed.textX, H: lh}
+				if ed.o.bandsInset > 0 {
+					band = ui.Rect{X: textRect.X, Y: y, W: textRect.W - ed.o.bandsInset, H: lh}
+				}
+				p.Fill(band, b.Color, 0)
 			}
 		}
 		if active && !lineSelected && (!ed.o.caretRowOnly || ed.caretRowAt(l, ri)) {
-			p.Fill(ui.Rect{X: textRect.X, Y: y, W: textRect.W, H: lh}, ct.ActiveLine, 0)
+			p.Fill(ui.Rect{X: textRect.X, Y: y, W: textRect.W - ed.o.bandsInset, H: lh}, ct.ActiveLine, 0)
+		}
+		if ri == 0 && ed.o.indentGuides && ed.o.guidesUnderRanges {
+			ed.paintGuides(p, f, line, ox, y, len(l.rows))
 		}
 		// The app's ranges of text, at characters' edges.
 		for _, b := range f.texts {
@@ -494,6 +501,9 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				}
 			}
 		}
+		if ed.o.guidesUnderRanges {
+			ed.paintBrackets(p, f, l, row, ox, y)
+		}
 		// The selections.
 		selColor := ct.Selection
 		if !ed.focused {
@@ -521,22 +531,10 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				p.Fill(ui.Rect{X: x, Y: y, W: v.charWidth * 0.6, H: lh}, selColor, 0)
 			}
 		}
-		// Brackets around the caret.
-		if f.bracketsOK {
-			for _, b := range f.brackets {
-				if b.Start >= l.start && b.Start < l.start+len(l.text) {
-					f.rects = v.rangeRects(l, row, l.toDisp(b.Start-l.start, false), l.toDisp(min(b.End, l.start+len(l.text))-l.start, false), f.rects[:0])
-					for _, rc := range f.rects {
-						if ed.o.filledBrackets {
-							p.Fill(ui.Rect{X: ox + rc.X, Y: y + 2, W: rc.W, H: lh - 4}, ct.MatchingBracket, 2)
-							continue
-						}
-						p.Stroke(ui.Rect{X: ox + rc.X, Y: y + 1, W: rc.W, H: lh - 2}, ct.MatchingBracket, 2, 1)
-					}
-				}
-			}
+		if !ed.o.guidesUnderRanges {
+			ed.paintBrackets(p, f, l, row, ox, y)
 		}
-		if ri == 0 && ed.o.indentGuides {
+		if ri == 0 && ed.o.indentGuides && !ed.o.guidesUnderRanges {
 			ed.paintGuides(p, f, line, ox, y, len(l.rows))
 		}
 		if ri == 0 && ed.o.signs && style.sign != "" {
@@ -570,6 +568,15 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				continue
 			}
 			a, b := max(d.Start-l.start, 0), min(max(d.End, d.Start+1)-l.start, len(l.text))
+			if ed.o.straightUnderlines && a == b {
+				// No character to underline (an empty range widened to
+				// one reaches the line's end): a mark 2 DIPs wide where
+				// it is, as zode's editor draws one.
+				if disp := l.toDisp(a, false); l.rowOf(disp, false) == ri {
+					ed.underline(p, ox+v.xOf(l, row, disp), y, 2, ct.SeverityColor(d.Severity))
+				}
+				continue
+			}
 			f.rects = v.rangeRects(l, row, l.toDisp(a, false), l.toDisp(max(b, a), false), f.rects[:0])
 			if a == b && len(l.text) == 0 {
 				f.rects = append(f.rects, ui.Rect{X: row.indent, W: v.charWidth})
@@ -606,10 +613,10 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				}
 				x := ox + v.xOf(l, row, d)
 				if ed.o.fontCarets {
-					ed.paintFontCaret(p, l, row, s.head, x, ox, y)
+					ed.paintFontCaret(p, l, row, s, x, ox, y)
 					continue
 				}
-				switch ed.o.cursorShape {
+				switch ed.caretShape(s) {
 				case CursorBlock:
 					r := ui.Rect{X: x, Y: y, W: ed.caretWidth(l, row, s.head, x-ox), H: lh}
 					if ed.focused {
@@ -673,13 +680,43 @@ func (ed *editor) fillRange(p *ui.Painter, f *frame, l *lineLayout, row *rowLayo
 	}
 }
 
+// paintBrackets marks the brackets around the caret on a row of l at y.
+func (ed *editor) paintBrackets(p *ui.Painter, f *frame, l *lineLayout, row *rowLayout, ox, y float32) {
+	if !f.bracketsOK {
+		return
+	}
+	v, ct, lh := &ed.view, ed.theme, l.rowHeight
+	for _, b := range f.brackets {
+		if b.Start >= l.start && b.Start < l.start+len(l.text) {
+			f.rects = v.rangeRects(l, row, l.toDisp(b.Start-l.start, false), l.toDisp(min(b.End, l.start+len(l.text))-l.start, false), f.rects[:0])
+			for _, rc := range f.rects {
+				if ed.o.filledBrackets {
+					p.Fill(ui.Rect{X: ox + rc.X, Y: y + 2, W: rc.W, H: lh - 4}, ct.MatchingBracket, 2)
+					continue
+				}
+				p.Stroke(ui.Rect{X: ox + rc.X, Y: y + 1, W: rc.W, H: lh - 2}, ct.MatchingBracket, 2, 1)
+			}
+		}
+	}
+}
+
+// caretShape is the shape of s's caret: CursorShape's, but a bar for a
+// selection's with BlockCaretWhenEmpty.
+func (ed *editor) caretShape(s sel) CursorShape {
+	if ed.o.blockCaretWhenEmpty && ed.o.cursorShape == CursorBlock && !s.empty() {
+		return CursorBar
+	}
+	return ed.o.cursorShape
+}
+
 // paintFontCaret draws a caret at x of a row at y as FontCarets has it.
-func (ed *editor) paintFontCaret(p *ui.Painter, l *lineLayout, row *rowLayout, at int, x, ox, y float32) {
+func (ed *editor) paintFontCaret(p *ui.Painter, l *lineLayout, row *rowLayout, s sel, x, ox, y float32) {
+	at := s.head
 	v := &ed.view
 	lh := l.rowHeight
 	h := min(lh, v.ascent+v.descent+4)
 	top := y + (lh-h)/2
-	if ed.o.cursorShape == CursorBlock {
+	if ed.caretShape(s) == CursorBlock {
 		w := max(2, ed.caretWidth(l, row, at, x-ox))
 		p.Fill(ui.Rect{X: x, Y: top, W: w, H: h}, ed.theme.Cursor.Alpha(0.55), 1)
 		return
@@ -1011,7 +1048,15 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 			if ed.o.folding && ed.o.decor == nil {
 				folded := ed.isFolded(line)
 				hovered := ed.pointerIn && ed.pointer.X < ed.gutterW
-				if folded || hovered && ed.foldable(line) {
+				if (folded || hovered && ed.foldable(line)) && gl != nil && gl.Folded != nil && gl.Unfolded != nil {
+					icon, col, size := gl.Unfolded, ct.FoldIcon, gl.FoldIconSize
+					if folded {
+						icon, col = gl.Folded, ct.FoldedIcon
+					}
+					// As nanoui draws a symbol of a size: in a box 1.2 times
+					// it, from where the size centred would start.
+					p.Icon(icon, ui.Rect{X: r.X + 4, Y: ny + (lh-size)/2, W: size * 1.2, H: size * 1.2}, col)
+				} else if folded || hovered && ed.foldable(line) {
 					cx, cy := r.X+ed.gutterW-4-lh*0.4, ny+lh/2
 					d := lh * 0.16
 					if gl != nil {

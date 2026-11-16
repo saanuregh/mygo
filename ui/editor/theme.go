@@ -53,6 +53,9 @@ type Theme struct {
 	// "⋯" half a space in, colored FoldText (LineNumber when zero);
 	// unset, the chip is Occurrence's with the "⋯" centered.
 	FoldChip, FoldText ui.Color
+	// FoldIcon and FoldedIcon color GutterLayout's fold icons, of a line
+	// that folds and of one folded.
+	FoldIcon, FoldedIcon ui.Color
 	// Tokens styles the kinds of tokens; a zero color is Text.
 	Tokens [tokenKinds]TokenStyle
 }

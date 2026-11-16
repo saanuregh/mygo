@@ -244,6 +244,9 @@ func (ed *editor) accessibility(n *platform.AccessNode) {
 // menu is the editor's context menu: the editing commands and folding,
 // or the app's Menu in their place, and the app's items.
 func (ed *editor) menu(m *ui.Menu) {
+	if ed.onFoldStrip {
+		return
+	}
 	if ed.onGutterMenu && ed.o.gutterMenu != nil {
 		ed.o.gutterMenu(m, ed.gutterMenuLine)
 		return
