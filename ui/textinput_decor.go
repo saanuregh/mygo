@@ -49,6 +49,18 @@ type TextBlock struct {
 	// click there as a TextWidget's OnClick does: a task's box ticked.
 	Marker        func(p *Painter, r Rect)
 	OnMarkerClick func()
+	// Top and Bottom add room inside the block's box above its first
+	// paragraph and below its last: a code block's header, which Paint
+	// draws, and the padding under its code.
+	Top, Bottom float32
+	// OnTopClick, when set, takes a click in the room Top adds, as a
+	// TextWidget's OnClick does: a code block's header choosing its
+	// language.
+	OnTopClick func()
+	// CollapseHidden has a paragraph of the block whose runes are all
+	// hidden now (TextRange.Hidden) take no room: a code block's fences,
+	// which its header and frame stand for.
+	CollapseHidden bool
 }
 
 // TextWidgets draws runs of a text input's text as boxes of the app's, in
@@ -263,12 +275,25 @@ func (ed *editor) markerBox(b *TextBlock) (Rect, bool) {
 	if a.rtl {
 		x += ed.contentW - indent
 	}
-	return Rect{x, ed.originY + float32(a.hs.top(p)-a.scroll), indent, l.Lines[0].Height}, true
+	return Rect{x, ed.originY + float32(a.textTop(&ed.buf, p)-a.scroll), indent, l.Lines[0].Height}, true
+}
+
+// topBox returns the room above block b's first paragraph (TextBlock.Top)
+// relative to the element, once it is laid out.
+func (ed *editor) topBox(b *TextBlock) (Rect, bool) {
+	a := ed.area
+	if a == nil || a.version == 0 || b.Start > ed.buf.n || b.Top <= 0 {
+		return Rect{}, false
+	}
+	p := ed.buf.para(b.Start)
+	a.paraLayout(ed, p)
+	return Rect{ed.originX, ed.originY + float32(a.hs.top(p)-a.scroll), ed.contentW, b.Top}, true
 }
 
 // clickableAt returns what takes a click at (x, y), relative to the
 // element: widget i with an OnClick as i, the marker of block j with an
-// OnMarkerClick as len(widgets)+j, else -1.
+// OnMarkerClick as len(widgets)+j, the room above block j with an
+// OnTopClick as len(widgets)+len(blocks)+j, else -1.
 func (ed *editor) clickableAt(x, y float32) int {
 	if ed.password || !ed.laidOut() {
 		return -1
@@ -292,6 +317,15 @@ func (ed *editor) clickableAt(x, y float32) int {
 			return len(ed.widgets) + j
 		}
 	}
+	for j := len(ed.blocks) - 1; j >= 0; j-- {
+		b := &ed.blocks[j]
+		if b.OnTopClick == nil {
+			continue
+		}
+		if r, ok := ed.topBox(b); ok && in(r) {
+			return len(ed.widgets) + len(ed.blocks) + j
+		}
+	}
 	return -1
 }
 
@@ -300,8 +334,10 @@ func (ed *editor) click(k int) {
 	switch {
 	case k < len(ed.widgets):
 		ed.widgets[k].OnClick()
-	default:
+	case k < len(ed.widgets)+len(ed.blocks):
 		ed.blocks[k-len(ed.widgets)].OnMarkerClick()
+	default:
+		ed.blocks[k-len(ed.widgets)-len(ed.blocks)].OnTopClick()
 	}
 }
 
@@ -332,6 +368,53 @@ func (ed *editor) paintWidgets(p *Painter, l *text.Layout, x, y float32, global 
 			}
 		}
 	}
+}
+
+// paraRoom returns the room the blocks add to paragraph p above and below
+// its text (TextBlock.Top, Bottom), and whether one collapses it while its
+// runes are all hidden (TextBlock.CollapseHidden).
+func (ed *editor) paraRoom(p int) (above, below float32, collapse bool) {
+	if len(ed.blocks) == 0 {
+		return 0, 0, false
+	}
+	b := &ed.buf
+	start, end := b.start(p), b.end(p)
+	for i := range ed.blocks {
+		blk := &ed.blocks[i]
+		if blk.Start > end || blk.End < start {
+			continue
+		}
+		if b.para(min(blk.Start, b.n)) == p {
+			above += max(blk.Top, 0)
+		}
+		if b.para(min(blk.End, b.n)) == p {
+			below += max(blk.Bottom, 0)
+		}
+		collapse = collapse || blk.CollapseHidden
+	}
+	return above, below, collapse
+}
+
+// allHidden reports whether runes start up to end, at least one, are all
+// hidden now (TextRange.Hidden).
+func (ed *editor) allHidden(start, end int) bool {
+	if start >= end {
+		return false
+	}
+	at := start
+	for _, r := range ed.inReach(start) {
+		if r.Start > at || at >= end {
+			break
+		}
+		if r.End <= at {
+			continue
+		}
+		if !ed.hides(&r) {
+			return false
+		}
+		at = r.End
+	}
+	return at >= end
 }
 
 // paraIndent returns the indent of paragraph p (TextBlock.Indent).

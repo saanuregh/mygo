@@ -305,7 +305,7 @@ func (w *widgetTextInput) BoundsForRange(r TextInputRange) (Rect, TextInputRange
 		if ed.compose != "" && p > ed.buf.para(ed.caret) {
 			local -= n
 		}
-		y = float32(a.hs.top(p) - a.scroll)
+		y = float32(a.textTop(&ed.buf, p) - a.scroll)
 		x0 = a.offsetX(ed, p)
 	} else {
 		l = w.layout()
