@@ -1681,3 +1681,32 @@ func TestListRowPressedWithoutChoosing(t *testing.T) {
 		t.Errorf("released: row %d reports the press", pressed)
 	}
 }
+
+// Scrolled tells the list was scrolled from its top by any amount, its
+// first row still in view; the frame that changes it builds another for
+// what read it.
+func TestListScrolled(t *testing.T) {
+	var s ListState
+	var seen []bool
+	tt := coreNewTester(func(c *context) {
+		seen = append(seen, s.Scrolled())
+		coreList(c, &s, 100, func(i int) {
+			coreBox(c).Height(40).Children(func() { coreTextf(c, "Row %d", i) })
+		}).Grow(1)
+	}, 300, 400)
+	if s.Scrolled() {
+		t.Fatal("scrolled at the top")
+	}
+	tt.Move(100, 100)
+	tt.Scroll(100, 100, 0, 5)
+	if first, _ := s.Visible(); first != 0 || !s.Scrolled() {
+		t.Fatalf("scrolled by 5: row %d first, scrolled %v", first, s.Scrolled())
+	}
+	if !seen[len(seen)-1] {
+		t.Error("the last frame built did not see the list scrolled")
+	}
+	tt.Scroll(100, 100, 0, -5)
+	if s.Scrolled() || seen[len(seen)-1] {
+		t.Errorf("back at the top: scrolled %v, the last frame saw %v", s.Scrolled(), seen[len(seen)-1])
+	}
+}
