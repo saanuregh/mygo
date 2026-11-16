@@ -57,7 +57,19 @@ func (ed *editor) inlayAt(x float32, y float64) (int, ui.Rect, bool) {
 		if b <= r.from || a >= r.to {
 			continue
 		}
-		x0, x1 := v.xOf(l, r, max(a, r.from)), v.xOf(l, r, min(b, r.to))
+		// Its label's glyphs, not the room around it, and 2 past each
+		// side (zode's view.zig inlaysOnRow).
+		a, b = max(a, r.from), min(b, r.to)
+		for a < b && l.disp[a] == ' ' {
+			a++
+		}
+		for b > a && l.disp[b-1] == ' ' {
+			b--
+		}
+		if a == b {
+			continue
+		}
+		x0, x1 := v.xOf(l, r, a)-2, v.xOf(l, r, b)+2
 		if x >= x0 && x < x1 {
 			top := g.rows + float64(ri)*float64(l.rowHeight)
 			return inl[sg.inlay].index, ui.Rect{X: x0, Y: float32(top), W: x1 - x0, H: l.rowHeight}, true

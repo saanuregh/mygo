@@ -88,9 +88,17 @@ func (f *FindBar) Close() {
 // closes the bar. It returns in.
 func (f *FindBar) QueryInput(in ui.Element) ui.Element {
 	fd := &f.ed.find
-	if fd.focusQuery {
-		fd.focusQuery = false
-		in.Focus().SetTextSelection(0, utf8.RuneCountInString(fd.query))
+	if fd.focusQuery || fd.selectQuery {
+		n := utf8.RuneCountInString(fd.query)
+		switch {
+		case fd.selectQuery, !in.Focused(), !f.ed.o.findFromOrigin:
+			in.Focus().SetTextSelection(0, n)
+		case fd.seeded:
+			// FindFromOrigin's query, focused already, put in afresh:
+			// the caret at its end, as zode's text field set anew.
+			in.SetTextSelection(n, n)
+		}
+		fd.focusQuery, fd.selectQuery = false, false
 	}
 	mods := f.c.Modifiers()
 	switch {
@@ -106,10 +114,26 @@ func (f *FindBar) QueryInput(in ui.Element) ui.Element {
 	return in
 }
 
+// FocusReplacement gives in, the replacement's field, the focus when the
+// bar asks for it (FindFromOrigin's FindReplace over a query), and returns
+// in, for a bar that binds its own field.
+func (f *FindBar) FocusReplacement(in ui.Element) ui.Element {
+	if fd := &f.ed.find; fd.focusReplace {
+		fd.focusReplace = false
+		in.Focus()
+	}
+	return in
+}
+
+// FocusQuery has the query's field take the focus at the next frame, the
+// query selected, whether it had the focus or not.
+func (f *FindBar) FocusQuery() { f.ed.find.selectQuery = true }
+
 // ReplacementInput makes in the field of the replacement: Enter replaces
 // the match selected, Cmd+Enter all of them, and Escape closes the bar.
 // It returns in.
 func (f *FindBar) ReplacementInput(in ui.Element) ui.Element {
+	f.FocusReplacement(in)
 	switch {
 	case in.Submitted() && f.c.Modifiers()&ui.Cmd != 0:
 		f.ReplaceAll()
@@ -371,6 +395,7 @@ type CompletionMenu struct {
 	// build: the item chosen, -1 for none.
 	chosen  int
 	closing bool
+	anchor  ui.Element
 }
 
 // Items returns the completions shown, best first.
@@ -385,6 +410,10 @@ func (m *CompletionMenu) Items() []Completion {
 
 // Selected is the index in Items of the completion chosen.
 func (m *CompletionMenu) Selected() int { return m.ed.complete.selected }
+
+// Anchor is the box at the caret's line the list is attached to (below
+// it), for a list that places itself: AttachTo it another way.
+func (m *CompletionMenu) Anchor() ui.Element { return m.anchor }
 
 // Prefix is the word typed, which the completions match.
 func (m *CompletionMenu) Prefix() string { return m.ed.complete.prefix }
@@ -512,7 +541,7 @@ func (ed *editor) buildCompletions(c *ui.Context, anchor ui.Element) {
 		if render == nil {
 			render = DefaultCompletions
 		}
-		m := &CompletionMenu{c: c, ed: ed, chosen: -1}
+		m := &CompletionMenu{c: c, ed: ed, chosen: -1, anchor: anchor}
 		render(c, panel, m)
 		switch {
 		case m.chosen >= 0:

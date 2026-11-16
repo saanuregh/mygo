@@ -299,6 +299,21 @@ type clipboard struct {
 	lines  []bool // pieces copied as whole lines
 }
 
+// Copied returns what an editor last copied, or SetCopied set: the text
+// it wrote to the clipboard, its pieces, one a selection, and whether
+// each was whole lines. Pasting that text in any editor takes them.
+func Copied() (text string, pieces []string, lines []bool) {
+	return lastClip.text, slices.Clone(lastClip.pieces), slices.Clone(lastClip.lines)
+}
+
+// SetCopied records text, written to the clipboard by the app (as a Vim
+// yank), as copied in pieces, lines saying which are whole lines, for
+// pasting in an editor as Copied says. The pieces are one each, in order,
+// of the editor's selections the paste goes to when as many.
+func SetCopied(text string, pieces []string, lines []bool) {
+	lastClip = clipboard{text: text, pieces: slices.Clone(pieces), lines: slices.Clone(lines)}
+}
+
 type autoclose struct {
 	sel   int // the selection's id
 	at    int // the offset of the closing text
@@ -350,7 +365,7 @@ func (ed *editor) init(buf *Buffer, o options, t *ui.Theme) {
 		ed.sels = []sel{{goal: -1, id: 0}}
 		ed.nextID = 1
 		ed.blinkStart = ed.frameNow
-		ed.hover.asked = -1
+		ed.hover.asked, ed.hover.restOff = -1, -1
 		ed.hoverLine = -1
 		ed.inlayHovered = -1
 	}
@@ -751,9 +766,9 @@ func (ed *editor) doReveal() {
 	margin := min(float64(ed.o.scrollMargin)*lh, max(0, (h-lh)/2))
 	switch mode {
 	case revealCenter:
-		if top < ed.scrollY || bottom > ed.scrollY+h {
-			ed.setScroll(top - (h-lh)/2)
-		}
+		// Always, the caret's line at the middle, in view or not (as
+		// zode's editor's .center).
+		ed.setScroll(top - h/2)
 	case revealTop:
 		ed.setScroll(top - margin)
 	default:

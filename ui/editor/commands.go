@@ -322,6 +322,7 @@ func (ed *editor) run(cmd Command) bool {
 	case UnfoldAll:
 		ed.folds = nil
 		ed.needsBuild = true
+		ed.reveal = revealCenter
 		return true
 	case FoldRecursive:
 		return ed.foldRecursive(ed.primary().head)
@@ -386,6 +387,8 @@ func (ed *editor) run(cmd Command) bool {
 	case ToggleSoftWrap:
 		ed.toggledWrap = !ed.toggledWrap
 		ed.needsBuild = true
+		// Rows change: the caret's line goes to the middle.
+		ed.reveal = revealCenter
 		return true
 	case ToggleLineNumbers:
 		ed.toggledNumbers = !ed.toggledNumbers

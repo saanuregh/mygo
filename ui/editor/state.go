@@ -118,8 +118,9 @@ type State struct {
 	// diagnostic's, as VS Code's editor.hover.enabled off: ShowHover, as
 	// Cmd+K Cmd+I, still asks for one at the caret.
 	NoPointerHover bool
-	// OnDefinition is called for Cmd+click (Ctrl+click elsewhere) and F12
-	// on a word, as to go to its definition.
+	// OnDefinition is called for Cmd+click (Ctrl+click elsewhere), with
+	// any other modifiers held too, and F12 on a word, as to go to its
+	// definition.
 	OnDefinition func(offset int)
 	// NoDefinitionClick leaves Cmd+click to the editor's other clicks,
 	// with no link under it: F12 and the context menu still go to the
@@ -163,6 +164,9 @@ type State struct {
 	// HoverAppOnly shows in the hover only what the app gives ShowHover:
 	// no diagnostics, and nothing before its answer. The hover goes as
 	// soon as the pointer leaves the text hovered, but into the hover.
+	// The pointer rests on a name only (nothing on punctuation), and
+	// HoverDelay's wait runs on across the name, starting again on another
+	// name alone; the hover is asked at the name's start.
 	HoverAppOnly bool
 	// GutterHoverMark is drawn on the line under the pointer while it is
 	// over the gutter, where the line has no mark of its own: where a
@@ -248,9 +252,13 @@ type State struct {
 	// The scroll bars stay at the edge, over it (NoScrollbars hides them).
 	MarginRight float32
 	// FindFromOrigin has the find bar's query seeded by the selection
-	// alone (not the word at the caret), and typing it select the match
-	// at or after where the selection started as the bar opened, rather
-	// than after the match last selected.
+	// alone (not the word at the caret, nor one of 1000 bytes or more),
+	// and any change of the query, its options or the text select the
+	// match at or after where the selection started as the bar opened,
+	// rather than after the match last selected. Find hides replacing;
+	// FindReplace over a query gives the replacement the focus
+	// (FindBar.FocusReplacement). Empty matches of a regular expression
+	// count.
 	FindFromOrigin bool
 	// FilledBrackets marks the bracket next to the caret (after it, else
 	// before it) and its partner, filled with Theme.MatchingBracket,
