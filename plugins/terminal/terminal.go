@@ -170,6 +170,16 @@ type Options struct {
 	// right-click-action: show the context menu when zero. A program that
 	// takes the mouse gets the click instead, unless Shift is held.
 	RightClick RightClickAction
+	// ContextMenu is the context menu's items, in order, among ActionCopy,
+	// ActionPaste, ActionSelectAll and ActionClearScreen, each showing the
+	// key bound to it; nil shows Copy, Paste, Select All and, after a
+	// separator, Clear. An app whose terminals offer only Copy and Paste
+	// gives those two.
+	ContextMenu []Action
+	// NoLinks leaves links as text: Command+click (Control+click
+	// elsewhere) neither underlines nor opens a hyperlink, a URL or a
+	// path, and selects as a click does.
+	NoLinks bool
 	// NoClipboardWrite keeps programs from writing to the clipboard (OSC
 	// 52, OSC 5522), as Ghostty's clipboard-write = deny. Writes go
 	// through unless it is set; reads are governed by ClipboardRead.
@@ -421,7 +431,7 @@ type RightClickAction int
 
 const (
 	// RightClickContextMenu shows the context menu: Copy, Paste, Select
-	// All and Clear.
+	// All and Clear, or Options.ContextMenu's items.
 	RightClickContextMenu RightClickAction = iota
 	// RightClickPaste lets go of the selection and pastes.
 	RightClickPaste
