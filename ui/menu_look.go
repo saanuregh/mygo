@@ -55,6 +55,10 @@ type MenuStyle struct {
 	// one's filled with the Danger color, faint; 0 fills it with the
 	// Accent, AccentText on it.
 	Hover Color
+	// DisabledOpacity fades a disabled item whole, to that opacity in
+	// all, its label in its usual color; 0 grays its text and dims it as
+	// any disabled element.
+	DisabledOpacity float32
 }
 
 // Offset sets the room between the menu, as PopoverMenu and

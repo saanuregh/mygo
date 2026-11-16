@@ -1366,6 +1366,8 @@ func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem,
 		color = t.Danger
 	}
 	switch {
+	case !it.Enabled && st.DisabledOpacity > 0:
+		row.DimDisabled(false).Opacity(st.DisabledOpacity).TextColor(color)
 	case !it.Enabled:
 		color = t.TextMuted
 		row.TextColor(color)
@@ -1424,7 +1426,7 @@ func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem,
 				coreBox(c).Size(size, size).Shrink(0)
 			} else {
 				img := coreImage(c, b).Size(size, size).Fit(Contain).Shrink(0)
-				if !it.Enabled && !it.Icon.Template {
+				if !it.Enabled && !it.Icon.Template && st.DisabledOpacity == 0 {
 					img.Opacity(0.4)
 				}
 			}
