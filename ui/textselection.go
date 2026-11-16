@@ -527,6 +527,10 @@ func (rt *engine) textSelectionMenu(s *state, x, y float32) bool {
 	if !rt.textSelectionVisible(s) || !selected || rt.compareTextPoints(p, a) < 0 || rt.compareTextPoints(p, b) > 0 {
 		rt.selection = textSelection{scope: s.textScope, anchor: p, caret: p}
 	}
-	rt.focused, rt.focusVisible = s.id, false
+	// In an element that ClearsFocus the focus stays where it was: the
+	// menu copies from the text without it.
+	if sc := rt.states[s.textScope]; sc == nil || !sc.clearsFocus {
+		rt.focused, rt.focusVisible = s.id, false
+	}
 	return true
 }

@@ -2083,7 +2083,8 @@ func (e *node) hasState() bool {
 // ClearsFocus has a press on the element, or on what is inside it, leave
 // the keyboard focus nowhere, though an element around it takes the
 // focus: a control that acts without taking the keyboard, as the buttons
-// of a find bar over a code editor.
+// of a find bar over a code editor. A right press on its read-only text
+// leaves the focus where it was as the text's menu opens.
 func (e *node) ClearsFocus() *node { e.clearsFocus = true; return e }
 
 // Focusable lets the element take the keyboard focus, by a click or Tab.
