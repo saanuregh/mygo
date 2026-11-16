@@ -538,7 +538,8 @@ func (rt *engine) cancelPress() {
 		rt.deliver(p, InputEvent{Kind: InputPointerUp, Button: rt.pressButton, Mods: rt.mods, Clicks: rt.pressClicks})
 	}
 	if p.editor != nil {
-		p.editor.release()
+		p.editor.pressedWidget = 0 // a pan clicks no widget
+		p.editor.release(0, 0)
 	}
 	rt.selection.dragging = false
 	p.pressed = false

@@ -87,6 +87,15 @@ type editor struct {
 	ranges []TextRange
 	apart  bool
 	merge  rangeMerge
+	// widgets and blocks are the frame's TextWidgets and TextBlocks; stale
+	// marks them, with the ranges, as the last frame's while a build has
+	// given none yet (staleDecorations).
+	widgets []TextWidget
+	blocks  []TextBlock
+	stale   bool
+	// pressedWidget is 1 + what a press went down on that takes clicks
+	// (clickableAt), whose OnClick the release calls if it comes over it.
+	pressedWidget int
 	// paintStyles, paintSpans and painted hold what rangeSpans returns to
 	// paint a text, used again for the next: painting keeps none.
 	paintStyles []text.Span

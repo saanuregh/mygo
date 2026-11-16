@@ -77,6 +77,7 @@ func (ed *editor) shapeInput(params text.Params) *text.Layout {
 
 func (e *node) inputHeight(cw float32) float32 {
 	ed := e.st.editor
+	ed.freshDecorations()
 	if ed.area != nil {
 		p := e.textParams(0)
 		p.Text = ""
@@ -96,6 +97,7 @@ func (e *node) inputHeight(cw float32) float32 {
 
 func (e *node) layoutInput(cw, ch float32) {
 	ed := e.st.editor
+	ed.freshDecorations()
 	if a := ed.area; a != nil {
 		ed.contentW = cw
 		ed.originX, ed.originY = e.contentX(), e.contentY()
@@ -194,6 +196,9 @@ func (e *node) paintInput(p *Painter) {
 		}
 	}
 	p.textForeground(l, ox, oy, ts.color, ts, sp)
+	if !ed.password {
+		ed.paintWidgets(p, l, ox, oy, ed.textIndex)
+	}
 	if ed.compose != "" {
 		start := ed.caret
 		end := start + utf8.RuneCountInString(ed.compose)
@@ -263,19 +268,22 @@ func (ed *editor) spansOf(ranges []TextRange, start, end int) (string, *spanPain
 }
 
 // styleRanges is spansOf, building how to paint the ranges only if paint
-// is set. Without it, it builds nothing unless a range sets a weight.
+// is set. Without it, it builds nothing unless a range changes how the
+// runes are laid out: a weight, font, size or slant, runes hidden, a
+// widget.
 func (ed *editor) styleRanges(ranges []TextRange, start, end int, paint bool) (string, *spanPaint) {
 	reach := len(ranges)
 	if !paint {
-		weighted := false
-		for i, r := range ranges {
+		shapes := false
+		for i := range ranges {
+			r := &ranges[i]
 			if r.Start >= end {
 				reach = i
 				break
 			}
-			weighted = weighted || r.Weight > 0 && max(r.Start, start) < min(r.End, end)
+			shapes = shapes || max(r.Start, start) < min(r.End, end) && ed.shapes(r)
 		}
-		if !weighted {
+		if !shapes {
 			return "", nil
 		}
 	}
@@ -302,21 +310,34 @@ func (ed *editor) styleRanges(ranges []TextRange, start, end int, paint bool) (s
 		styles = make([]text.Span, 0, 2*reach+1)
 	}
 	at := 0
-	add := func(from, to int, r TextRange) {
+	add := func(from, to int, st text.Span, ps Span) {
 		if from > at {
 			styles = append(styles, text.Span{End: from})
 			if paint {
 				spans = append(spans, Span{})
 			}
 		}
-		styles = append(styles, text.Span{End: to, Weight: r.Weight})
+		st.End = to
+		styles = append(styles, st)
 		if paint {
-			spans = append(spans, Span{Color: r.Color, Weight: r.Weight})
+			spans = append(spans, ps)
 		}
 		at = to
 	}
-	weighted, colored := false, false
-	for _, r := range ranges[:reach] {
+	piece := func(from, to int, st text.Span, ps Span) {
+		if from >= to {
+			return
+		}
+		if from < caret && caret < to {
+			add(local(from, true), local(caret, false), st, ps)
+			add(local(caret, true), local(to, false), st, ps)
+		} else {
+			add(local(from, true), local(to, false), st, ps)
+		}
+	}
+	shaped, painted := false, false
+	for i := range ranges[:reach] {
+		r := &ranges[i]
 		if r.Start >= end {
 			break
 		}
@@ -324,26 +345,70 @@ func (ed *editor) styleRanges(ranges []TextRange, start, end int, paint bool) (s
 		if from >= to {
 			continue
 		}
-		if from < caret && caret < to {
-			add(local(from, true), local(caret, false), r)
-			add(local(caret, true), local(to, false), r)
-		} else {
-			add(local(from, true), local(to, false), r)
+		st, ps := ed.runStyle(r)
+		if r.widget != 0 {
+			// The widget's box is its first rune; the others take no room.
+			w := &ed.widgets[r.widget-1]
+			if from == w.Start {
+				first := st
+				first.ObjectWidth, first.ObjectHeight, first.ObjectDescent = max(w.Width, hiddenWidth), max(w.Height-w.Descent, 0), w.Descent
+				piece(from, from+1, first, ps)
+				from++
+			}
 		}
-		weighted = weighted || r.Weight > 0
-		colored = colored || r.Color.A > 0
+		piece(from, to, st, ps)
+		shaped = shaped || st != text.Span{}
+		painted = painted || ps.Color.A > 0 || ps.Strikethrough || ps.Background.A > 0
 	}
 	key := ""
-	if weighted {
+	if shaped {
 		key = text.EncodeSpans(styles)
 	}
 	var sp *spanPaint
 	if paint {
 		ed.paintStyles, ed.paintSpans = styles, spans
-		if colored {
+		if painted {
 			ed.painted = spanPaint{spans: spans, styles: styles}
 			sp = &ed.painted
 		}
 	}
 	return key, sp
+}
+
+// hiddenWidth is the width of a rune hidden (TextRange.Hidden) or under a
+// widget past its first: an inline object as narrow as the text engines
+// measure, one Pango unit, which draws nothing.
+const hiddenWidth = 1.0 / 1024
+
+// hiddenSize is the font size of runes hidden: Pango leaves the spaces of
+// an inline object's run their font's width, which this makes none.
+const hiddenSize = 1.0 / 64
+
+// shapes reports whether r changes how its runes are laid out.
+func (ed *editor) shapes(r *TextRange) bool {
+	return r.Weight > 0 || r.Font != "" || r.Size > 0 || r.Italic || r.widget != 0 || ed.hides(r)
+}
+
+// hides reports whether r hides its runes now: it hides them, and neither
+// the caret nor an end of the selection is within its reveal range.
+func (ed *editor) hides(r *TextRange) bool {
+	if !r.Hidden {
+		return false
+	}
+	if r.RevealEnd <= r.RevealStart {
+		return true
+	}
+	lo, hi := min(ed.anchor, ed.caret), max(ed.anchor, ed.caret)
+	return lo > r.RevealEnd || hi < r.RevealStart
+}
+
+// runStyle returns how a run styled by r is laid out and painted, past
+// the first rune of a widget.
+func (ed *editor) runStyle(r *TextRange) (text.Span, Span) {
+	if r.widget != 0 || ed.hides(r) {
+		return text.Span{ObjectWidth: hiddenWidth, Size: hiddenSize}, Span{}
+	}
+	weight := max(r.Weight, 0)
+	return text.Span{Weight: weight, Family: r.Font, Size: r.Size, Italic: r.Italic},
+		Span{Color: r.Color, Weight: weight, Strikethrough: r.Strikethrough, Background: r.Background, Radius: r.Radius}
 }
