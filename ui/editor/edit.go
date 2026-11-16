@@ -23,7 +23,7 @@ func (ed *editor) apply(edits []Edit, kind editKind, after func(move func(int, b
 // buffer's line endings, as moving lines carries theirs.
 func (ed *editor) applyEnds(edits []Edit, ends func(lineEnds) []string, kind editKind, after func(move func(int, bias) int) []sel) bool {
 	b := ed.buf()
-	if b == nil || ed.o.readOnly || len(edits) == 0 {
+	if b == nil || ed.o.readOnly || len(edits) == 0 || !ed.inExcerpt(edits) {
 		return false
 	}
 	before := slices.Clone(ed.sels)

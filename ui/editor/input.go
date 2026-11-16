@@ -48,6 +48,7 @@ func (ed *editor) retry(fn func() bool) bool {
 		ed.stale = false
 		ok := fn()
 		if !ed.stale {
+			ed.keepInExcerpt()
 			return ok
 		}
 	}
