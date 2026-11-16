@@ -76,6 +76,8 @@ type editor struct {
 	// Placeholder color is paint-only and reset by each widget build.
 	placeholderColor    Color
 	placeholderColorSet bool
+	// placeholderOneLine: the placeholder never wraps (PlaceholderOneLine).
+	placeholderOneLine bool
 	// caretWidth is paint-only, in DIPs, and reset by each widget build.
 	caretWidth float32
 	// ranges style runs of the text (TextRanges): as given until apart is
@@ -150,6 +152,7 @@ func (ed *editor) rebuild() {
 	ed.shown = editorOptions{ed.readOnly, ed.password, ed.maxLength, ed.onPaste, ed.onTextKey}
 	ed.readOnly, ed.password, ed.maxLength, ed.lines, ed.onPaste, ed.onTextKey = false, false, 0, [2]int{}, nil, nil
 	ed.placeholderColorSet = false
+	ed.placeholderOneLine = false
 	ed.caretWidth = 1
 }
 

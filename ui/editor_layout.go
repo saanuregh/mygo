@@ -148,7 +148,7 @@ func (e *node) layoutInput(cw, ch float32) {
 func (e *node) placeholderParams(width float32) text.Params {
 	ed := e.st.editor
 	params := e.textParams(width)
-	params.Text, params.Spans, params.MaxLines, params.NoWrap, params.Ellipsis = ed.placeholder, "", 0, !ed.multiline, ""
+	params.Text, params.Spans, params.MaxLines, params.NoWrap, params.Ellipsis = ed.placeholder, "", 0, !ed.multiline || ed.placeholderOneLine, ""
 	return params
 }
 
