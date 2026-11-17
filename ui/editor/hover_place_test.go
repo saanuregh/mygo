@@ -131,3 +131,28 @@ func TestHoverRestOnTheNextNameGoesOnAsTheCardGoes(t *testing.T) {
 		t.Fatalf("on beta: asked %d, shown %v at %d", asked, st.ed.hover.shown, st.ed.hover.start)
 	}
 }
+
+// With room above the text (PaddingTop, zode's 6) and the editor away
+// from the window's corner, the card is still 20 below the pointer.
+func TestHoverBelowCountsThePaddingAboveTheText(t *testing.T) {
+	st := &State{Buffer: NewBuffer(strings.Repeat("one two\n", 40)), HoverAppOnly: true, HoverBelow: true, PaddingTop: 6}
+	st.OnHover = func(r HoverRequest) { st.ShowHover(r.Offset, r.Offset+3, "a card", nil) }
+	var eb ui.Rect
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Column(c).Fill().Padding(50, 0, 0, 70).Children(func() { eb = View(c, st).Fill().Bounds() })
+		st.RenderHover = func(c *ui.Context, panel ui.Element, card *HoverCard) {
+			panel.Label("Hover card").Padding(10, 12).Children(func() { ui.Text(c, card.Text()) })
+		}
+	}, 1200, 400)
+	tt.Frame()
+	ed := &st.ed
+	x := eb.X + ed.textX + ed.view.charWidth*1.5
+	y := eb.Y + ed.top + float32(ed.view.heights.geometry(0).rows-ed.scrollY) + ed.view.lineHeight/2
+	tt.Move(x, y)
+	tt.Advance(time.Second)
+	tt.Frame()
+	card, ok := tt.Find("Hover card")
+	if !ok || abs(card.Y-(y+20)) > 0.5 {
+		t.Fatalf("card %v, pointer y %v: want %v", card, y, y+20)
+	}
+}
