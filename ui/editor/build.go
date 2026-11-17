@@ -164,15 +164,16 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 			hoverAnchor, hasHover = anchor("code hover anchor", h.start, 0)
 			// Below the pointer as it asked: from 10 above it, 26 high (as
 			// zode's hover_card.zig anchors its card); asked by the
-			// keyboard, the caret.
+			// keyboard, the caret. The pointer is in the text's box, below
+			// the find bar's strip and the padding above the text (ed.top).
 			if hasHover && ed.o.hoverBelow {
 				eb := e.LayoutBounds()
 				if h.byPointer {
-					y := h.pointerY - 10
+					y := ed.top + h.pointerY - 10
 					hoverAnchor.Left(h.pointerX).Top(y).Size(1, 26)
 					h.place = ui.Rect{X: eb.X + h.pointerX, Y: eb.Y + y, W: 1, H: 26}
 				} else if cr, ok := ed.caretRect(ed.primary().head); ok {
-					h.place = ui.Rect{X: eb.X + ed.textX + cr.X - ed.scrollX, Y: eb.Y + float32(float64(cr.Y)-ed.scrollY), W: cr.W, H: cr.H}
+					h.place = ui.Rect{X: eb.X + ed.textX + cr.X - ed.scrollX, Y: eb.Y + ed.top + float32(float64(cr.Y)-ed.scrollY), W: cr.W, H: cr.H}
 				}
 			}
 		}
