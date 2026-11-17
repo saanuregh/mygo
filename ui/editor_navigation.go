@@ -46,8 +46,11 @@ func (ed *editor) wants(k keyEvent) bool {
 		return m != Alt || runtime.GOOS == "darwin"
 	case KeyHome, KeyEnd, KeyDelete:
 		return true
-	case KeyUp, KeyDown, KeyPageUp, KeyPageDown:
+	case KeyUp, KeyDown:
 		return ed.multiline || m != 0
+	case KeyPageUp, KeyPageDown:
+		// With Ctrl, Cmd or Alt they are the window's, as switching tabs.
+		return ed.multiline && m == 0
 	case KeyEnter:
 		return m == 0
 	case KeyTab, KeyEscape:
