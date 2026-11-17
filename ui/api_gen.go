@@ -6277,6 +6277,19 @@ func (_handle Element) LayoutBounds() Rect {
 	return _node.LayoutBounds()
 }
 
+// Leading sets the height of lines of text as a multiple of the font's
+// own line height, rounded up to a whole DIP, as nanoui's leading: 1.35
+// of a 12 DIP monospaced font's 17 DIP line is 23 DIPs.
+func (_handle Element) Leading(m float32) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.Leading(m))
+}
+
 func (_handle Element) Left(v float32) Element {
 	_node := _handle.node()
 	if _node == nil {

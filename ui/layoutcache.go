@@ -223,6 +223,7 @@ type textLayout struct {
 	tabSize                   float32
 	weight                    int
 	italic, fixedLine         bool
+	natural                   bool
 	align                     Align
 }
 
@@ -239,7 +240,7 @@ func (l *textLayout) same(t *textStyle) bool {
 		(set&setSize == 0 || l.size == t.size) &&
 		(set&setWeight == 0 || l.weight == t.weight) &&
 		(set&setItalic == 0 || l.italic == t.italic) &&
-		(set&setLineHeight == 0 || l.lineHeight == t.lineHeight && l.fixedLine == t.fixedLine) &&
+		(set&setLineHeight == 0 || l.lineHeight == t.lineHeight && l.fixedLine == t.fixedLine && l.natural == t.natural) &&
 		(set&setAlign == 0 || l.align == t.align) &&
 		(set&setSpacing == 0 || l.spacing == t.spacing) &&
 		(set&setFeatures == 0 || l.features == t.features) &&
@@ -267,7 +268,7 @@ func layoutOfText(t *textStyle) textLayout {
 		l.italic = t.italic
 	}
 	if set&setLineHeight != 0 {
-		l.lineHeight, l.fixedLine = t.lineHeight, t.fixedLine
+		l.lineHeight, l.fixedLine, l.natural = t.lineHeight, t.fixedLine, t.natural
 	}
 	if set&setAlign != 0 {
 		l.align = t.align
