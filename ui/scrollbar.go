@@ -86,6 +86,11 @@ type ScrollbarStyle struct {
 	// pointer is over the vertical bar's edge, as an overlay scroller.
 	// Zero shows them on hover. It applies to scroll containers only.
 	FadeAfter, FadeOver time.Duration
+	// HoverWidth, when set, is a vertical thumb's width while the pointer
+	// is within 10 DIPs of the container's right edge or drags it, in
+	// place of a dragged thumb widened by 2 (nanoui's 4 widening to 7).
+	// A view painting its own bar (Painter.Scrollbar) widens it dragged.
+	HoverWidth float32
 }
 
 // Resolve returns s with its zero fields filled from t, as Painter.Scrollbar
@@ -129,6 +134,9 @@ func (s ScrollbarStyle) Resolve(t *Theme) ScrollbarStyle {
 	if s.Active != (Color{}) {
 		base.Active = s.Active
 	}
+	if s.HoverWidth > 0 {
+		base.HoverWidth = s.HoverWidth
+	}
 	if s.FadeAfter > 0 {
 		base.FadeAfter, base.FadeOver = s.FadeAfter, s.FadeOver
 	}
@@ -167,7 +175,7 @@ func (s ScrollbarStyle) Resolve(t *Theme) ScrollbarStyle {
 	return ScrollbarStyle{
 		TrackWidth: width, ThumbWidth: thumbWidth, Radius: radius, Square: base.Square, Flush: base.Flush,
 		MinLength: minLength, Track: base.Track, Thumb: thumb, Hover: hover, Active: active,
-		FadeAfter: base.FadeAfter, FadeOver: base.FadeOver,
+		FadeAfter: base.FadeAfter, FadeOver: base.FadeOver, HoverWidth: base.HoverWidth,
 	}
 }
 
@@ -286,6 +294,15 @@ func (p *Painter) ScrollbarThumb(s Scrollbar, st ScrollbarState) {
 	case st.Hovered:
 		c = style.Hover
 	}
+	if style.HoverWidth > 0 {
+		// Dragged, at its hover width, as a container's.
+		r, radius := s.thumbRect(style), style.Radius
+		if st.Dragging && !s.Horizontal {
+			r, radius = widenThumb(r, style, false)
+		}
+		p.scrollThumbFill(r, s.Horizontal, false, c, radius)
+		return
+	}
 	// A thumb with no room to grow changes color only while dragged, as
 	// VS Code's.
 	p.scrollThumbFill(s.thumbRect(style), s.Horizontal, st.Dragging && style.ThumbWidth+2 <= style.TrackWidth, c, style.Radius)
@@ -308,4 +325,19 @@ func (p *Painter) scrollThumbFill(bar Rect, horizontal, grow bool, c Color, radi
 	}
 	radius = min(radius, half)
 	p.fill(bar, [4]float32{radius, radius, radius, radius}, c, 0, Color{})
+}
+
+// widenThumb returns a vertical thumb at its style's HoverWidth, grown
+// away from the edge it sits at, and its corners' radius: a thumb rounded
+// as its width's half stays so.
+func widenThumb(r Rect, style ScrollbarStyle, rtl bool) (Rect, float32) {
+	radius := style.Radius
+	if !style.Square && radius == r.W/2 {
+		radius = style.HoverWidth / 2
+	}
+	if !rtl {
+		r.X -= style.HoverWidth - r.W
+	}
+	r.W = style.HoverWidth
+	return r, radius
 }
