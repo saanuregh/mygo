@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"math"
 	"slices"
 
 	"github.com/egoist/mygo/internal/text"
@@ -396,6 +397,9 @@ func (e *node) textWidths() [2]float32 {
 	sys := e.c.rt.text
 	l := sys.Layout(p)
 	w := [2]float32{l.Width, 0}
+	if wholeTextWidths.Load() {
+		w[0] = float32(math.Ceil(float64(w[0])))
+	}
 	switch {
 	case e.noWrap:
 		w[1] = w[0]

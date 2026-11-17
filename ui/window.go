@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/i18n"
@@ -57,6 +58,15 @@ func SetFractionalText(on bool) { text.SetAppFractional(on) }
 // other systems keep their own fallbacks. A Tester's window takes them
 // too.
 func SetFallbackFonts(families ...string) { text.SetAppFallbackFamilies(families...) }
+
+// SetWholeTextWidths makes text as wide as its widest line rounded up to
+// a whole DIP (its max-content width), SingleLine, NoWrap or wrapping, as
+// nanoui lays out every text it does not wrap, rather than its
+// fractional width. Call it before the first window.
+func SetWholeTextWidths(on bool) { wholeTextWidths.Store(on) }
+
+// wholeTextWidths is SetWholeTextWidths'.
+var wholeTextWidths atomic.Bool
 
 // A FontFamily is a font family text can use, as FontFamilies lists it.
 type FontFamily struct {
