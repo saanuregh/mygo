@@ -112,6 +112,9 @@ func DefaultTheme(t *ui.Theme) *Theme {
 		tok(TokenInserted, "#7ee787")
 		tok(TokenDeleted, "#ffa198")
 		tok(TokenInvalid, "#f85149")
+		tok(TokenBracket1, "#ffd700")
+		tok(TokenBracket2, "#da70d6")
+		tok(TokenBracket3, "#179fff")
 	} else {
 		ct.ActiveLine = ui.RGBA(0, 0, 0, 0.035)
 		ct.MatchingBracket = ui.RGBA(0, 0, 0, 0.3)
@@ -140,6 +143,9 @@ func DefaultTheme(t *ui.Theme) *Theme {
 		tok(TokenInserted, "#116329")
 		tok(TokenDeleted, "#82071e")
 		tok(TokenInvalid, "#d1242f")
+		tok(TokenBracket1, "#0431fa")
+		tok(TokenBracket2, "#319331")
+		tok(TokenBracket3, "#7b3814")
 	}
 	// The kinds parsers tell apart and lexers do not take the colors of
 	// those they are nearest.
