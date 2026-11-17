@@ -120,7 +120,7 @@ func layerOf(z int32) int {
 // drawImages draws the images of a layer, within the grid.
 func (v *view) drawImages(p *ui.Painter, layer int, ox, oy float32) {
 	s := v.scale
-	grid := ui.Rect{X: ox, Y: oy, W: float32(v.cols*v.cellW) / s, H: float32(v.rows*v.cellH) / s}
+	grid := ui.Rect{X: ox, Y: oy, W: float32(v.cols) * v.cellX / s, H: float32(v.rows*v.cellH) / s}
 	for _, im := range v.images {
 		if im.layer != layer {
 			continue

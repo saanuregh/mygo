@@ -42,6 +42,15 @@ func RegisterFont(data []byte, family string) error {
 	return text.RegisterAppFont(data, family)
 }
 
+// SetFractionalText makes every window's text measure as a text stack
+// reading the fonts itself does (browsers', nanoui's): the fonts'
+// unhinted metrics and advances, glyphs at fractions of a pixel, and a
+// line the font's ascent, descent and line gap rounded up to whole DIPs.
+// Off, the default, text on Linux is hinted to whole pixels as GTK's
+// labels are. Other systems' text stacks ignore the advances and
+// positions. A Tester's window measures as the app's windows do.
+func SetFractionalText(on bool) { text.SetAppFractional(on) }
+
 // A FontFamily is a font family text can use, as FontFamilies lists it.
 type FontFamily struct {
 	// Name is the family as Font and Theme take it.

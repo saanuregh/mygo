@@ -107,10 +107,26 @@ func (v *view) layout(r ui.Rect, scale float32) {
 		for _, g := range ui.Shape(asciiPrintable, v.fonts[0]) {
 			adv = max(adv, g.Advance)
 		}
-		v.fitW = max(int(math.Ceil(float64(adv*scale-0.05))), 1)
-		v.cellW = max(int(math.Ceil(float64(adv*fk.cellWidth*scale-0.05))), 1)
-		v.cellH = max(int(math.Ceil(float64((m.Ascent+m.Descent+m.LineGap)*fk.lineHeight*scale-0.05))), 1)
-		v.baseline = int(math.Round(float64((float32(v.cellH)-(m.Ascent+m.Descent)*scale)/2 + m.Ascent*scale)))
+		if t.opts.FractionalCells {
+			// As nanoui's terminal: the advance as it is, a row the
+			// font's line rounded up to a DIP, times the line height,
+			// rounded up again, and the text placed in it as nanoui
+			// places a line's, the room past the font's line split above
+			// and below and half the gap above the ascent.
+			line := math.Ceil(float64(m.Ascent + m.Descent + m.LineGap))
+			row := math.Ceil(line * float64(fk.lineHeight))
+			v.fitW = max(int(math.Round(float64(adv*scale))), 1)
+			v.cellX = max(adv*fk.cellWidth*scale, 1)
+			v.cellW = max(int(math.Round(float64(v.cellX))), 1)
+			v.cellH = max(int(math.Round(row*float64(scale))), 1)
+			v.baseline = int(math.Round((row-line)/2*float64(scale) + float64((m.LineGap/2+m.Ascent)*scale)))
+		} else {
+			v.fitW = max(int(math.Ceil(float64(adv*scale-0.05))), 1)
+			v.cellW = max(int(math.Ceil(float64(adv*fk.cellWidth*scale-0.05))), 1)
+			v.cellX = float32(v.cellW)
+			v.cellH = max(int(math.Ceil(float64((m.Ascent+m.Descent+m.LineGap)*fk.lineHeight*scale-0.05))), 1)
+			v.baseline = int(math.Round(float64((float32(v.cellH)-(m.Ascent+m.Descent)*scale)/2 + m.Ascent*scale)))
+		}
 		v.shaped.clear()
 		v.lines = v.lines[:0]
 	}
@@ -118,7 +134,7 @@ func (v *view) layout(r ui.Rect, scale float32) {
 	px, py := t.opts.padding()
 	v.ox, v.oy = int(math.Round(float64(px*scale))), int(math.Round(float64(py*scale)))
 	w, h := int(math.Round(float64(r.W*scale)))-2*v.ox, int(math.Round(float64(r.H*scale)))-2*v.oy
-	v.cols, v.rows = max(w/v.cellW, 1), max(h/v.cellH, 1)
+	v.cols, v.rows = max(int(float32(w)/v.cellX), 1), max(h/v.cellH, 1)
 }
 
 const asciiPrintable = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
@@ -570,7 +586,7 @@ func (v *view) shapeRun(line *rowCache, text []rune, cols []int16, widths []int8
 		return
 	}
 	shaped := v.shape(text, variant, 1)
-	cw, fw := float32(v.cellW)/v.scale, float32(v.fitW)/v.scale
+	cw, fw := v.cellX/v.scale, float32(v.fitW)/v.scale
 	out := line.nextRun(fg, 0)
 	// The glyphs of a cell, or of the cells a ligature spans, keep their
 	// places relative to each other and are centered in the cells, as the
@@ -675,7 +691,7 @@ const keyText = 5
 // draw draws the rows and the cursor.
 func (v *view) draw(p *ui.Painter, r ui.Rect) {
 	s := v.scale
-	cw, ch := float32(v.cellW)/s, float32(v.cellH)/s
+	cw, ch := v.cellX/s, float32(v.cellH)/s
 	// The grid starts at a whole pixel of the display.
 	ox := (float32(math.Round(float64(r.X*s))) + float32(v.ox)) / s
 	oy := (float32(math.Round(float64(r.Y*s))) + float32(v.oy)) / s

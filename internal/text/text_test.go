@@ -2372,6 +2372,7 @@ func sameLayout(a, b *Layout) bool {
 // letter after them moves by what the cells add.
 func TestDigitCells(t *testing.T) {
 	s := newSystem()
+	s.SetFractional(true) // as nanoui measures: the centring keeps its fraction
 	layout := func(text, features string) *Layout {
 		return s.Layout(Params{Text: text, Style: Style{Size: 13, Features: features}})
 	}

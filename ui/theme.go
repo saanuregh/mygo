@@ -48,6 +48,9 @@ type Theme struct {
 	Success Color
 	// Selection highlights selected text.
 	Selection Color
+	// InputFocus is how a text input with the keyboard focus shows it
+	// (InputFocusStyle); its zero value is MyGo's accent border.
+	InputFocus InputFocusStyle
 	// InputNoHover keeps a text input's border as it is under the
 	// pointer, as nanoui's text field, rather than darkening it.
 	InputNoHover bool
@@ -117,6 +120,10 @@ type Theme struct {
 	// than staying hidden until the pointer leaves (Base UI's closeOnClick,
 	// the default). Escape still hides it.
 	TooltipAfterClick bool
+	// TooltipsHiddenByPopups: no tip shows while a popover or a menu
+	// drawn in the window is open (often the one its element opened), but
+	// those of elements inside one.
+	TooltipsHiddenByPopups bool
 	// Tooltip is how Tooltip's tips look (TooltipStyle); its zero value is
 	// MyGo's look.
 	Tooltip TooltipStyle
@@ -137,6 +144,18 @@ type InputSelectionStyle struct {
 	NoCaret bool
 }
 
+// InputFocusStyle is how a focused text input's box shows the focus,
+// beyond its border taking the accent.
+type InputFocusStyle struct {
+	// Width is the accent's width at the box's edge, its border included,
+	// drawn within the box so that its text stays where it was: the
+	// border's own width when zero.
+	Width float32
+	// Glow is the blur of an accent glow around the box, Opacity the
+	// accent's opacity in it; none when either is zero.
+	Glow, Opacity float32
+}
+
 // TooltipStyle is how tooltips look; a zero field keeps MyGo's.
 type TooltipStyle struct {
 	// FontSize is the text's: the theme's FontSize less 1 by default.
@@ -151,6 +170,10 @@ type TooltipStyle struct {
 	// Background and Text are its colors: the theme's Inverse and
 	// InverseText by default.
 	Background, Text Color
+	// Border outlines it, a DIP wide, when set.
+	Border Color
+	// Shadow is its shadow's color: black at 0.2 by default.
+	Shadow Color
 	// OneLine keeps the text on one line, however long, where it wraps
 	// at 80 units of Spacing by default.
 	OneLine bool
@@ -176,6 +199,9 @@ func (t *Theme) TooltipLook() TooltipStyle {
 	}
 	if s.Text == Transparent {
 		s.Text = text
+	}
+	if s.Shadow == Transparent {
+		s.Shadow = RGBA(0, 0, 0, 0.2)
 	}
 	return s
 }

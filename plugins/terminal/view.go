@@ -163,8 +163,12 @@ type view struct {
 	scale                  float32
 	cellW, cellH, baseline int
 	fitW                   int
-	ox, oy                 int
-	cols, rows             int
+	// cellX is the width of a cell as drawn, which Options.FractionalCells
+	// keeps a fraction of a pixel; cellW is it rounded, as the program and
+	// the emulator are told.
+	cellX      float32
+	ox, oy     int
+	cols, rows int
 
 	colors    vt.Colors
 	contrast  float32 // Options.MinimumContrast, as of the last paint
@@ -563,7 +567,7 @@ func (v *view) caret() ui.Rect {
 	if v.scale == 0 {
 		return ui.Rect{}
 	}
-	cw, ch := float32(v.cellW)/v.scale, float32(v.cellH)/v.scale
+	cw, ch := v.cellX/v.scale, float32(v.cellH)/v.scale
 	x := float32(v.ox)/v.scale + float32(v.caretCell[0])*cw
 	y := float32(v.oy)/v.scale + float32(v.caretCell[1])*ch
 	return ui.Rect{X: x, Y: y, W: cw, H: ch}
@@ -1094,7 +1098,7 @@ func (v *view) cellAt(x, y float32) (col, row int) {
 	if v.cellW == 0 {
 		return 0, 0
 	}
-	col = int(math.Floor(float64((x*v.scale - float32(v.ox)) / float32(v.cellW))))
+	col = int(math.Floor(float64((x*v.scale - float32(v.ox)) / v.cellX)))
 	row = int(math.Floor(float64((y*v.scale - float32(v.oy)) / float32(v.cellH))))
 	return max(0, min(col, v.cols-1)), max(0, min(row, v.rows-1))
 }
@@ -1261,7 +1265,7 @@ func (t *Terminal) HoveredLink() (link string, path bool, at ui.Rect) {
 	if v == nil || !v.hover.on() || v.scale == 0 {
 		return "", false, ui.Rect{}
 	}
-	cw, ch := float32(v.cellW)/v.scale, float32(v.cellH)/v.scale
+	cw, ch := v.cellX/v.scale, float32(v.cellH)/v.scale
 	h := v.hover
 	x0, x1 := h.x0, h.x1
 	if h.last > h.row {

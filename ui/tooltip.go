@@ -86,6 +86,9 @@ func tooltipBase(c *context, anchor *node, fn func(tip *node)) (*node, bool) {
 	if c.inert || rt.showTooltip(c) != anchor.id || rt.tips.dismissed == anchor.id {
 		return nil, false
 	}
+	if c.theme.TooltipsHiddenByPopups && rt.tips.popupsLast && !insidePopup(anchor) {
+		return nil, false
+	}
 	var tip *node
 	coreOverlay(c, func() {
 		tip = coreBox(c).Absolute().IgnoreInput(true).Role(RoleTooltip)
@@ -98,6 +101,16 @@ func tooltipBase(c *context, anchor *node, fn func(tip *node)) (*node, bool) {
 		}
 	})
 	return tip, rt.tips.byFocus
+}
+
+// insidePopup reports whether e is built inside a popover or a menu.
+func insidePopup(e *node) bool {
+	for ; e != nil; e = e.parent {
+		if e.role == RolePopup || e.role == RoleMenu {
+			return true
+		}
+	}
+	return false
 }
 
 // popupShows notes that a popup attached to e shows in the frame: its
@@ -122,7 +135,12 @@ func (rt *engine) hideTip(s *state) {
 // keyboard focus comes to it, as TooltipBase does: above the element,
 // centered, or below it where there is no room above. It describes the
 // element to assistive technology where Description does not.
-func (e *node) Tooltip(s string) *node {
+func (e *node) Tooltip(s string) *node { return e.TooltipAt(s, AnchorTop) }
+
+// TooltipAt is Tooltip on a side of the element: AnchorTop (Tooltip's),
+// AnchorBottom, AnchorLeft or AnchorRight, centered along it, or on the
+// other side where there is no room.
+func (e *node) TooltipAt(s string, side Anchor) *node {
 	if e.description == "" {
 		e.description = s
 	}
@@ -138,14 +156,26 @@ func (e *node) Tooltip(s string) *node {
 		if !look.OneLine {
 			tip.MaxWidth(t.Space(80))
 		}
-		tip.Shadow(0, 2, 8, 0, RGBA(0, 0, 0, 0.2))
+		if look.Border != Transparent {
+			tip.Border(1, look.Border)
+		}
+		tip.Shadow(0, 2, 8, 0, look.Shadow)
 		tip.Children(func() {
 			text := coreText(c, s)
 			if look.OneLine {
 				text.SingleLine()
 			}
 		})
-		tip.AttachTo(e, AnchorTop, AnchorBottom).Margin(0, 0, look.Gap, 0)
+		switch side {
+		case AnchorBottom:
+			tip.AttachTo(e, AnchorBottom, AnchorTop).Margin(look.Gap, 0, 0, 0)
+		case AnchorLeft:
+			tip.AttachTo(e, AnchorLeft, AnchorRight).Margin(0, look.Gap, 0, 0)
+		case AnchorRight:
+			tip.AttachTo(e, AnchorRight, AnchorLeft).Margin(0, 0, 0, look.Gap)
+		default:
+			tip.AttachTo(e, AnchorTop, AnchorBottom).Margin(0, 0, look.Gap, 0)
+		}
 	})
 	return e
 }

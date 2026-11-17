@@ -144,6 +144,12 @@ type Options struct {
 	// NoBlink keeps it from blinking unless a program asks it to.
 	Cursor  CursorStyle
 	NoBlink bool
+	// FractionalCells makes a cell as wide as the font's advance times
+	// Font.CellWidth, a fraction of a pixel as it may be, and a row the
+	// font's line, rounded up to a DIP, times its LineHeight rounded up to
+	// a DIP, as nanoui's terminals have them; without it cells are whole
+	// pixels, rounded up. The program is told whole pixels either way.
+	FractionalCells bool
 	// Scrollback is about how many bytes of output the terminal keeps above
 	// the screen: 10 MB when zero, none when negative.
 	Scrollback int

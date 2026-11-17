@@ -61,6 +61,7 @@ const (
 	cairoHintStyleSlight       = 2
 	cairoHintStyleMedium       = 3
 	cairoHintStyleFull         = 4
+	cairoHintMetricsOff        = 1
 	cairoHintMetricsOn         = 2
 	cairoStatusSuccess         = 0
 	fcResultMatch              = 0
@@ -424,6 +425,9 @@ type pangoEngine struct {
 	// The cairo antialiasing, hint style and subpixel order of the
 	// desktop's settings (setFontRendering), as GTK has its labels draw.
 	antialias, hintStyle, subpixels int32
+	// fractional: the System's SetFractional, metrics unhinted and glyphs
+	// at quarters of a pixel.
+	fractional bool
 	// languages are the PangoLanguages of tags.
 	languages map[string]uintptr
 	// hanFamilies are the families fontconfig picks for the languages
@@ -451,19 +455,33 @@ func (e *pangoEngine) setFontRendering(antialias, hinting, subpixels string) {
 
 // applyOptions gives the context GTK's font options for labels: the
 // desktop's antialiasing, hint style and subpixel order, metrics hinted
-// to whole pixels, and glyphs on whole pixels.
+// to whole pixels, and glyphs on whole pixels; fractional, the metrics
+// unhinted and glyphs where they fall.
 func (e *pangoEngine) applyOptions() {
 	l := &pangoLib
 	opts := l.cairoFontOptionsCreate()
 	l.cairoFontOptionsAntialias(opts, e.antialias)
 	l.cairoFontOptionsHintStyle(opts, e.hintStyle)
 	l.cairoFontOptionsSubpixel(opts, e.subpixels)
-	l.cairoFontOptionsHintMets(opts, cairoHintMetricsOn)
+	hint, round := int32(cairoHintMetricsOn), gTrue
+	if e.fractional {
+		hint, round = cairoHintMetricsOff, gFalse
+	}
+	l.cairoFontOptionsHintMets(opts, hint)
 	l.contextSetFontOptions(e.context, opts)
 	l.cairoFontOptionsDestroy(opts)
 	if l.contextSetRoundPositions != nil {
-		l.contextSetRoundPositions(e.context, int32(gTrue))
+		l.contextSetRoundPositions(e.context, int32(round))
 	}
+}
+
+func (e *pangoEngine) setFractional(on bool) {
+	e.fractional = on
+	e.applyOptions()
+	for _, sf := range e.scaled {
+		pangoLib.cairoScaledFontDestroy(sf)
+	}
+	clear(e.scaled)
 }
 
 func (e *pangoEngine) setUIFamily(family string) {
@@ -1163,8 +1181,14 @@ func (e *pangoEngine) textParams() (scene.TextParams, bool) {
 }
 
 // positions puts glyphs on whole pixels, as GTK does: Pango rounds their
-// positions, and labels sit on whole pixels.
-func (e *pangoEngine) positions(*Font, float32, bool) (int, bool) { return 1, true }
+// positions, and labels sit on whole pixels; fractional, at the quarter
+// of a pixel their pen is in, as nanoui places them.
+func (e *pangoEngine) positions(*Font, float32, bool) (int, bool) {
+	if e.fractional {
+		return 4, false
+	}
+	return 1, true
+}
 
 // decorate places underlines and strikethroughs as GTK draws a label's
 // (PangoRenderer): at the positions and thicknesses of the run's font,
@@ -1220,8 +1244,14 @@ func (e *pangoEngine) ink(f *Font, id uint32) (a, b float32, ok bool) {
 	return float32(ink.x) / pangoScale, float32(ink.x+ink.width) / pangoScale, true
 }
 
-// baseline is the whole pixel at or above y, as a GTK label's.
-func (e *pangoEngine) baseline(y float32) float32 { return float32(math.Floor(float64(y) + 1e-3)) }
+// baseline is the whole pixel at or above y, as a GTK label's; the
+// nearest one when fractional, as nanoui snaps a baseline.
+func (e *pangoEngine) baseline(y float32) float32 {
+	if e.fractional {
+		return float32(math.Round(float64(y)))
+	}
+	return float32(math.Floor(float64(y) + 1e-3))
+}
 
 func (e *pangoEngine) glyph(f *Font, id uint32, scale, dx float32, _ Shade, subpixel bool) bitmap {
 	// Pango's empty glyphs, and the boxes it draws for missing ones, are

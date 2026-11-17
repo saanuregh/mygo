@@ -155,7 +155,7 @@ func (v *view) drawHolders(p *ui.Painter, layer int, ox, oy float32, grid ui.Rec
 			if !ok {
 				continue
 			}
-			dst.X = ox + (float32(h.x*v.cellW)+dst.X)/s
+			dst.X = ox + (float32(h.x)*v.cellX+dst.X)/s
 			dst.Y = oy + (float32(y*v.cellH)+dst.Y)/s
 			dst.W, dst.H = dst.W/s, dst.H/s
 			p.Clip(grid, 0, func() { p.ImageRegion(vi.bmp, src, dst, ui.ImageOptions{}) })

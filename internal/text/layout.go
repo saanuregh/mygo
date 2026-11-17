@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode"
 	"unsafe"
 
@@ -498,6 +499,11 @@ type System struct {
 	// subpixel tells that the system's settings ask for subpixel
 	// antialiasing (TextParams).
 	subpixel bool
+	// fractional: SetFractional.
+	fractional bool
+	// appGen is the app's settings (SetAppFractional) a System New made
+	// took last.
+	appGen uint64
 	// rooms counts MakeRoom calls during the frame.
 	rooms int
 	// Buffers layouts reuse: the first runes of clusters (line), and the
@@ -603,12 +609,48 @@ func RegisterAppFont(data []byte, family string) error {
 	return nil
 }
 
+// appSettings are the app's settings for all its text, which Shared
+// takes at once and each System New makes at its next layout, as it takes
+// the app's fonts: gen counts their changes.
+var appSettings struct {
+	mu         sync.Mutex
+	gen        atomic.Uint64
+	fractional bool
+}
+
+// SetAppFractional sets SetFractional in Shared and in every System New
+// makes, as the app's fonts (RegisterAppFont) are: a Tester's window,
+// which lays out text in a System of its own, then measures it as the
+// app's windows do.
+func SetAppFractional(on bool) {
+	appSettings.mu.Lock()
+	appSettings.fractional = on
+	appSettings.gen.Add(1)
+	appSettings.mu.Unlock()
+	Shared().SetFractional(on)
+}
+
+// takeAppSettings takes in a System New made the app's settings changed
+// since it last looked (SetAppFractional). s.mu is held.
+func (s *System) takeAppSettings() {
+	if !s.apart || appSettings.gen.Load() == s.appGen {
+		return
+	}
+	appSettings.mu.Lock()
+	s.appGen = appSettings.gen.Load()
+	fractional := appSettings.fractional
+	appSettings.mu.Unlock()
+	s.setFractional(fractional)
+}
+
 // takeAppFonts registers in a System New made the app's fonts registered
-// since it last looked (RegisterAppFont). s.mu is held.
+// since it last looked (RegisterAppFont), and takes the app's settings
+// (SetAppFractional). s.mu is held.
 func (s *System) takeAppFonts() {
 	if !s.apart {
 		return
 	}
+	s.takeAppSettings()
 	appFonts.mu.Lock()
 	fonts := appFonts.fonts[s.appFonts:]
 	s.appFonts = len(appFonts.fonts)
@@ -633,6 +675,9 @@ func (s *System) engine() engine {
 		if f, ok := s.eng.(fontRenderer); ok && s.rendering != nil {
 			r := s.rendering
 			f.setFontRendering(r[0], r[1], r[2])
+		}
+		if f, ok := s.eng.(fractionalSetter); ok && s.fractional {
+			f.setFractional(true)
 		}
 	}
 	return s.eng
@@ -695,6 +740,45 @@ func (s *System) SetFontRendering(antialias, hinting, subpixels string) {
 		clear(s.places)
 		clear(s.runs)
 	}
+}
+
+// fractionalSetter is an engine that hints metrics to whole pixels and
+// places glyphs on them unless told otherwise (SetFractional).
+type fractionalSetter interface{ setFractional(on bool) }
+
+// SetFractional makes text measure as a text stack reading the fonts
+// itself does (nanoui's, browsers'): the fonts' unhinted metrics and
+// advances, glyphs placed at fractions of a pixel, and a line the fonts'
+// ascent, descent and line gap rounded up to whole DIPs, the gap's half
+// above the ascent. Off (the default), Pango on Linux hints metrics to
+// whole DIPs and places glyphs on whole pixels, as GTK does, and a line
+// is the fonts' height as it comes. The layouts made before are made anew
+// (Generation). A System New makes takes SetAppFractional's setting at
+// its next layout after the app changes it, which a call here overrides
+// until then.
+func (s *System) SetFractional(on bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.setFractional(on)
+}
+
+// setFractional is SetFractional with s.mu held.
+func (s *System) setFractional(on bool) {
+	if on == s.fractional {
+		return
+	}
+	s.fractional = on
+	if f, ok := s.eng.(fractionalSetter); ok {
+		f.setFractional(on)
+		clear(s.fonts)
+		clear(s.glyphs)
+		clear(s.places)
+		clear(s.runs)
+	}
+	s.gen++
+	s.clearLayouts()
+	clear(s.marks)
+	clear(s.digitCells)
 }
 
 // SetUIFamily sets the family "system-ui" stands for where the system's
@@ -1191,10 +1275,15 @@ func (s *System) LayoutsMade() uint64 {
 // Generation returns a number that changes whenever the system forgets
 // its layouts, as it lets go of its fonts (EndFrame) or takes other ones:
 // the layouts it returned before are then to be made anew. Until then they
-// still draw, with the fonts they were made with.
+// still draw, with the fonts they were made with. A System New made takes
+// the app's fonts and settings changed since it last looked
+// (RegisterAppFont, SetAppFractional) first: a window that asks as each
+// frame starts lays its text out anew once, before the frame rather than
+// in it.
 func (s *System) Generation() uint64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.takeAppFonts()
 	return s.gen
 }
 
@@ -1213,7 +1302,7 @@ func (s *System) Metrics(style Style) (ascent, descent, lineHeight float32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.takeAppFonts()
-	m := metricsOf(s.font(style), style)
+	m := metricsOf(s.font(style), style, s.fractional)
 	return m.ascent, m.descent, m.lineHeight
 }
 
@@ -1234,16 +1323,23 @@ func (s *System) font(style Style) *Font {
 // lineMetrics are the vertical metrics of a style's lines.
 type lineMetrics struct {
 	ascent, descent, lineHeight float32
+	// gap is the font's line gap; fractional that the System's text is
+	// (SetFractional): lines a whole number of DIPs tall, the gap's half
+	// above the ascent.
+	gap        float32
+	fractional bool
 }
 
-func metricsOf(f *Font, style Style) lineMetrics {
+func metricsOf(f *Font, style Style, fractional bool) lineMetrics {
 	size := style.FontSize()
-	m := lineMetrics{ascent: size * 0.8, descent: size * 0.2}
-	gap := float32(0)
+	m := lineMetrics{ascent: size * 0.8, descent: size * 0.2, fractional: fractional}
 	if f != nil && f.Ascent > 0 {
-		m.ascent, m.descent, gap = f.Ascent, f.Descent, max(f.LineGap, 0)
+		m.ascent, m.descent, m.gap = f.Ascent, f.Descent, max(f.LineGap, 0)
 	}
-	m.lineHeight = m.ascent + m.descent + gap
+	m.lineHeight = m.ascent + m.descent + m.gap
+	if fractional {
+		m.lineHeight = float32(math.Ceil(float64(m.lineHeight)))
+	}
 	if style.LineHeight > 0 {
 		m.lineHeight = style.LineHeight * size
 	}
@@ -1253,7 +1349,7 @@ func metricsOf(f *Font, style Style) lineMetrics {
 func (s *System) layout(p Params) *cached {
 	s.made++
 	s.engine().resetScratch()
-	m := metricsOf(s.font(p.Style), p.Style)
+	m := metricsOf(s.font(p.Style), p.Style, s.fractional)
 	runes := []rune(p.Text)
 	spans := DecodeSpans(p.Spans)
 	c := &cached{layout: Layout{Params: p, Runes: runes}}
@@ -1682,6 +1778,12 @@ func line(p Params, text []rune, sl shapedLine, offset int, rtl bool, m lineMetr
 	line.Height = max(m.lineHeight, line.Ascent+line.Descent)
 	line.Y = *y
 	line.Baseline = *y + (line.Height-line.Ascent-line.Descent)/2 + line.Ascent
+	if m.fractional {
+		// As the fonts' own line: the room past it split above and
+		// below, then the gap's half above the ascent.
+		natural := float32(math.Ceil(float64(line.Ascent + line.Descent + m.gap)))
+		line.Baseline = *y + (line.Height-natural)/2 + m.gap/2 + line.Ascent
+	}
 	for i := range line.Glyphs {
 		line.Glyphs[i].X -= x0
 		line.Glyphs[i].Y += line.Baseline

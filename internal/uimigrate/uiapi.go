@@ -399,6 +399,7 @@ var elementChains = map[string]bool{
 	"TextStroke":            true,
 	"TextWidgets":           true,
 	"Tooltip":               true,
+	"TooltipAt":             true,
 	"Top":                   true,
 	"TopPercent":            true,
 	"TrackLines":            true,
