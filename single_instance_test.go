@@ -130,7 +130,11 @@ func (p *testInstance) exit(t *testing.T) {
 // testInstancePaths returns the socket and the lock file of the app
 // named name, which the test removes when it ends.
 func testInstancePaths(t *testing.T, name string) (socket, lock string) {
-	socket = singleInstanceSocket(singleInstanceKey(name))
+	t.Helper()
+	socket, err := singleInstanceSocket(singleInstanceKey(name))
+	if err != nil {
+		t.Fatal(err)
+	}
 	lock = singleInstanceLockPath(socket)
 	t.Cleanup(func() {
 		_ = os.Remove(socket)
