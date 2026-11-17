@@ -108,7 +108,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		if _, diff := ed.o.decor.(*diffSide); !diff {
 			ed.view.measureWraps(0, time.Second)
 		}
-		e.Height(float32(ed.view.heights.total()))
+		e.Height(float32(ed.view.heights.total()) + ed.top)
 		ed.scrollY = 0
 	} else if ed.r.W > 0 {
 		// Scroll to what moved before building what depends on it.
@@ -150,7 +150,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 			if !ok {
 				return ui.Element{}, false
 			}
-			return ui.Box(c).Key(key).Absolute().Left(ed.textX+cr.X-ed.scrollX+shift).Top(float32(float64(cr.Y)-ed.scrollY)).Size(1, cr.H).PassThrough(), true
+			return ui.Box(c).Key(key).Absolute().Left(ed.textX+cr.X-ed.scrollX+shift).Top(ed.top+float32(float64(cr.Y)-ed.scrollY)).Size(1, cr.H).PassThrough(), true
 		}
 		var caretAnchor, hoverAnchor ui.Element
 		var hasCaret, hasHover bool
@@ -174,6 +174,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 			}
 		}
 		ed.buildReplacements(c)
+		ed.findBarEl = ui.Element{}
 		if ds, ok := ed.o.decor.(*diffSide); ok {
 			ds.buildBlocks(c, ed)
 		} else {

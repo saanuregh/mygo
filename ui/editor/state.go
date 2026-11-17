@@ -259,6 +259,12 @@ type State struct {
 	// right of the caret (zode's view.zig measured its popups' caret from
 	// 6 points past the text's left edge).
 	CaretCardShift float32
+	// FindBarAbove places the find bar in a strip across the editor's
+	// top, as wide as the editor and as high as RenderFindBar builds it,
+	// above the text, which starts below it while it shows (painting,
+	// the pointer and scrolling go by the text's box), rather than over
+	// the text's top right corner.
+	FindBarAbove bool
 	// Gutter, when set, lays the gutter out by its sizes in place of the
 	// editor's own (GutterLayout).
 	Gutter *GutterLayout
@@ -470,7 +476,7 @@ func (st *State) options() options {
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
 		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, blocks: st.Blocks, renderBlock: st.RenderBlock, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
-		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift,
+		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift, findBarAbove: st.FindBarAbove,
 		gutter: st.Gutter, lineNotes: st.LineNotes, noteFont: st.NoteFont, straightUnderlines: st.StraightUnderlines, marginRight: st.MarginRight, findFromOrigin: st.FindFromOrigin, noOccurrences: st.NoOccurrences, filledBrackets: st.FilledBrackets, caretBeforeInlays: st.CaretBeforeInlays,
 		roundRanges: st.RoundRanges, caretRowOnly: st.CaretRowOnly, guidesFromBelow: st.GuidesFromBelow, caretSolidFor: st.CaretSolidFor, fontCarets: st.FontCarets, hintsFollowText: st.HintsFollowText,
 		guidesUnderRanges: st.GuidesUnderRanges, bandsInset: st.BandsInset, pageMovesCarets: st.PageMovesCarets, blockCaretWhenEmpty: st.BlockCaretWhenEmpty, plainClicks: st.PlainClicks,

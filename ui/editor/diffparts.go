@@ -164,7 +164,7 @@ func (d *DiffState) buildSeparators(c *ui.Context, ct *Theme) {
 				desc = tx.UnmodifiedLineNumbersOldNew(oldFrom, oldFrom+g.hidden-1, newFrom, newFrom+g.hidden-1)
 			}
 		}
-		sep := ui.Box(c).Key(key).Absolute().Left(0).Right(ed.trackWidth()).Top(float32(top - ed.scrollY)).Height(b.height).
+		sep := ui.Box(c).Key(key).Absolute().Left(0).Right(ed.trackWidth()).Top(ed.top + float32(top-ed.scrollY)).Height(b.height).
 			Role(ui.RoleGroup).Label(label).Description(desc).Cursor(ui.CursorDefault).KeepFocus().HandleInput(ed.wheelOnly)
 		render(c, sep, s)
 	})

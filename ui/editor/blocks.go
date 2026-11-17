@@ -66,7 +66,7 @@ func (ed *editor) buildBlocks(c *ui.Context) {
 		if key == nil {
 			key = [3]any{ab.Line, ab.Below, b.from}
 		}
-		box := ui.Box(c).Key(fmt.Sprint("code block ", key)).Absolute().Left(0).Top(float32(top - ed.scrollY)).
+		box := ui.Box(c).Key(fmt.Sprint("code block ", key)).Absolute().Left(0).Top(ed.top + float32(top-ed.scrollY)).
 			Width(w).Height(b.height).HandleInput(ed.wheelOnly)
 		ed.o.renderBlock(c, box, ab)
 	})

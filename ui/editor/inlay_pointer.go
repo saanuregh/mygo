@@ -90,7 +90,7 @@ func (ed *editor) pointerOnInlay(x, y float32, overText bool) (on, changed bool)
 		cx, cy := ed.toContent(x, y)
 		if i, r, ok := ed.inlayAt(cx, cy); ok {
 			index = i
-			box = ui.Rect{X: ed.textX + r.X - ed.scrollX, Y: float32(float64(r.Y) - ed.scrollY), W: r.W, H: r.H}
+			box = ui.Rect{X: ed.textX + r.X - ed.scrollX, Y: ed.top + float32(float64(r.Y)-ed.scrollY), W: r.W, H: r.H}
 		}
 	}
 	changed = index != ed.inlayHovered
