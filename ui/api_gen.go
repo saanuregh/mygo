@@ -503,6 +503,16 @@ func (_handle *Context) OpenURLThen(url string, done func(err error)) {
 	_ctx.OpenURLThen(url, done)
 }
 
+// PixelScale returns how many device pixels one DIP of the content is:
+// the window's scale, zoomed.
+func (_handle *Context) PixelScale() float32 {
+	_ctx := _handle.build()
+	if _ctx == nil {
+		return 1
+	}
+	return _ctx.PixelScale()
+}
+
 // PopupShown reports whether a popover, a select's options or a drawn
 // menu showed anywhere in the window in the last frame, as nanoui's
 // Context.popovers_last: a view that rests while nothing needs it stays

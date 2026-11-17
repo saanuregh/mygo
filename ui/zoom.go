@@ -32,6 +32,13 @@ func (c *context) SetZoom(z float32) { c.rt.setZoom(z) }
 // Zoom returns the zoom SetZoom set, 1 for none.
 func (c *context) Zoom() float32 { return c.rt.zoomFactor() }
 
+// PixelScale returns how many device pixels one DIP of the content is:
+// the window's scale, zoomed.
+func (c *context) PixelScale() float32 {
+	_, _, scale := c.rt.size()
+	return scale
+}
+
 // zoomFactor is the content's zoom, 1 for none.
 func (rt *engine) zoomFactor() float32 {
 	if rt.contentZoom == 0 {
