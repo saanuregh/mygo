@@ -218,9 +218,11 @@ type textStyle struct {
 	weight int
 	italic bool
 	color  Color
-	// lineHeight is a multiple of the font size, or DIPs when fixedLine.
+	// lineHeight is a multiple of the font size, DIPs when fixedLine, or a
+	// multiple of the font's own line when natural (Leading).
 	lineHeight float32
 	fixedLine  bool
+	natural    bool
 	align      Align
 	underline  bool
 	wavy       bool
@@ -1829,7 +1831,7 @@ func (ts *textStyle) caretColor(t *Theme) Color {
 // LineHeight sets the height of lines of text as a multiple of the font
 // size.
 func (e *node) LineHeight(m float32) *node {
-	e.ts.lineHeight, e.ts.fixedLine = m, false
+	e.ts.lineHeight, e.ts.fixedLine, e.ts.natural = m, false, false
 	e.ts.set |= setLineHeight
 	return e
 }
@@ -1837,7 +1839,16 @@ func (e *node) LineHeight(m float32) *node {
 // FixedLineHeight sets the height of lines of text in DIPs, whatever the
 // font size, as for rows of text that line up with a grid.
 func (e *node) FixedLineHeight(v float32) *node {
-	e.ts.lineHeight, e.ts.fixedLine = v, true
+	e.ts.lineHeight, e.ts.fixedLine, e.ts.natural = v, true, false
+	e.ts.set |= setLineHeight
+	return e
+}
+
+// Leading sets the height of lines of text as a multiple of the font's
+// own line height, rounded up to a whole DIP, as nanoui's leading: 1.35
+// of a 12 DIP monospaced font's 17 DIP line is 23 DIPs.
+func (e *node) Leading(m float32) *node {
+	e.ts.lineHeight, e.ts.fixedLine, e.ts.natural = m, false, true
 	e.ts.set |= setLineHeight
 	return e
 }

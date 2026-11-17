@@ -395,6 +395,8 @@ func textStyles(ts *textStyle, set uint32) []inspDecl {
 	if set&setLineHeight != 0 {
 		if ts.fixedLine {
 			add("line-height", pxText(ts.lineHeight))
+		} else if ts.natural {
+			add("line-height", num(ts.lineHeight)+" (font line)")
 		} else {
 			add("line-height", num(ts.lineHeight))
 		}

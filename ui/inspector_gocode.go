@@ -213,6 +213,9 @@ func goCalls(name, value string) []string {
 		if e.ts.fixedLine {
 			return []string{call("FixedLineHeight", goNum(e.ts.lineHeight))}
 		}
+		if e.ts.natural {
+			return []string{call("Leading", goNum(e.ts.lineHeight))}
+		}
 		return []string{call("LineHeight", goNum(e.ts.lineHeight))}
 	case "letter-spacing":
 		return []string{call("LetterSpacing", goNum(e.ts.spacing))}

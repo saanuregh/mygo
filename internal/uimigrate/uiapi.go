@@ -269,6 +269,7 @@ var elementChains = map[string]bool{
 	"Label":                 true,
 	"LabelledBy":            true,
 	"Lang":                  true,
+	"Leading":               true,
 	"Left":                  true,
 	"LeftPercent":           true,
 	"LetterSpacing":         true,

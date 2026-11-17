@@ -28,6 +28,10 @@ type Style struct {
 	// LineHeight is the height of a line as a multiple of Size; 0 takes
 	// the font's own line spacing.
 	LineHeight float32
+	// Leading, when LineHeight is 0, is the height of a line as a multiple
+	// of the font's own line (ascent, descent and gap), rounded up to a
+	// whole DIP, the product rounded up too, as nanoui's leading.
+	Leading float32
 	// LetterSpacing adds DIPs after every character; negative tightens.
 	LetterSpacing float32
 	// Features are OpenType features, comma separated: a tag turns one
@@ -1394,6 +1398,9 @@ func metricsOf(f *Font, style Style, fractional bool) lineMetrics {
 	}
 	if style.LineHeight > 0 {
 		m.lineHeight = style.LineHeight * size
+	} else if style.Leading > 0 {
+		natural := math.Ceil(float64(m.ascent + m.descent + m.gap))
+		m.lineHeight = float32(math.Ceil(natural * float64(style.Leading)))
 	}
 	return m
 }

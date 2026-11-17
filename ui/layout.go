@@ -230,6 +230,9 @@ func (e *node) textParams(width float32) text.Params {
 	if ts.fixedLine && ts.lineHeight > 0 {
 		style.LineHeight = ts.lineHeight / style.FontSize()
 	}
+	if ts.natural {
+		style.LineHeight, style.Leading = 0, ts.lineHeight
+	}
 	p := text.Params{Text: e.text, Width: width, MaxLines: e.maxLines, Style: style, Spans: e.textSpans(), NoWrap: e.noWrap, Balance: e.balance, Pretty: e.pretty, KeepSpaces: e.keepSpaces, Ellipsis: e.ellipsis, TruncateMiddle: e.middle, TruncateStart: e.cutStart, RTL: e.rtl()}
 	// Wrapped text to read, not to edit, starts each line at the left, as
 	// nanoui's wrapped text: its spaces there are left out.
@@ -277,7 +280,7 @@ func (e *node) resolvedText() textStyle {
 			out.color = t.color
 		}
 		if take&setLineHeight != 0 {
-			out.lineHeight, out.fixedLine = t.lineHeight, t.fixedLine
+			out.lineHeight, out.fixedLine, out.natural = t.lineHeight, t.fixedLine, t.natural
 		}
 		if take&setAlign != 0 {
 			out.align = t.align
