@@ -33,10 +33,16 @@ func (b *Buffer) tell() {
 		return
 	}
 	b.telling = true
+	// telling is cleared under the lock of the last check, so that an
+	// edit made after it tells the listeners itself; the deferred
+	// function clears it only when a listener panics.
+	done := false
 	defer func() {
-		b.mu.Lock()
-		b.telling = false
-		b.mu.Unlock()
+		if !done {
+			b.mu.Lock()
+			b.telling = false
+			b.mu.Unlock()
+		}
 	}()
 	for {
 		var l *listener
@@ -47,6 +53,8 @@ func (b *Buffer) tell() {
 			}
 		}
 		if l == nil {
+			b.telling = false
+			done = true
 			b.mu.Unlock()
 			return
 		}
