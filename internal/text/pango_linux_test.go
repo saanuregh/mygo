@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+
+	"golang.org/x/image/font/gofont/goregular"
 )
 
 // Punctuation and full-width forms in a language that writes Han get the
@@ -319,5 +321,37 @@ func TestGrayscaleFontPreservesColorGlyphs(t *testing.T) {
 	}
 	if drawn == 0 {
 		t.Fatal("no emoji glyphs drawn")
+	}
+}
+
+// TestFallbackFamilies draws what a style's families lack with the first
+// fallback family that has it, before the system's choice, in Shared and
+// in a System New makes (SetAppFallbackFamilies).
+func TestFallbackFamilies(t *testing.T) {
+	const second = "Noto Serif CJK JP"
+	drawn := func(s *System, family string) [2]float32 {
+		g := s.Layout(Params{Text: "日", Style: Style{Size: 20, Family: family}}).Lines[0].Glyphs[0]
+		return [2]float32{float32(g.ID), g.Font.Ascent}
+	}
+	s := newSystem()
+	if err := s.RegisterFont(goregular.TTF, "MyGo Latin"); err != nil {
+		t.Fatal(err)
+	}
+	want := drawn(s, second)
+	if id := uint32(want[0]); id == 0 || id&0x10000000 != 0 || want == drawn(s, "MyGo Latin") {
+		t.Skipf("%s is missing, or what the system falls back to", second)
+	}
+	s.SetFallbackFamilies(second)
+	if got := drawn(s, "MyGo Latin"); got != want {
+		t.Errorf("日 in MyGo Latin is not drawn with the fallback %s", second)
+	}
+	if err := RegisterAppFont(goregular.TTF, "MyGo Latin App"); err != nil {
+		t.Fatal(err)
+	}
+	SetAppFallbackFamilies(second)
+	defer SetAppFallbackFamilies()
+	apart := New()
+	if got := drawn(apart, "MyGo Latin App"); got != want {
+		t.Errorf("a System New made does not draw 日 with the app's fallback %s", second)
 	}
 }
