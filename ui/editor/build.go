@@ -97,6 +97,8 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		e.Cursor(ui.CursorPointer)
 	case ed.region == regionGutter && ed.pointerIn && ed.onChangeBar():
 		e.Cursor(ui.CursorPointer)
+	case ed.region == regionText && ed.onTrailingInlay && ed.o.onTrailingInlayClick != nil:
+		e.Cursor(ui.CursorPointer)
 	case ed.region == regionText:
 		e.Cursor(ui.CursorText)
 	default:

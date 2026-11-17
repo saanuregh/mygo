@@ -234,7 +234,7 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		return true
 	}
 	// A hint's own press, as Cmd+click to where its label points.
-	if ed.pressOnInlay(cx, cy, ev) {
+	if ed.pressOnInlay(cx, cy, ev) || ed.pressOnTrailingInlay(cx, cy) {
 		return true
 	}
 	off := ed.offsetAt(cx, cy)
@@ -442,6 +442,10 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 	}
 	if l := ed.linkAt(ev.Mods); l != ed.link {
 		ed.link = l
+		changed = true
+	}
+	if on := ed.pointerOnTrailingInlay(ev.X, ev.Y); on != ed.onTrailingInlay {
+		ed.onTrailingInlay = on
 		changed = true
 	}
 	h := &ed.hover
