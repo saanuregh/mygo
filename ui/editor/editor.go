@@ -129,6 +129,8 @@ type options struct {
 	roundRanges, caretRowOnly, guidesFromBelow bool
 	// caretSolidFor is State's CaretSolidFor.
 	caretSolidFor time.Duration
+	// noCaretBlink is State's NoCaretBlink.
+	noCaretBlink bool
 	// fontCarets is State's FontCarets.
 	fontCarets bool
 	// hintsFollowText is State's HintsFollowText.

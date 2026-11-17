@@ -176,7 +176,9 @@ func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 	ed.prepare(&f)
 	if ed.focused {
 		phase := ed.frameNow.Sub(ed.blinkStart)
-		if solid := ed.o.caretSolidFor; solid > 0 && phase < solid {
+		if ed.o.noCaretBlink {
+			f.caretsOn = true
+		} else if solid := ed.o.caretSolidFor; solid > 0 && phase < solid {
 			f.caretsOn = true
 			p.After(solid - phase)
 		} else {

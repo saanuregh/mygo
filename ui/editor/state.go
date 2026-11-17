@@ -327,6 +327,9 @@ type State struct {
 	// CaretSolidFor keeps the caret shown this long after it moved or the
 	// text changed, before it blinks (shown first).
 	CaretSolidFor time.Duration
+	// NoCaretBlink keeps the carets shown while the editor has the
+	// keyboard.
+	NoCaretBlink bool
 	// FontCarets draws carets as tall as the font's line and 4 DIPs (the
 	// row at most), centered in the row and rounded by 1; a block at 55%
 	// of Theme.Cursor; and none while the editor has not the keyboard.
@@ -486,7 +489,7 @@ func (st *State) options() options {
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift, findBarAbove: st.FindBarAbove, paddingTop: st.PaddingTop, wideSidewaysRoom: st.WideSidewaysRoom, sidewaysCut: st.SidewaysCut,
 		gutter: st.Gutter, lineNotes: st.LineNotes, noteFont: st.NoteFont, straightUnderlines: st.StraightUnderlines, marginRight: st.MarginRight, findFromOrigin: st.FindFromOrigin, noOccurrences: st.NoOccurrences, filledBrackets: st.FilledBrackets, caretBeforeInlays: st.CaretBeforeInlays,
-		roundRanges: st.RoundRanges, caretRowOnly: st.CaretRowOnly, guidesFromBelow: st.GuidesFromBelow, caretSolidFor: st.CaretSolidFor, fontCarets: st.FontCarets, hintsFollowText: st.HintsFollowText,
+		roundRanges: st.RoundRanges, caretRowOnly: st.CaretRowOnly, guidesFromBelow: st.GuidesFromBelow, caretSolidFor: st.CaretSolidFor, noCaretBlink: st.NoCaretBlink, fontCarets: st.FontCarets, hintsFollowText: st.HintsFollowText,
 		guidesUnderRanges: st.GuidesUnderRanges, bandsInset: st.BandsInset, pageMovesCarets: st.PageMovesCarets, blockCaretWhenEmpty: st.BlockCaretWhenEmpty, plainClicks: st.PlainClicks,
 	}
 }
