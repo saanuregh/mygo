@@ -316,7 +316,7 @@ func (v *view) build(c *ui.Context, e ui.Element) {
 		}
 		t.schemeChanged(t.curTheme, theme)
 		t.curTheme = theme
-		if focused != v.focused && t.term.Mode(vt.ModeFocusEvent) {
+		if focused != v.focused && !t.opts.NoFocusReports && t.term.Mode(vt.ModeFocusEvent) {
 			t.in.push(vt.EncodeFocus(focused))
 		}
 		// The hand over a link follows Command as it is pressed and let
@@ -724,6 +724,20 @@ func (v *view) keyDown(ev ui.InputEvent) bool {
 	k, unshifted := vtKey(key)
 	if k == vt.KeyUnidentified {
 		return false
+	}
+	// Ctrl+I, Ctrl+M and Ctrl+[ alone keep their C0 controls (controlKey):
+	// as characters Ghostty's encoder would make them fixterms' CSI u.
+	if t.opts.KeysAsCharacters && mods&(ui.Ctrl|ui.Alt) != 0 && (vtMods(mods) != vt.ModCtrl || controlKeys[k] == "") {
+		if r, ck, ok := keyCharacter(key, mods&ui.Shift != 0, mac); ok {
+			// Text the key types after this (Option on macOS) is sent with it.
+			v.pending = &pendingKey{key: k, sent: true}
+			action := vt.KeyPress
+			if ev.Repeat {
+				action = vt.KeyRepeat
+			}
+			v.sendKey(vt.KeyEvent{Action: action, Key: ck, Mods: vtMods(mods), Text: string(r), Unshifted: r})
+			return true
+		}
 	}
 	altMeta := mods&ui.Alt != 0 && (!mac || t.opts.OptionAsAlt)
 	// AltGr types text on Windows, where it is Control and Alt.
@@ -1156,7 +1170,7 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 		if ev.Button != 0 {
 			return false // the context menu
 		}
-		if ev.Mods&ui.Alt != 0 && v.clickToMove(col, row) {
+		if ev.Mods&ui.Alt != 0 && !t.opts.NoAltClick && v.clickToMove(col, row) {
 			return true
 		}
 		ref, ok := t.term.CellAt(col, row)
@@ -1188,7 +1202,7 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 			v.ticking = v.selectionScrollDirection() != 0
 			return true
 		}
-		if s, ok := v.gesture.Drag(t.term, ref, px, py, v.geometry(), ev.Mods&ui.Alt != 0); ok {
+		if s, ok := v.gesture.Drag(t.term, ref, px, py, v.geometry(), ev.Mods&ui.Alt != 0 && !t.opts.NoAltClick); ok {
 			t.term.SetSelection(&s)
 		}
 		v.ticking = v.gesture.Autoscroll(t.term) != 0
@@ -1299,6 +1313,9 @@ const scrollbarStrip = 12
 func (v *view) overScrollbar(x, y float32) bool {
 	if v.barHeld {
 		return true
+	}
+	if v.t.opts.NoScrollbar {
+		return false
 	}
 	width := v.barStyle.TrackWidth
 	if width <= 0 {
@@ -1524,7 +1541,7 @@ func (v *view) scroll(ev ui.InputEvent) bool {
 	if v.cellH == 0 {
 		return false
 	}
-	zooming := ev.Mods&ui.Cmd != 0
+	zooming := ev.Mods&ui.Cmd != 0 && !t.opts.NoWheelZoom
 	if ev.Precise {
 		// A touchpad gesture keeps what it began as, even if Command comes
 		// down while its momentum still runs.
@@ -1622,7 +1639,7 @@ func (v *view) wheelTracked(mods ui.Modifiers) bool {
 // wheelArrows reports whether a full-screen program takes the wheel as
 // arrow keys (alternate scroll, mode 1007). t.mu held.
 func (v *view) wheelArrows() bool {
-	return v.t.term.AltScreen() && v.t.term.Mode(vt.ModeAltScroll)
+	return !v.t.opts.NoAlternateScroll && v.t.term.AltScreen() && v.t.term.Mode(vt.ModeAltScroll)
 }
 
 // wheelScrollsBack reports whether the wheel scrolls the scrollback, no

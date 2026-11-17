@@ -193,6 +193,9 @@ func (v *view) paint(p *ui.Painter, r ui.Rect) {
 	}
 	all := prev == nil || rs.Dirty() == vt.Full
 	v.colors, v.contrast, v.cursor = colors, contrast, rs.Cursor()
+	if t.opts.FixedCursor {
+		v.cursor.Style, v.cursor.Blinking = vtCursor(t.opts.Cursor), !t.opts.NoBlink
+	}
 	v.updateRows(rs, prev, all, cols, rows)
 	rs.Clean()
 	v.draw(p, r)
@@ -739,6 +742,11 @@ func (v *view) draw(p *ui.Painter, r ui.Rect) {
 	}
 	v.drawImages(p, belowText, ox, oy)
 	cur, curColor, curText, block := v.cursorRect(ox, oy, cw, ch)
+	// A see-through block goes over the text, which shows through it.
+	over := block && curColor.A < 255
+	if over {
+		block = false
+	}
 	if block {
 		p.Fill(cur, curColor, 0)
 	}
@@ -790,7 +798,7 @@ func (v *view) draw(p *ui.Painter, r ui.Rect) {
 		}
 	}
 	if cur.W > 0 && !block {
-		if v.focused || v.cursor.Style != vt.CursorBlock {
+		if v.focused || v.cursor.Style != vt.CursorBlock || over {
 			p.Fill(cur, curColor, 0)
 		} else {
 			p.Stroke(cur, curColor, 0, 1/s)
@@ -934,10 +942,15 @@ func (v *view) cursorRect(ox, oy, cw, ch float32) (r ui.Rect, c, text ui.Color, 
 		return
 	}
 	c = color(v.colors.Foreground)
-	if v.colors.HasCursor {
+	switch th := v.theme; {
+	case !v.focused && th.UnfocusedCursor.A > 0:
+		c = th.UnfocusedCursor
+	case v.colors.HasCursor && v.colors.Cursor != rgb(th.Cursor):
+		c = color(v.colors.Cursor) // a program's (OSC 12)
+	case th.Cursor.A > 0:
+		c = th.Cursor // its alpha too, which the terminal's colors drop
+	case v.colors.HasCursor:
 		c = color(v.colors.Cursor)
-	} else if v.theme.Cursor.A > 0 {
-		c = v.theme.Cursor
 	}
 	text = color(v.colors.Background)
 	if v.theme.CursorText.A > 0 {
@@ -1034,7 +1047,7 @@ func (v *view) drawPreedit(p *ui.Painter, ox, oy, cw, ch, base float32) {
 // the terminal or drags the thumb; in the terminal's text color, as its
 // colors are its own.
 func (v *view) drawScrollbar(p *ui.Painter, r ui.Rect) {
-	if !v.inView && !v.barHeld {
+	if !v.inView && !v.barHeld || v.t.opts.NoScrollbar {
 		return
 	}
 	b := bar(v.scrollbar, r)
