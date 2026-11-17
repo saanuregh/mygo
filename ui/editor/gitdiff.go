@@ -26,6 +26,7 @@ func (ed *editor) syncGitDiff() {
 	if ed.gitDiff == nil {
 		ed.gitDiff = &gitDiff{}
 	}
+	ed.gitDiff.d.plain = ed.o.diffPlain
 	ed.gitDiff.d.set(base, ed.buf(), false)
 	ed.gitDiff.d.update()
 }

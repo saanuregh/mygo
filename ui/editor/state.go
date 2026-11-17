@@ -99,6 +99,13 @@ type State struct {
 	// against in the gutter, as the version of a file in Git: bars mark
 	// lines added and changed, and a mark where lines were deleted.
 	DiffBase *Buffer
+	// DiffPlain compares the whole texts again at each change of either,
+	// with Myers's algorithm on what their ends leave, none of the
+	// changes slid (zode's Zig diff.zig), where the default compares the
+	// lines near an edit, with git's histogram and its sliding, and puts
+	// the line Enter opened where the edit was. Large texts are compared
+	// off the main thread as the default's whole comparisons are.
+	DiffPlain bool
 
 	// OnCompletion asks the app for completions where the caret is, as
 	// a word is typed or Ctrl+Space pressed: answer with ShowCompletions,
@@ -458,7 +465,7 @@ func (st *State) options() options {
 		keepScrollbars: st.KeepScrollbars, hideScrollbars: st.NoScrollbars, scrollbar: st.Scrollbar,
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, cursorShape: st.CursorShape, fitContent: st.FitContent,
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, gutterMarks: st.GutterMarks,
-		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, completionScore: st.CompletionScore, onHover: st.OnHover, onDefinition: st.OnDefinition,
+		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, diffPlain: st.DiffPlain, onCompletion: st.OnCompletion, completionScore: st.CompletionScore, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
 		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, blocks: st.Blocks, renderBlock: st.RenderBlock, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,

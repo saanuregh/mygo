@@ -50,6 +50,7 @@ type options struct {
 	backgrounds   []LineBackground
 	textBgs       []TextBackground
 	diffBase      *Buffer
+	diffPlain     bool // State.DiffPlain
 	onCompletion  func(CompletionRequest)
 	onHover       func(HoverRequest)
 	onDefinition  func(int)

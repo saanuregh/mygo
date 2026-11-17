@@ -192,3 +192,48 @@ func TestHistogramRarity(t *testing.T) {
 		t.Errorf("hunks %v, want git's %v", got, want)
 	}
 }
+
+// zode's old Zig diff.zig: the common ends are set aside, then Myers's
+// algorithm finds the changes, none slid afterwards.
+func TestPlainTrimsTheEndsFirst(t *testing.T) {
+	old := []string{"a", "", "b"}
+	new := []string{"a", "", "", "b"}
+	if got, want := Plain(old, new), []Hunk{{2, 2, 2, 3}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Plain %v, want %v", got, want)
+	}
+	if got := Plain([]string{"a", "b", "c"}, []string{"a", "B", "c"}); !reflect.DeepEqual(got, []Hunk{{1, 2, 1, 2}}) {
+		t.Errorf("modified: %v", got)
+	}
+	if got := Plain([]string{"a", "b", "c"}, []string{"a", "c"}); !reflect.DeepEqual(got, []Hunk{{1, 2, 1, 1}}) {
+		t.Errorf("deleted: %v", got)
+	}
+	if got := Plain(nil, []string{"x", "y"}); !reflect.DeepEqual(got, []Hunk{{0, 0, 0, 2}}) {
+		t.Errorf("added: %v", got)
+	}
+}
+
+// Plain's hunks turn a into b, whatever the lines.
+func TestPlainHunksApply(t *testing.T) {
+	r := rand.New(rand.NewPCG(7, 7))
+	for range 300 {
+		pick := func() []string {
+			s := make([]string, r.IntN(41))
+			for i := range s {
+				s[i] = string(rune('a' + r.IntN(4)))
+			}
+			return s
+		}
+		a, b := pick(), pick()
+		var out []string
+		at := 0
+		for _, h := range Plain(a, b) {
+			out = append(out, a[at:h.A0]...)
+			out = append(out, b[h.B0:h.B1]...)
+			at = h.A1
+		}
+		out = append(out, a[at:]...)
+		if !slices.Equal(out, b) {
+			t.Fatalf("a %q b %q gave %q", a, b, out)
+		}
+	}
+}
