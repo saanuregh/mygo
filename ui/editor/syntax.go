@@ -40,6 +40,10 @@ const (
 	TokenParameter // a function's parameters
 	TokenLabel     // labels of loops and gotos
 	TokenNamespace // packages, modules and namespaces
+	// Bracket pairs by nesting depth, cycling through three colors.
+	TokenBracket1
+	TokenBracket2
+	TokenBracket3
 	tokenKinds
 )
 
