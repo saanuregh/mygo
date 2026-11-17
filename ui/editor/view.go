@@ -1049,7 +1049,7 @@ func (v *view) ellipsizeTrailing(l *lineLayout) {
 	// Replacements can be inline objects with an application-provided width.
 	// Measure their real faces before the normal face pass below shortens l.
 	faces := v.facesOf(l, nil)
-	breaks := v.wrapBreaks(prefix, faces, len(prefix) <= fitBytes)
+	breaks := v.wrapBreaks(prefix, faces, l.segs, len(prefix) <= fitBytes)
 	start, indent := 0, float32(0)
 	if len(breaks) > 0 {
 		start = breaks[len(breaks)-1]
@@ -1097,7 +1097,7 @@ func (l *lineLayout) replaced(col int) bool {
 func (v *view) layoutRows(l *lineLayout) {
 	l.rows = l.rows[:0]
 	fit := len(l.disp) <= fitBytes
-	breaks := v.wrapBreaks(l.disp, l.faces, fit)
+	breaks := v.wrapBreaks(l.disp, l.faces, l.segs, fit)
 	indent := float32(0)
 	if len(breaks) > 0 && !v.wrapAtSpaces {
 		indent = v.wrapIndent(l.disp)
@@ -1177,7 +1177,8 @@ func (v *view) piece(l *lineLayout, p *rowPiece) *text.Layout {
 // breaking after whitespace or between a word and what is not, anywhere
 // in CJK but before closing punctuation and after opening punctuation,
 // and inside a word too long for a row. faces are those of s, if known.
-// With WrapAtSpaces, rows break by columns instead (wrapBreaksAtSpaces).
+// With WrapAtSpaces, rows break by columns instead (wrapBreaksAtSpaces),
+// counting the inlays of segs, s's segments (nil without tabs or inlays).
 //
 // With fit, a row is then shaped as it is painted, and ends at a place
 // to break before while it is wider than the wrap width: the room the
@@ -1187,7 +1188,7 @@ func (v *view) piece(l *lineLayout, p *rowPiece) *text.Layout {
 // fits its rows, which it shapes to paint them anyway; measuring the
 // wraps of lines out of view only sums, and may count too few rows until
 // they show.
-func (v *view) wrapBreaks(s string, faces []faceRun, fit bool) []int {
+func (v *view) wrapBreaks(s string, faces []faceRun, segs []dispSeg, fit bool) []int {
 	if !v.wrap || v.wrapWidth <= 0 {
 		return nil
 	}
@@ -1195,7 +1196,7 @@ func (v *view) wrapBreaks(s string, faces []faceRun, fit bool) []int {
 		return nil
 	}
 	if v.wrapAtSpaces {
-		return v.wrapBreaksAtSpaces(s)
+		return v.wrapBreaksAtSpaces(s, segs)
 	}
 	var breaks []int
 	indent := float32(0)
@@ -1407,16 +1408,17 @@ func (v *view) measureWraps(near int, budget time.Duration) bool {
 		}
 		disp := s
 		var faces []faceRun
+		var segs []dispSeg
 		if strings.IndexByte(s, '\t') >= 0 || len(v.inlaysIn(at, at+len(s))) > 0 || len(v.replsIn(at, at+len(s))) > 0 {
 			l := &lineLayout{n: i, start: at, text: s}
 			v.display(l)
-			disp = l.disp
+			disp, segs = l.disp, l.segs
 			if len(l.reps) > 0 {
 				// The widths of the elements replacements show.
 				faces = v.facesOf(l, nil)
 			}
 		}
-		w.set(i, len(v.wrapBreaks(disp, faces, false))+1)
+		w.set(i, len(v.wrapBreaks(disp, faces, segs, false))+1)
 		return true
 	}
 	// Those around near first, so what shows is right at once.

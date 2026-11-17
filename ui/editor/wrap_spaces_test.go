@@ -40,3 +40,34 @@ func TestWrapAtSpacesBreaksOnlyAfterSpaces(t *testing.T) {
 		}
 	}
 }
+
+// Inlay hints take room in the rows, go with the character after them and
+// one at the line's end takes the last word down (zode's inlays.zig tests).
+func TestWrapAtSpacesCountsInlays(t *testing.T) {
+	for _, c := range []struct {
+		text  string
+		hints []Inlay
+		cols  int
+		rows  []string
+	}{
+		{"aaaa bbbb cccc", nil, 10, []string{"aaaa bbbb ", "cccc"}},
+		{"aaaa bbbb cccc", []Inlay{{Offset: 4, Text: ": long"}}, 10, []string{"aaaa", ": long ", "bbbb cccc"}},
+		{"aaaa bbbb", []Inlay{{Offset: 9, Text: " // 2"}}, 10, []string{"aaaa ", "bbbb // 2"}},
+		// A tab's columns count after a hint before it.
+		{"\t\tf(\"some long text here to wrap\")", []Inlay{{Offset: 4, Text: "format: "}}, 30, []string{"        f(format: \"some long ", "text here to wrap\")"}},
+	} {
+		ct := newEditorTest(t, "", c.text)
+		ct.st.SoftWrap, ct.st.WrapColumn, ct.st.WrapAtSpaces, ct.st.TabSize = true, c.cols, true, 4
+		ct.st.SetInlays(c.hints)
+		ct.tt.Frame()
+		v := &ct.st.ed.view
+		l := v.line(0)
+		var rows []string
+		for _, r := range l.rows {
+			rows = append(rows, l.disp[r.from:r.to])
+		}
+		if !reflect.DeepEqual(rows, c.rows) {
+			t.Errorf("%q at %d: rows %q, want %q", c.text, c.cols, rows, c.rows)
+		}
+	}
+}
