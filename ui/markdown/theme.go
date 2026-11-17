@@ -116,8 +116,12 @@ type Theme struct {
 	// in the link's look, rather than in brackets in Muted.
 	ImageAltAsLink bool
 
-	// Mark is the background of text marked with <mark>.
+	// Mark is the background of text marked with <mark>, and of the
+	// ranges Options.Marks names.
 	Mark Color
+	// MarkCurrent is the background of the current one of Options.Marks:
+	// the theme's accent, faint, by default.
+	MarkCurrent Color
 	// Checkbox colors the check boxes of task lists that are checked.
 	Checkbox Color
 }
@@ -180,6 +184,7 @@ func DefaultTheme(t *ui.Theme) *Theme {
 		TableCellPadding:    [2]float32{0.6, 0.4},
 		TableMaxColumn:      24,
 		Mark:                ui.RGBA(250, 204, 21, 0.35),
+		MarkCurrent:         t.Accent.Alpha(0.35),
 		Checkbox:            t.Accent,
 	}
 	if t.FontSize == 0 {
@@ -269,6 +274,7 @@ func resolve(th *Theme, def *Theme) Theme {
 	f(&out.TableCellPadding[1], def.TableCellPadding[1])
 	f(&out.TableMaxColumn, def.TableMaxColumn)
 	c(&out.Mark, def.Mark)
+	c(&out.MarkCurrent, def.MarkCurrent)
 	c(&out.Checkbox, def.Checkbox)
 	out.fillSizes()
 	return out

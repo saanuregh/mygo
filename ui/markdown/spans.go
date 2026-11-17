@@ -54,6 +54,8 @@ type para struct {
 	refs      []int
 	resolved  []string
 	resolvers uint8
+	// marked is the Options.Marks it was built with, those within it.
+	marked []Mark
 	// width is the width of its text on one line, once measured.
 	width    float32
 	measured bool
@@ -96,11 +98,13 @@ type spanBuilder struct {
 	// and CodeLink), and resolvers says which of those are set.
 	resolve   func(in parser.Inline) (string, bool)
 	resolvers uint8
+	// marks are the Options.Marks within the block.
+	marks []Mark
 }
 
 // build makes the paragraph of block i, of base style s.
 func (sb *spanBuilder) build(p *para, base spanStyle) {
-	*p = para{pieces: p.pieces[:0], marks: p.marks[:0], refs: p.refs[:0], resolved: p.resolved[:0], resolvers: sb.resolvers}
+	*p = para{pieces: p.pieces[:0], marks: p.marks[:0], refs: p.refs[:0], resolved: p.resolved[:0], resolvers: sb.resolvers, marked: p.marked}
 	sb.p = p
 	sb.in = sb.d.Inlines(sb.block)
 	sb.html = sb.html[:0]
@@ -209,6 +213,15 @@ func entityAt(source string, i int, text string) int {
 }
 
 func (sb *spanBuilder) addSpan(text string, src, end int, exact bool, s spanStyle, link int, alpha float32) {
+	if len(sb.marks) == 0 {
+		sb.addRun(text, src, end, exact, s, link, alpha, nil)
+		return
+	}
+	sb.addMarked(text, src, end, exact, s, link, alpha)
+}
+
+// addRun adds a span of text, under mark's background when mark is set.
+func (sb *spanBuilder) addRun(text string, src, end int, exact bool, s spanStyle, link int, alpha float32, mark *Mark) {
 	th := sb.th
 	sp := ui.Span{Text: text, Font: th.Font, Size: th.FontSize, Weight: s.weight, Italic: s.italic, Strikethrough: s.strike, Underline: s.underline}
 	if s.size != 0 {
@@ -241,6 +254,12 @@ func (sb *spanBuilder) addSpan(text string, src, end int, exact bool, s spanStyl
 	}
 	if s.mark {
 		sp.Background = th.Mark
+	}
+	if mark != nil {
+		sp.Background = th.Mark
+		if mark.Current {
+			sp.Background = th.MarkCurrent
+		}
 	}
 	if s.color.A > 0 && !(s.code && th.CodeKeepsColor) {
 		sp.Color = s.color
