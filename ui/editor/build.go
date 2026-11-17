@@ -62,6 +62,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		ed.refocus = false
 		e.Focus()
 	}
+	ed.offerPrimary()
 	label := o.label
 	switch {
 	case label != "":

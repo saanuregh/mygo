@@ -145,6 +145,8 @@ type options struct {
 	pageMovesCarets     bool
 	blockCaretWhenEmpty bool
 	plainClicks         bool
+	// primarySelection is State's PrimarySelection.
+	primarySelection bool
 }
 
 // sharedScroll is the vertical scroll several editors share.
@@ -281,6 +283,11 @@ type editor struct {
 	pointer    ui.Point
 	pointerIn  bool
 	hoverLine  int
+
+	// primarySels are the selections as the primary selection last heard
+	// of them (State.PrimarySelection), as anchor and head.
+	primarySels [][2]int
+
 	// inlayHovered is the hint the app was told the pointer is on, -1
 	// for none (OnInlayHover).
 	inlayHovered int

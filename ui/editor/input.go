@@ -180,6 +180,9 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 	if !ed.pressKeepsHover(ev) {
 		ed.hover.close()
 	}
+	if ev.Button == 2 && ed.o.primarySelection {
+		return ed.pastePrimary(ev)
+	}
 	if ev.Button != 0 {
 		// The secondary button keeps a selection under it for the menu;
 		// on a line's number, the gutter's menu is of that line.

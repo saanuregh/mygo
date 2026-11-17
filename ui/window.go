@@ -924,6 +924,19 @@ func (h *windowHost) writeClipboardData(d transfer.Data) {
 	}
 }
 
+func (h *windowHost) readPrimary() string {
+	if p, ok := h.conn.Clipboard.(platform.PrimarySelection); ok {
+		return p.ReadPrimaryText()
+	}
+	return ""
+}
+
+func (h *windowHost) writePrimary(s string) {
+	if p, ok := h.conn.Clipboard.(platform.PrimarySelection); ok {
+		p.WritePrimaryText(s)
+	}
+}
+
 func (h *windowHost) startDrag() {
 	if h.conn.StartDrag != nil {
 		h.conn.StartDrag()

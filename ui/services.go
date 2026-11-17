@@ -69,6 +69,24 @@ func (s Services) WriteClipboardData(data transfer.Data) {
 	}
 }
 
+// ReadPrimary reads the primary selection: the text last selected, on
+// Linux desktops, which a middle click pastes. Elsewhere it is "".
+func (s Services) ReadPrimary() string {
+	if rt := s.owner.Value(); rt != nil && !rt.closed {
+		return rt.host.readPrimary()
+	}
+	return ""
+}
+
+// WritePrimary puts text in the primary selection, as a selection does
+// on Linux desktops, leaving the clipboard as it is. Elsewhere it does
+// nothing.
+func (s Services) WritePrimary(text string) {
+	if rt := s.owner.Value(); rt != nil && !rt.closed {
+		rt.host.writePrimary(text)
+	}
+}
+
 func (s Services) OpenURL(url string) {
 	if rt := s.owner.Value(); rt != nil && !rt.closed {
 		rt.host.openURL(url, nil)
