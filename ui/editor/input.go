@@ -823,7 +823,7 @@ func (ed *editor) replaceText(r *ui.TextInputRange, s string) {
 	s = lf(s)
 	ed.replaceRanges(ts, s, editCompose, -1, -1)
 	if b := ed.buf(); b != nil {
-		b.endGroup()
+		b.EndGroup()
 	}
 	ed.complete.close()
 	ed.afterTyping(s)
@@ -914,7 +914,7 @@ func (ed *editor) replaceRanges(ts []ui.TextInputRange, s string, kind editKind,
 func (ed *editor) UnmarkText() {
 	ed.markedActive, ed.marked = false, nil
 	if b := ed.buf(); b != nil {
-		b.endGroup()
+		b.EndGroup()
 	}
 }
 
