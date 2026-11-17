@@ -51,6 +51,10 @@ type Theme struct {
 	// InputFocus is how a text input with the keyboard focus shows it
 	// (InputFocusStyle); its zero value is MyGo's accent border.
 	InputFocus InputFocusStyle
+	// InputPadding is the room inside a text input's border, above and
+	// below its text and on its sides, in DIPs: Space(1.5) and
+	// Space(2.5) where zero.
+	InputPadding [2]float32
 	// InputNoHover keeps a text input's border as it is under the
 	// pointer, as nanoui's text field, rather than darkening it.
 	InputNoHover bool
@@ -355,4 +359,17 @@ func DarkTheme() *Theme {
 		Spacing:         4,
 		FontSize:        defaultFontSize(),
 	}
+}
+
+// inputPadding is a text input's room inside its border, down and across
+// (Theme.InputPadding).
+func (t *Theme) inputPadding() (y, x float32) {
+	y, x = t.InputPadding[0], t.InputPadding[1]
+	if y == 0 {
+		y = t.Space(1.5)
+	}
+	if x == 0 {
+		x = t.Space(2.5)
+	}
+	return y, x
 }

@@ -225,6 +225,7 @@ func (sb *spanBuilder) addSpan(text string, src, end int, exact bool, s spanStyl
 		}
 		sp.Background = th.CodeBackground
 		sp.Radius = max(3, sp.Size/4)
+		sp.Chip = th.CodeChip
 		if !s.inLink || th.LinkCodeColor {
 			sp.Color = th.Code
 		}
@@ -241,7 +242,7 @@ func (sb *spanBuilder) addSpan(text string, src, end int, exact bool, s spanStyl
 	if s.mark {
 		sp.Background = th.Mark
 	}
-	if s.color.A > 0 {
+	if s.color.A > 0 && !(s.code && th.CodeKeepsColor) {
 		sp.Color = s.color
 	}
 	if alpha < 1 {
@@ -332,13 +333,17 @@ func (sb *spanBuilder) inlines(from, to int, s spanStyle) {
 				sb.p.resolved = append(sb.p.resolved, dest)
 			}
 			if dest == "" || s.inLink {
+				sb.room(n.Start, a, link)
 				sb.add(n.Text, a, min(a+len(n.Text), z), z-a == len(n.Text), cs, link)
+				sb.room(min(a+len(n.Text), z), n.End, link)
 				continue
 			}
 			// A link of its own that keeps the code's look.
 			cs.inLink = true
+			sb.room(n.Start, a, link)
 			sb.add(n.Text, a, min(a+len(n.Text), z), z-a == len(n.Text), cs, k)
 			sb.cur.dest = dest
+			sb.room(min(a+len(n.Text), z), n.End, link)
 		case parser.Emphasis:
 			cs := s
 			cs.italic = true
@@ -473,6 +478,22 @@ func (sb *spanBuilder) mathObject(n *parser.Inline, s spanStyle, link int) bool 
 	p.marks = append(p.marks, runMark{rune: p.runes, src: n.Start, end: n.End})
 	p.runes++
 	return true
+}
+
+// room adds Theme.CodeRoom beside a code span, from the source's
+// [src, end) (its backticks): an object drawing nothing, which copies as
+// nothing.
+func (sb *spanBuilder) room(src, end, link int) {
+	w := sb.th.CodeRoom
+	if !(w > 0) {
+		return
+	}
+	p := sb.p
+	p.objects = append(p.objects, mathObject{rune: p.runes, src: src, end: src})
+	pc := sb.piece(link)
+	pc.spans = append(pc.spans, ui.Span{Text: "\uFFFC", ObjectWidth: w})
+	p.marks = append(p.marks, runMark{rune: p.runes, src: src, end: end})
+	p.runes++
 }
 
 // codeStart returns where a code span's text starts in the source.

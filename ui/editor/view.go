@@ -37,6 +37,8 @@ type view struct {
 	tabSize    int
 	wrap       bool
 	wrapWidth  float32
+	// wrapAtSpaces: State.WrapAtSpaces.
+	wrapAtSpaces bool
 	// hintsFollowText: State.HintsFollowText.
 	hintsFollowText bool
 	scale           float32
@@ -462,6 +464,20 @@ func (v *view) setTheme(ct *Theme) {
 	}
 	if faces != v.faces {
 		v.faces, v.styled = faces, styled
+		v.lines.m = nil
+	}
+}
+
+// setWrapAtSpaces sets where wrapped lines break (State.WrapAtSpaces).
+func (v *view) setWrapAtSpaces(on bool) {
+	if on == v.wrapAtSpaces {
+		return
+	}
+	v.wrapAtSpaces = on
+	if v.wrap {
+		v.heights.wraps.reset(v.text.LineCount(), true)
+		v.heights.dirty = true
+		v.wrapAt = 0
 		v.lines.m = nil
 	}
 }
@@ -1037,6 +1053,8 @@ func (v *view) ellipsizeTrailing(l *lineLayout) {
 	start, indent := 0, float32(0)
 	if len(breaks) > 0 {
 		start = breaks[len(breaks)-1]
+	}
+	if len(breaks) > 0 && !v.wrapAtSpaces {
 		indent = v.wrapIndent(prefix)
 	}
 	used := indent + v.runsWidth(displayed, faces, start, segment.disp)
@@ -1081,7 +1099,7 @@ func (v *view) layoutRows(l *lineLayout) {
 	fit := len(l.disp) <= fitBytes
 	breaks := v.wrapBreaks(l.disp, l.faces, fit)
 	indent := float32(0)
-	if len(breaks) > 0 {
+	if len(breaks) > 0 && !v.wrapAtSpaces {
 		indent = v.wrapIndent(l.disp)
 	}
 	from := 0
@@ -1159,6 +1177,7 @@ func (v *view) piece(l *lineLayout, p *rowPiece) *text.Layout {
 // breaking after whitespace or between a word and what is not, anywhere
 // in CJK but before closing punctuation and after opening punctuation,
 // and inside a word too long for a row. faces are those of s, if known.
+// With WrapAtSpaces, rows break by columns instead (wrapBreaksAtSpaces).
 //
 // With fit, a row is then shaped as it is painted, and ends at a place
 // to break before while it is wider than the wrap width: the room the
@@ -1174,6 +1193,9 @@ func (v *view) wrapBreaks(s string, faces []faceRun, fit bool) []int {
 	}
 	if len(faces) == 0 && v.widths.mono > 0 && float32(len(s))*v.widths.mono <= v.wrapWidth && (!fit || isASCII(s)) {
 		return nil
+	}
+	if v.wrapAtSpaces {
+		return v.wrapBreaksAtSpaces(s)
 	}
 	var breaks []int
 	indent := float32(0)
