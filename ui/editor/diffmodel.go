@@ -35,7 +35,10 @@ type diffModel struct {
 	plain bool
 	// job compares the whole texts off the main thread, nil when none
 	// does: until it is done there are no hunks, and the texts are the
-	// buffers' as they are now.
+	// buffers' as they are now. Under plain the hunks before it stay,
+	// moved with the edits of the new text, and the texts it compares
+	// with them; edits made meanwhile start no other job, the texts being
+	// compared again once it is done.
 	job *diffJob
 }
 
@@ -79,7 +82,7 @@ func (d *diffModel) set(old, new *Buffer, eol bool) {
 }
 
 // comparing reports whether the texts are being compared off the main
-// thread, there being no hunks until they are.
+// thread, there being no hunks until they are (but under plain).
 func (d *diffModel) comparing() bool { return d.job != nil }
 
 // update compares the texts again where they changed, and reports
@@ -98,7 +101,19 @@ func (d *diffModel) update() bool {
 	newText, newVer := d.new.snapshot()
 	took := false
 	if j := d.job; j != nil && d.old != d.new {
-		if j.oldVer != oldVer {
+		if d.plain && !j.done.Load() {
+			// The hunks shown move with the edits until then.
+			if newVer == d.newVer {
+				return false
+			}
+			if _, _, _, ok := d.follow(newText, newVer); !ok {
+				d.hunks, d.newText, d.newVer = nil, newText, newVer
+			}
+			d.version++
+			d.words = nil
+			return true
+		}
+		if !d.plain && j.oldVer != oldVer {
 			// The old text changed since: compare it anew.
 			d.full(oldText, newText, oldVer, newVer)
 			return true
@@ -131,20 +146,48 @@ func (d *diffModel) update() bool {
 		}
 		return changed
 	}
-	if d.plain || oldVer != d.oldVer || newText.Len() == 0 || d.newText.Len() == 0 {
+	if d.plain {
+		// The hunks, moved with the edits of the new text, show until
+		// a comparison off the main thread is done; those of another old
+		// text go.
+		if oldVer != d.oldVer {
+			d.hunks = nil
+		} else if _, _, _, ok := d.follow(newText, newVer); !ok {
+			d.hunks = nil
+		}
 		d.full(oldText, newText, oldVer, newVer)
 		return true
 	}
-	changes, ver, ok := d.new.changesSince(d.newVer)
-	if !ok || ver != newVer {
+	if oldVer != d.oldVer || newText.Len() == 0 || d.newText.Len() == 0 {
 		d.full(oldText, newText, oldVer, newVer)
 		return true
+	}
+	dirtyFrom, dirtyTo, touched, ok := d.follow(newText, newVer)
+	if !ok {
+		d.full(oldText, newText, oldVer, newVer)
+		return true
+	}
+	if dirtyFrom < 0 {
+		return took
+	}
+	d.redo(dirtyFrom, dirtyTo, touched)
+	return true
+}
+
+// follow moves the hunks with the edits of the new text since d.newVer,
+// to newText of version newVer, and returns the lines the edits touched,
+// in the new text (from -1 when none), and the hunks they touched; false,
+// and the hunks as they were, when the buffer's log no longer holds them.
+func (d *diffModel) follow(newText rope.Text, newVer uint64) (dirtyFrom, dirtyTo int, touched []bool, ok bool) {
+	changes, ver, ok := d.new.changesSince(d.newVer)
+	if !ok || ver != newVer {
+		return -1, -1, nil, false
 	}
 	// The lines the edits touched, in the new text, and the hunks moved
 	// with the lines after them. Hunks next to an edit are touched too, as
 	// lines it inserts where lines were deleted may be those lines again;
 	// they are compared again with the edit.
-	dirtyFrom, dirtyTo := -1, -1
+	dirtyFrom, dirtyTo = -1, -1
 	grow := func(a, b int) {
 		if dirtyFrom < 0 {
 			dirtyFrom, dirtyTo = a, b
@@ -152,7 +195,7 @@ func (d *diffModel) update() bool {
 		}
 		dirtyFrom, dirtyTo = min(dirtyFrom, a), max(dirtyTo, b)
 	}
-	touched := make([]bool, len(d.hunks))
+	touched = make([]bool, len(d.hunks))
 	for _, cs := range changes {
 		for _, c := range cs {
 			// The lines the change replaced, where the changes before it
@@ -187,19 +230,16 @@ func (d *diffModel) update() bool {
 		}
 	}
 	d.newText, d.newVer = newText, newVer
-	if dirtyFrom < 0 {
-		return took
-	}
-	d.redo(dirtyFrom, dirtyTo, touched)
-	return true
+	return dirtyFrom, dirtyTo, touched, true
 }
 
 // full compares the whole texts: on the main thread when they are small,
 // or while no window shows the buffers, as for an app's Hunks with no
 // view; otherwise on a goroutine, whose hunks update takes once done,
 // which draws the windows showing the buffers again. Until then there
-// are no hunks, and its result is dropped if the old text changes, or
-// set is given other buffers, before.
+// are no hunks, but under plain those d has, and its result is dropped
+// if the old text changes (but under plain), or set is given other
+// buffers, before.
 func (d *diffModel) full(oldText, newText rope.Text, oldVer, newVer uint64) {
 	d.oldText, d.newText, d.oldVer, d.newVer = oldText, newText, oldVer, newVer
 	d.version++
@@ -210,7 +250,9 @@ func (d *diffModel) full(oldText, newText rope.Text, oldVer, newVer uint64) {
 		d.hunks = d.compare(oldText, newText)
 		return
 	}
-	d.hunks = nil
+	if !d.plain {
+		d.hunks = nil
+	}
 	j := &diffJob{oldText: oldText, newText: newText, oldVer: oldVer, newVer: newVer}
 	d.job = j
 	cmp := diffModel{eol: d.eol, plain: d.plain}
