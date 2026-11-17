@@ -242,7 +242,10 @@ func (ed *editor) prepare(f *frame) {
 		}
 	}
 	if p.empty() && len(ed.sels) == 1 {
-		if ed.o.filledBrackets {
+		if ed.o.filledBrackets && !ed.focused && ed.o.fitContent {
+			// zode's: an editor inside a page (a multibuffer's excerpt)
+			// marks them only while it has the keyboard.
+		} else if ed.o.filledBrackets {
 			// The bracket after the caret, else the one before it.
 			for _, at := range []int{p.head, p.head - 1} {
 				if at < 0 || at >= t.Len() {
@@ -782,8 +785,14 @@ func (ed *editor) fillRangeInset(p *ui.Painter, f *frame, l *lineLayout, row *ro
 		return
 	}
 	f.rects = mergeRects(ed.view.rangeRects(l, row, a, b, f.rects[:0]))
-	if len(f.rects) == 0 && a == b {
-		f.rects = ed.view.rangeRects(l, row, a, a, f.rects[:0])
+	if a == b {
+		// An empty range, as an empty match: a bar 2 wide where it is, on
+		// the row that holds it (where a wrapped row ends, the next's).
+		last := row.to >= len(l.disp)
+		if a < row.from || a > row.to || a == row.to && !last {
+			return
+		}
+		f.rects = append(f.rects[:0], ui.Rect{X: ed.view.xOf(l, row, a)})
 	}
 	for _, rc := range f.rects {
 		p.Fill(ui.Rect{X: ox + rc.X, Y: y + 1, W: max(rc.W, 2), H: l.rowHeight - 2}, c, 3)
@@ -859,7 +868,10 @@ func (ed *editor) paintGuides(p *ui.Painter, f *frame, line int, ox, y float32, 
 		gh = v.rowHeight(line)
 	}
 	for level := 0; level*tab < in; level++ {
-		x := float32(math.Round(float64(ox + float32(level*tab)*v.charWidth)))
+		x := ox + float32(level*tab)*v.charWidth
+		if !ed.o.guidesFromBelow {
+			x = float32(math.Round(float64(x)))
+		}
 		c := ct.IndentGuide
 		if level == f.activeGuide.level && line >= f.activeGuide.from && line <= f.activeGuide.to {
 			c = ct.ActiveIndentGuide

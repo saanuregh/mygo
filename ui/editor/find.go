@@ -56,6 +56,107 @@ type finder struct {
 	// none: no match is the current one, as the bar opened again on the
 	// matches it had (FindFromOrigin).
 	none bool
+	// unicode: \w, \d and \s (and their opposites) take any script's
+	// characters, as zode's rure does (FindFromOrigin).
+	unicode bool
+}
+
+// pattern is the query as a Go regular expression: multi-line, without
+// case unless told, its classes Unicode's (unicode).
+func (f *finder) pattern() string {
+	pat := f.query
+	if f.unicode {
+		pat = unicodeClasses(pat)
+	}
+	if !f.caseSens {
+		pat = "(?i)" + pat
+	}
+	return "(?m)" + pat
+}
+
+// The Unicode classes of Rust's regex crate (rure), as Go writes them:
+// \w is a letter, a mark, a decimal digit or a connector; \s Unicode's
+// White_Space.
+const (
+	unicodeWord  = `\p{L}\p{M}\p{Nd}\p{Pc}`
+	unicodeSpace = `\t-\r \x{85}\x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}`
+)
+
+// unicodeClasses rewrites pat's \w, \W, \d, \D, \s and \S as Unicode's
+// classes (Go's are ASCII's). Inside brackets \W and \S stay Go's: a
+// class cannot hold the opposite of a union. \b stays ASCII's: Go has no
+// way to say Unicode's.
+func unicodeClasses(pat string) string {
+	var b strings.Builder
+	inClass := false
+	for i := 0; i < len(pat); i++ {
+		ch := pat[i]
+		switch {
+		case ch == '\\' && i+1 < len(pat):
+			next := pat[i+1]
+			i++
+			switch next {
+			case 'w':
+				if inClass {
+					b.WriteString(unicodeWord)
+				} else {
+					b.WriteString("[" + unicodeWord + "]")
+				}
+				continue
+			case 'd':
+				b.WriteString(`\p{Nd}`)
+				continue
+			case 'D':
+				b.WriteString(`\P{Nd}`)
+				continue
+			case 's':
+				if inClass {
+					b.WriteString(unicodeSpace)
+				} else {
+					b.WriteString("[" + unicodeSpace + "]")
+				}
+				continue
+			case 'W', 'S':
+				if !inClass {
+					set := unicodeWord
+					if next == 'S' {
+						set = unicodeSpace
+					}
+					b.WriteString("[^" + set + "]")
+					continue
+				}
+			}
+			b.WriteByte('\\')
+			b.WriteByte(next)
+		case ch == '[' && !inClass:
+			inClass = true
+			b.WriteByte(ch)
+			// A ] first (after ^) is one of the class's characters.
+			if i+1 < len(pat) && pat[i+1] == '^' {
+				i++
+				b.WriteByte('^')
+			}
+			if i+1 < len(pat) && pat[i+1] == ']' {
+				i++
+				b.WriteByte(']')
+			}
+		case ch == '[' && inClass && i+1 < len(pat) && pat[i+1] == ':':
+			// A POSIX class inside, as [[:alpha:]]: as it is.
+			end := strings.Index(pat[i:], ":]")
+			if end < 0 {
+				b.WriteByte(ch)
+				continue
+			}
+			b.WriteString(pat[i : i+end+2])
+			i += end + 1
+		case ch == ']' && inClass:
+			inClass = false
+			b.WriteByte(ch)
+		default:
+			b.WriteByte(ch)
+		}
+	}
+	return b.String()
 }
 
 // findKey is what FindFromOrigin's choice of a match follows.
@@ -233,18 +334,23 @@ func (f *finder) scan(ed *editor, text, lower string, base int, found func(m dif
 	}
 	switch {
 	case f.regex:
-		pat := f.query
-		if !f.caseSens {
-			pat = "(?i)" + pat
-		}
-		re, err := regexp.Compile("(?m)" + pat)
+		f.unicode = ed.o.findFromOrigin
+		pat := f.pattern()
+		re, err := regexp.Compile(pat)
 		if err != nil {
 			f.err = err
+			if ed.o.findFromOrigin {
+				// zode's find.zig: a pattern that is not one is
+				// searched for as it is typed, its error still said.
+				f.regex = false
+				f.scan(ed, text, lower, base, found)
+				f.regex = true
+			}
 			return
 		}
 		all := re.FindAllStringSubmatchIndex(text, maxMatches)
 		if ed.o.findFromOrigin {
-			all = withAbuttingEmpty("(?m)"+pat, text, all)
+			all = withAbuttingEmpty(pat, text, all)
 		}
 		for _, m := range all {
 			// Empty matches count as FindFromOrigin's (zode's rure) do.
@@ -442,11 +548,7 @@ func (f *finder) replacement(text string, i int) string {
 	if !f.regex || i >= len(f.subs) {
 		return f.replace
 	}
-	pat := f.query
-	if !f.caseSens {
-		pat = "(?i)" + pat
-	}
-	re, err := regexp.Compile("(?m)" + pat)
+	re, err := regexp.Compile(f.pattern())
 	if err != nil {
 		return f.replace
 	}
