@@ -11,8 +11,11 @@ import (
 type Theme struct {
 	Foreground, Background ui.Color
 	// Cursor colors the cursor: the foreground when zero. CursorText
-	// colors the text under a block cursor: the background when zero.
-	Cursor, CursorText ui.Color
+	// colors the text under a block cursor: the background when zero. A
+	// see-through Cursor (alpha under 1) is drawn over the text, which
+	// shows through it. UnfocusedCursor colors the hollow block it is
+	// while the view has not the focus: Cursor when zero.
+	Cursor, CursorText, UnfocusedCursor ui.Color
 	// Selection highlights the selected text: the foreground, a third
 	// opaque, when zero. SelectionText colors the selected text: its own
 	// colors when zero.

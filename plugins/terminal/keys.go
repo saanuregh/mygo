@@ -84,4 +84,33 @@ var shifted = map[rune]ui.Key{
 	'|': ui.KeyBackslash, '~': ui.KeyBackquote,
 }
 
+// keyCharacter returns the character key types for Options.KeysAsCharacters,
+// with Shift held or not, and Ghostty's key of that character; false for
+// keys that type none (arrows, Home, function keys; Delete on macOS).
+func keyCharacter(key ui.Key, shift, mac bool) (rune, vt.Key, bool) {
+	switch key {
+	case ui.KeyEnter:
+		return '\r', vt.KeyUnidentified, true
+	case ui.KeyEscape:
+		return 0x1b, vt.KeyUnidentified, true
+	case ui.KeyBackspace:
+		if mac {
+			return 0x7f, vt.KeyUnidentified, true
+		}
+		return 0x08, vt.KeyUnidentified, true
+	case ui.KeyDelete:
+		return 0x7f, vt.KeyUnidentified, !mac
+	}
+	k, r := vtKey(key)
+	if r == 0 {
+		return 0, 0, false
+	}
+	if shift && !('a' <= r && r <= 'z') {
+		if s := []rune(shiftedText(key, r)); len(s) == 1 && s[0] != r {
+			return s[0], vt.KeyUnidentified, true
+		}
+	}
+	return r, k, true
+}
+
 func vtMods(m ui.Modifiers) vt.Mods { return vt.Mods(m) } // the same bits

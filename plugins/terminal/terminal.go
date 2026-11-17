@@ -142,8 +142,10 @@ type Options struct {
 	Theme, DarkTheme *Theme
 	// Cursor is the shape of the cursor, which programs may change, and
 	// NoBlink keeps it from blinking unless a program asks it to.
-	Cursor  CursorStyle
-	NoBlink bool
+	// FixedCursor keeps both as set: programs change neither.
+	Cursor      CursorStyle
+	NoBlink     bool
+	FixedCursor bool
 	// FractionalCells makes a cell as wide as the font's advance times
 	// Font.CellWidth, a fraction of a pixel as it may be, and a row the
 	// font's line, rounded up to a DIP, times its LineHeight rounded up to
@@ -188,6 +190,33 @@ type Options struct {
 	// separator, Clear. An app whose terminals offer only Copy and Paste
 	// gives those two.
 	ContextMenu []Action
+	// NoScrollbar shows no scroll bar over the scrollback.
+	NoScrollbar bool
+	// NoWheelZoom: the wheel with Control held (Command on macOS) scrolls
+	// as without it, and zooms nothing.
+	NoWheelZoom bool
+	// NoAlternateScroll: the wheel over a full-screen program's screen
+	// (the alternate screen) does nothing when the program does not take
+	// the mouse, rather than send arrow keys (mode 1007).
+	NoAlternateScroll bool
+	// NoAltClick: Alt+click (Option+click on macOS) does not move a
+	// prompt's cursor, and Alt+drag selects as a drag does, not a
+	// rectangle.
+	NoAltClick bool
+	// NoFocusReports keeps the view from telling programs that ask
+	// (mode 1004) that it gained or lost the focus.
+	NoFocusReports bool
+	// KeysAsCharacters encodes a key held with Control or Alt, and not
+	// Command, by the character it types: letters lower case, Shift's
+	// symbol with Shift (a US keyboard's), Space, Tab, Enter, Escape,
+	// Backspace and Delete (but on macOS, where Delete is a function key)
+	// as their control characters. That character is the event's text and
+	// unshifted character, and its key Ghostty's key of it (unidentified
+	// for a shifted symbol or a control character but Tab). Ctrl+Shift+A
+	// then sends what Ctrl+A does. Arrows, Home, Page Up and function keys
+	// are encoded by their key, as without it. It is how a terminal reading
+	// keys as a menu's shortcuts would see them, as zode's earlier one did.
+	KeysAsCharacters bool
 	// NoLinks leaves links as text: Command+click (Control+click
 	// elsewhere) neither underlines nor opens a hyperlink, a URL or a
 	// path, and selects as a click does.
