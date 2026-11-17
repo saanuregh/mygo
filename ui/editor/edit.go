@@ -503,6 +503,11 @@ func (ed *editor) paste(text string) {
 	clip := lastClip
 	switch {
 	case clip.text != text:
+		// Outside text with a line for each caret, a trailing newline
+		// aside: a line at each, as VS Code's spread paste.
+		if lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n"); len(ed.sels) > 1 && len(lines) == len(ed.sels) {
+			pieces, whole = lines, make([]bool, len(lines))
+		}
 	case len(clip.pieces) == len(ed.sels):
 		pieces, whole = clip.pieces, clip.lines
 	case !slices.Contains(clip.lines, false):
