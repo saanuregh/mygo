@@ -123,7 +123,8 @@ func (st *viewState) table(c *ui.Context, i int, base spanStyle) ui.Element {
 }
 
 // equalTable builds a table as wide as the view, its columns sharing that
-// width equally, with no lines (Theme.TableEqualColumns).
+// width equally, with no lines between its cells, only TableBorder round
+// it (Theme.TableEqualColumns).
 func (st *viewState) equalTable(c *ui.Context, i int, base spanStyle) ui.Element {
 	d := st.doc
 	th := &st.th
@@ -131,6 +132,9 @@ func (st *viewState) equalTable(c *ui.Context, i int, base spanStyle) ui.Element
 	cols := len(b.Align)
 	padX, padY := th.em(th.TableCellPadding[0]), th.em(th.TableCellPadding[1])
 	grid := ui.Column(c).AlignSelf(ui.Stretch).Radius(th.TableRadius).Clip().Role(ui.RoleTable)
+	if th.TableBorder.A > 0 {
+		grid.Border(1, th.TableBorder)
+	}
 	if base.size != 0 {
 		grid.FontSize(base.size)
 	}

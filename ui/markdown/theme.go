@@ -94,8 +94,8 @@ type Theme struct {
 	TableCellPadding                      [2]float32
 	TableMaxColumn                        float32
 	// TableEqualColumns makes a table as wide as the view, its columns
-	// sharing that width equally, with no lines (TableBorder unused).
-	// TableSize is the size of its text in ems (1), and TableRadius that
+	// sharing that width equally, with no lines between its cells:
+	// TableBorder only rings it. TableSize is the size of its text in ems (1), and TableRadius that
 	// of its corners in DIPs (0.3 ems); TableLineHeight, when set, is the
 	// height of its lines as a multiple of its text's size.
 	TableEqualColumns                       bool
