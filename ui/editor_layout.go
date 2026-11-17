@@ -407,9 +407,12 @@ func (ed *editor) hides(r *TextRange) bool {
 // the first rune of a widget.
 func (ed *editor) runStyle(r *TextRange) (text.Span, Span) {
 	if r.widget != 0 || ed.hides(r) {
+		if r.widget == 0 && r.HiddenWidth > 0 {
+			return text.Span{ObjectWidth: r.HiddenWidth, Size: hiddenSize}, Span{}
+		}
 		return text.Span{ObjectWidth: hiddenWidth, Size: hiddenSize}, Span{}
 	}
 	weight := max(r.Weight, 0)
 	return text.Span{Weight: weight, Family: r.Font, Size: r.Size, Italic: r.Italic},
-		Span{Color: r.Color, Weight: weight, Strikethrough: r.Strikethrough, Background: r.Background, Radius: r.Radius}
+		Span{Color: r.Color, Weight: weight, Strikethrough: r.Strikethrough, Background: r.Background, Radius: r.Radius, Chip: r.Chip}
 }

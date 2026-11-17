@@ -454,3 +454,56 @@ func TestTextBlockRoomSizesTheArea(t *testing.T) {
 		t.Errorf("the area grew by %v, want %v", got, 20+6-2*h)
 	}
 }
+
+// A range's Chip sets its background's box, as a Span's: X past the
+// glyphs on each side, Above and Below the baseline.
+func TestTextRangeChip(t *testing.T) {
+	s := "a code b"
+	tint := RGB(30, 160, 90)
+	var el *node
+	tt := coreNewTester(func(c *context) {
+		el = coreTextAreaBase(c, &s).Width(300).Height(80).FontSize(13).TextRanges(
+			TextRange{Start: 2, End: 6, Background: tint, Radius: 4, Chip: ChipBox{X: 3, Above: 14, Below: 6}},
+		)
+	}, 320, 100)
+	defer tt.rt.close()
+	ed := el.st.editor
+	x0, _, _ := ed.area.caretAt(ed, 2, 0)
+	x1, _, _ := ed.area.caretAt(ed, 6, 0)
+	for _, op := range tt.h.last.Ops {
+		if op.Kind != scene.OpFill || op.Color != tint.scene() {
+			continue
+		}
+		if w, h := op.Rect.W, op.Rect.H; abs32(w-(x1-x0+6)) > 0.5 || abs32(h-20) > 0.5 {
+			t.Errorf("the chip is %vx%v, want %vx20", w, h, x1-x0+6)
+		}
+		return
+	}
+	t.Error("the chip was not painted")
+}
+
+// A hidden range's HiddenWidth is the room each of its hidden runes takes,
+// drawing nothing: the text after it starts that far on.
+func TestTextRangeHiddenWidth(t *testing.T) {
+	s := "`ab`"
+	caretAfterTick := func(w float32) float32 {
+		var el *node
+		tt := coreNewTester(func(c *context) {
+			el = coreTextAreaBase(c, &s).Width(300).Height(80).FontSize(13).TextRanges(
+				TextRange{Start: 0, End: 1, Hidden: true, HiddenWidth: w},
+				TextRange{Start: 3, End: 4, Hidden: true, HiddenWidth: w},
+			)
+		}, 320, 100)
+		defer tt.rt.close()
+		ed := el.st.editor
+		x0, _, _ := ed.area.caretAt(ed, 0, 0)
+		x1, _, _ := ed.area.caretAt(ed, 1, 0)
+		return x1 - x0
+	}
+	if got := caretAfterTick(0); got > 0.5 {
+		t.Errorf("a hidden rune takes %v without HiddenWidth", got)
+	}
+	if got := caretAfterTick(10); abs32(got-10) > 0.5 {
+		t.Errorf("a hidden rune takes %v with HiddenWidth 10", got)
+	}
+}
