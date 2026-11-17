@@ -30,6 +30,13 @@ type State struct {
 	// columns when narrower.
 	SoftWrap   bool
 	WrapColumn int
+	// WrapAtSpaces wraps as editors that count columns do: a character
+	// takes a column, a wide one two; rows break only after spaces and
+	// tabs (a word longer than a row before the character that does not
+	// fit, never inside one) and are not indented. By default rows also
+	// break between words and punctuation, and are indented as their
+	// line.
+	WrapAtSpaces bool
 	// LineNumbers shows the numbers of lines in the gutter, absolute by
 	// default.
 	LineNumbers LineNumbers
@@ -452,7 +459,7 @@ type TextBackground struct {
 func (st *State) options() options {
 	return options{
 		readOnly: st.ReadOnly, font: st.Font, lineHeight: st.LineHeight, tabSize: st.TabSize, indent: st.Indent,
-		wrap: st.SoftWrap, wrapColumn: st.WrapColumn, lineNumbers: st.LineNumbers, whitespace: st.Whitespace,
+		wrap: st.SoftWrap, wrapColumn: st.WrapColumn, wrapAtSpaces: st.WrapAtSpaces, lineNumbers: st.LineNumbers, whitespace: st.Whitespace,
 		wrapGuides: st.WrapGuides, indentGuides: !st.NoIndentGuides, scrollPastEnd: !st.NoScrollPastEnd && !st.FitContent,
 		keepScrollbars: st.KeepScrollbars, hideScrollbars: st.NoScrollbars, scrollbar: st.Scrollbar,
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, cursorShape: st.CursorShape, fitContent: st.FitContent,

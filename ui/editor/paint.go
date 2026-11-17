@@ -58,6 +58,7 @@ func (ed *editor) layout(w, h, scale float32) {
 		ww = min(ww, float32(math.Ceil(float64(float32(ed.o.wrapColumn)*v.charWidth))))
 	}
 	v.hintsFollowText = ed.o.hintsFollowText
+	v.setWrapAtSpaces(ed.o.wrapAtSpaces)
 	v.setWrap(wrap, max(ww, v.charWidth*8))
 	if wrap {
 		// Wrapped lines fit: nothing is sideways.

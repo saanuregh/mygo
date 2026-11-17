@@ -494,6 +494,9 @@ func (st *viewState) defaultBlock(c *ui.Context, i int, tight bool, base spanSty
 		s := base
 		s.weight, s.size, s.color = h.Weight, th.em(h.Size), h.Color
 		el := st.paragraph(c, i, s).Role(ui.RoleHeading).Level(b.Level)
+		if h.LineHeight > 0 {
+			el.FontSize(s.size).LineHeight(h.LineHeight)
+		}
 		if h.Rule {
 			el.BorderWidth(0, 0, 1, 0).BorderColor(th.Rule).Padding(0, 0, th.em(0.3), 0)
 		}
@@ -529,7 +532,11 @@ func (st *viewState) defaultBlock(c *ui.Context, i int, tight bool, base spanSty
 		s := base
 		s.color = th.QuoteText
 		// The bar on the side lines start: the right right to left.
-		q := ui.Column(c).BorderStartWidth(th.QuoteBarWidth).BorderColor(th.QuoteBar).PaddingStart(th.em(0.85)).TextColor(th.QuoteText)
+		gap := th.QuoteGap
+		if gap == 0 {
+			gap = th.em(0.85)
+		}
+		q := ui.Column(c).BorderStartWidth(th.QuoteBarWidth).BorderColor(th.QuoteBar).PaddingStart(gap).TextColor(th.QuoteText)
 		return q.Children(func() { st.blocks(c, i, false, s) })
 	case parser.List:
 		return st.list(c, i, base)

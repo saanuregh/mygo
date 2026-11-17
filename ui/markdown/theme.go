@@ -40,9 +40,18 @@ type Theme struct {
 	LinkCodeColor bool
 
 	// Code colors code spans, with CodeBackground behind them; CodeSize is
-	// their size in ems: 0.875.
-	Code, CodeBackground Color
-	CodeSize             float32
+	// their size in ems: 0.875, and CodeBlockSize that of code blocks'
+	// code, CodeSize when zero.
+	Code, CodeBackground    Color
+	CodeSize, CodeBlockSize float32
+	// CodeKeepsColor keeps code spans in the Code color inside quotes and
+	// headings, whose color they otherwise take.
+	CodeKeepsColor bool
+	// CodeRoom is room in DIPs on each side of a code span, between its
+	// glyphs and the words beside it, and CodeChip the box of its
+	// background (ui.Span.Chip): the background hugs its glyphs when zero.
+	CodeRoom float32
+	CodeChip ui.ChipBox
 
 	// BlockSpacing is the space between blocks, in ems: 0.75. ItemSpacing
 	// is that between the items of a tight list: 0.25.
@@ -57,6 +66,9 @@ type Theme struct {
 	// wide (3), and QuoteText their text.
 	QuoteBar, QuoteText Color
 	QuoteBarWidth       float32
+	// QuoteGap is the room between the bar and the text in DIPs: 0.85
+	// ems when zero.
+	QuoteGap float32
 	// Alerts color the bar, icon and title of GitHub's alerts, by kind:
 	// Note, Tip, Important, Warning and Caution, GitHub's colors by
 	// default, in light or dark as the window theme is.
@@ -81,6 +93,13 @@ type Theme struct {
 	TableBorder, TableHeader, TableStripe Color
 	TableCellPadding                      [2]float32
 	TableMaxColumn                        float32
+	// TableEqualColumns makes a table as wide as the view, its columns
+	// sharing that width equally, with no lines (TableBorder unused).
+	// TableSize is the size of its text in ems (1), and TableRadius that
+	// of its corners in DIPs (0.3 ems); TableLineHeight, when set, is the
+	// height of its lines as a multiple of its text's size.
+	TableEqualColumns                       bool
+	TableSize, TableRadius, TableLineHeight float32
 
 	// Mark is the background of text marked with <mark>.
 	Mark Color
@@ -104,6 +123,10 @@ type HeadingStyle struct {
 	// Rule draws a line below them, as GitHub does below headings of
 	// levels 1 and 2.
 	Rule bool
+	// LineHeight is the height of their lines as a multiple of their
+	// size; when zero their lines are the body's, or as tall as their
+	// font.
+	LineHeight float32
 }
 
 // DefaultTheme returns the Markdown theme of a window's theme: its font
@@ -159,7 +182,9 @@ func DefaultTheme(t *ui.Theme) *Theme {
 // resolve returns th with what it leaves zero taken from def.
 func resolve(th *Theme, def *Theme) Theme {
 	if th == nil {
-		return *def
+		out := *def
+		out.fillSizes()
+		return out
 	}
 	out := *th
 	f := func(v *float32, d float32) {
@@ -230,7 +255,22 @@ func resolve(th *Theme, def *Theme) Theme {
 	f(&out.TableMaxColumn, def.TableMaxColumn)
 	c(&out.Mark, def.Mark)
 	c(&out.Checkbox, def.Checkbox)
+	out.fillSizes()
 	return out
+}
+
+// fillSizes gives the sizes an app's theme may leave zero their
+// defaults, from the theme's resolved font size and code size.
+func (th *Theme) fillSizes() {
+	if th.CodeBlockSize == 0 {
+		th.CodeBlockSize = th.CodeSize
+	}
+	if th.TableSize == 0 {
+		th.TableSize = 1
+	}
+	if th.TableRadius == 0 {
+		th.TableRadius = th.em(0.3)
+	}
 }
 
 // em returns v ems in DIPs.

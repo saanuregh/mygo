@@ -31,6 +31,12 @@ func (st *viewState) table(c *ui.Context, i int, base spanStyle) ui.Element {
 	ts.seen = true
 	cols := len(b.Align)
 	padX, padY := th.em(th.TableCellPadding[0]), th.em(th.TableCellPadding[1])
+	if th.TableSize != 1 {
+		base.size = th.em(th.TableSize)
+	}
+	if th.TableEqualColumns {
+		return st.equalTable(c, i, base)
+	}
 	maxW := th.em(th.TableMaxColumn)
 	// The widths of the columns, from their cells' text.
 	widths := make([]float32, cols)
@@ -63,7 +69,7 @@ func (st *viewState) table(c *ui.Context, i int, base spanStyle) ui.Element {
 	ts.widths = append(ts.widths[:0], widths...)
 	scroll := ui.ScrollHorizontal(c).AlignSelf(ui.Stretch)
 	return scroll.Children(func() {
-		grid := ui.Column(c).Border(1, th.TableBorder).Radius(th.em(0.3)).Clip().Shrink(0).Role(ui.RoleTable)
+		grid := ui.Column(c).Border(1, th.TableBorder).Radius(th.TableRadius).Clip().Shrink(0).Role(ui.RoleTable)
 		grid.Children(func() {
 			n := 0
 			for r := i + 1; r < d.Block(i).Next; r = d.Block(r).Next {
@@ -113,5 +119,68 @@ func (st *viewState) table(c *ui.Context, i int, base spanStyle) ui.Element {
 				n++
 			}
 		})
+	})
+}
+
+// equalTable builds a table as wide as the view, its columns sharing that
+// width equally, with no lines (Theme.TableEqualColumns).
+func (st *viewState) equalTable(c *ui.Context, i int, base spanStyle) ui.Element {
+	d := st.doc
+	th := &st.th
+	b := d.Block(i)
+	cols := len(b.Align)
+	padX, padY := th.em(th.TableCellPadding[0]), th.em(th.TableCellPadding[1])
+	grid := ui.Column(c).AlignSelf(ui.Stretch).Radius(th.TableRadius).Clip().Role(ui.RoleTable)
+	if base.size != 0 {
+		grid.FontSize(base.size)
+	}
+	if th.TableLineHeight > 0 {
+		grid.LineHeight(th.TableLineHeight)
+	}
+	return grid.Children(func() {
+		n := 0
+		for r := i + 1; r < d.Block(i).Next; r = d.Block(r).Next {
+			row := d.Block(r)
+			rowEl := ui.Row(c).Role(ui.RoleRow).AlignItems(ui.Stretch).AlignSelf(ui.Stretch)
+			// The stripe on every other row under the header.
+			if row.Header {
+				rowEl.Background(th.TableHeader)
+			} else {
+				if n%2 == 1 && th.TableStripe.A > 0 {
+					rowEl.Background(th.TableStripe)
+				}
+				n++
+			}
+			if st.fade != nil && b.Open {
+				if a := st.fade(row.Start); a < 1 {
+					rowEl.Opacity(a)
+				}
+			}
+			header := row.Header
+			rowEl.Children(func() {
+				k := 0
+				for cell := r + 1; cell < d.Block(r).Next; cell = d.Block(cell).Next {
+					if k >= cols {
+						break
+					}
+					s := base
+					role := ui.RoleCell
+					if header {
+						s.weight = th.StrongWeight
+						role = ui.RoleColumnHeader
+					}
+					align := ui.Start
+					switch b.Align[k] {
+					case parser.AlignCenter:
+						align = ui.Center
+					case parser.AlignRight:
+						align = ui.End
+					}
+					box := ui.Column(c).Grow(1).Basis(0).MinWidth(0).Padding(padY, padX).Role(role)
+					box.Children(func() { st.paragraph(c, cell, s).TextAlign(align) })
+					k++
+				}
+			})
+		}
 	})
 }

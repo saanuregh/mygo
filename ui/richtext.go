@@ -37,6 +37,10 @@ type Span struct {
 	// span's glyphs, a little wider than them, rather than filling the
 	// line, as code within text shows.
 	Radius float32
+	// Chip, with Radius, sets the Background's box in place of the one
+	// hugging the glyphs: as inline code's chips are drawn, the same
+	// height whatever the code's font. It only paints, taking no room.
+	Chip ChipBox
 	// PaddingX and PaddingY pad the Background, which then hugs the
 	// span's glyphs, as CSS pads an inline box: a key cap, a mention chip.
 	// PaddingX, which replaces the little that Radius widens it by, also
@@ -136,6 +140,13 @@ func (s *Span) underlineOffset() (float32, bool) {
 // letterSpacing returns the span's LetterSpacing, and whether it sets one.
 func (s *Span) letterSpacing() (float32, bool) {
 	return s.LetterSpacing, s.NoLetterSpacing || s.LetterSpacing != 0
+}
+
+// ChipBox is the box of a span's Background drawn as a chip
+// (Span.Chip): X DIPs past its glyphs on each side, from Above DIPs above
+// the baseline to Below DIPs below it.
+type ChipBox struct {
+	X, Above, Below float32
 }
 
 // RichText creates a text whose spans differ in style, over the style of
@@ -469,6 +480,11 @@ func (sp *spanPaint) backgrounds(p *Painter, line *text.Line, x, y float32) {
 		p.transform = saved.Mul(p.inlineTransform(line.Glyphs[i].Cluster))
 		defer func() { p.transform = saved }()
 		if k < 0 || sp.spans[k].Background.A == 0 {
+			return
+		}
+		if s := &sp.spans[k]; s.Radius > 0 && s.Chip != (ChipBox{}) {
+			ch, base := s.Chip, line.Baseline-s.BaselineShift
+			p.Fill(Rect{x + x0 - ch.X, y + base - ch.Above, x1 - x0 + 2*ch.X, ch.Above + ch.Below}, s.Background, s.Radius)
 			return
 		}
 		if s := &sp.spans[k]; s.Radius > 0 || s.PaddingX > 0 || s.PaddingY > 0 || s.PaddingStart > 0 {
