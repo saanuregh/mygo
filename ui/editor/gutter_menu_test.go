@@ -78,7 +78,7 @@ func TestCaretBoxIsInTheWindow(t *testing.T) {
 	ct.tt.Frame()
 	r, ok := ct.st.CaretBox()
 	lh := float32(ct.st.ed.view.lineHeight)
-	if !ok || r.Y < lh-1 || r.Y > lh+1 || r.X <= ct.st.ed.textX || r.H != lh {
-		t.Fatalf("caret box %+v (ok %v), line height %v, text left %v", r, ok, lh, ct.st.ed.textX)
+	if !ok || r.Y < lh-1 || r.Y > lh+1 || r.X <= ct.st.TextLeft() || r.H != lh {
+		t.Fatalf("caret box %+v (ok %v), line height %v, text left %v", r, ok, lh, ct.st.TextLeft())
 	}
 }

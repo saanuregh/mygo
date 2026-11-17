@@ -23,7 +23,8 @@ type block struct {
 	height float32
 	kind   blockKind
 	// For deleted lines (blockDeleted), the lines of the other text it
-	// shows; for spacers and separators, what they stand for.
+	// shows; for spacers and separators, what they stand for; for an
+	// app's block, its index among them.
 	from, to int
 	// id identifies an annotation; hunk the diff hunk it belongs to.
 	id   any
@@ -41,6 +42,9 @@ const (
 	blockSeparator
 	blockAnnotation
 	blockHeader
+	// blockApp is a block of the app's (State.Blocks); from is its index
+	// among them.
+	blockApp
 )
 
 // lineSpan is the lines from to to, inclusive.

@@ -58,6 +58,8 @@ type options struct {
 	onInlayClick  func(InlayClick) bool
 	contextMenu   func(m *ui.Menu)
 	menu          func(m *ui.Menu)
+	blocks        []Block
+	renderBlock   func(*ui.Context, ui.Element, Block)
 	gutterMenu    func(m *ui.Menu, line int)
 	noContextMenu bool
 	hoverBelow    bool
@@ -288,8 +290,9 @@ type editor struct {
 	gitDiff  *gitDiff
 	brackets bracketCache
 	// excerpt is the lines the editor shows, when not all
-	// (State.SetExcerpt).
+	// (State.SetExcerpt); blocks are the app's blocks (State.Blocks).
 	excerpt excerpt
+	blocks  appBlocks
 
 	// placed are the elements of replacements the last build placed, at
 	// the scroll of placedScroll, which a frame painting them elsewhere
