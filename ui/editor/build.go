@@ -37,6 +37,9 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 	ed.sync()
 	ed.syncGitDiff()
 	ed.frameNow = c.Now()
+	if ed.blinkAgain {
+		ed.blinkStart, ed.blinkAgain = ed.frameNow, false
+	}
 	if o.fitContent {
 		ed.builtY[0], ed.builtY[1] = ed.fitRange()
 	}

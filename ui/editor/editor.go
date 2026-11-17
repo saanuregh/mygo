@@ -85,6 +85,8 @@ type options struct {
 	findBarAbove bool
 	// paddingTop is State.PaddingTop.
 	paddingTop float32
+	// wideSidewaysRoom is State.WideSidewaysRoom.
+	wideSidewaysRoom bool
 	// decor shows a diff in the editor.
 	decor decor
 	// noScrollbar draws no vertical scroll bar, as the old side of a split
@@ -264,11 +266,15 @@ type editor struct {
 	paintedBuild int
 	focused      bool // the editor and its window have the keyboard
 	blinkStart   time.Time
-	services     ui.Services
-	chord        *Binding
-	pointer      ui.Point
-	pointerIn    bool
-	hoverLine    int
+	// blinkAgain: the selections were set between frames; the next frame
+	// starts the caret's blink, shown first (the last frame's time may be
+	// long past).
+	blinkAgain bool
+	services   ui.Services
+	chord      *Binding
+	pointer    ui.Point
+	pointerIn  bool
+	hoverLine  int
 	// inlayHovered is the hint the app was told the pointer is on, -1
 	// for none (OnInlayHover).
 	inlayHovered int
@@ -558,7 +564,7 @@ func (ed *editor) setSels(sels []sel, reveal reveal) {
 	if reveal != revealNone {
 		ed.reveal = max(ed.reveal, reveal)
 	}
-	ed.blinkStart = ed.frameNow
+	ed.blinkStart, ed.blinkAgain = ed.frameNow, true
 	ed.autoclosed = ed.autoclosed[:0]
 	// What select next, add cursor and select larger go on from.
 	ed.wholeWord = false
@@ -811,6 +817,10 @@ func (ed *editor) doReveal() {
 	if !v.wrap && w > 0 {
 		x := cr.X
 		em := v.charWidth * 2
+		if ed.o.wideSidewaysRoom {
+			w = ed.r.W - ed.textX - ed.o.marginRight
+			em = min(48, w/4)
+		}
 		if x-em < ed.scrollX {
 			ed.scrollX = max(0, x-em)
 		} else if x+em > ed.scrollX+w {

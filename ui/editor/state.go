@@ -262,6 +262,10 @@ type State struct {
 	// the pointer and scrolling go by the text's box), rather than over
 	// the text's top right corner.
 	FindBarAbove bool
+	// WideSidewaysRoom keeps room past the caret as it moves sideways of
+	// a quarter of the text's width, at most 48 DIPs, as zode's editor
+	// (view.zig applyAutoscroll), rather than two characters.
+	WideSidewaysRoom bool
 	// PaddingTop is room above the text, in the editor's background, that
 	// lines never scroll into (below the find bar while it shows above).
 	PaddingTop float32
@@ -287,11 +291,14 @@ type State struct {
 	// rather than after the match last selected. Find hides replacing;
 	// FindReplace over a query gives the replacement the focus
 	// (FindBar.FocusReplacement). Empty matches of a regular expression
-	// count.
+	// count, its \w, \d and \s (and opposites) are Unicode's, and a
+	// pattern that is not one is searched for as typed, its error still
+	// said, as zode's rure did.
 	FindFromOrigin bool
 	// FilledBrackets marks the bracket next to the caret (after it, else
 	// before it) and its partner, filled with Theme.MatchingBracket,
-	// rather than outlining the brackets around the caret.
+	// rather than outlining the brackets around the caret; with
+	// FitContent, only while the editor has the keyboard.
 	FilledBrackets bool
 	// CaretBeforeInlays draws a caret at an inlay hint's offset before
 	// the hint rather than after it.
@@ -301,14 +308,17 @@ type State struct {
 	NoOccurrences bool
 	// RoundRanges rounds the selections' corners by 3 DIPs, and draws the
 	// find bar's matches and the app's text backgrounds a DIP short of a
-	// row's top and bottom, rounded alike.
+	// row's top and bottom, rounded alike: an empty one, as an empty
+	// match, as a bar 2 DIPs wide.
 	RoundRanges bool
 	// CaretRowOnly highlights the caret's row (not every row of its
 	// wrapped line) and only while there is one caret and no selection.
 	CaretRowOnly bool
 	// GuidesFromBelow gives a blank line the indent guides of the next
 	// line with text (none after the last), not the deeper of the lines
-	// around it, and draws a line's guides beside its first row alone.
+	// around it, and draws a line's guides beside its first row alone,
+	// where the characters' columns fall, not rounded to a whole DIP (as
+	// zode's editor).
 	GuidesFromBelow bool
 	// CaretSolidFor keeps the caret shown this long after it moved or the
 	// text changed, before it blinks (shown first).
@@ -324,7 +334,8 @@ type State struct {
 	HintsFollowText bool
 	// StraightUnderlines underlines diagnostics with a straight rounded
 	// line, 2 DIPs thick, rather than a wavy one; a diagnostic of no
-	// width at a line's end with a mark 2 DIPs wide.
+	// width under the character after it, or, at a line's end, with a
+	// mark 2 DIPs wide rather than a character's.
 	StraightUnderlines bool
 	// GuidesUnderRanges paints the indent guides under the app's text
 	// ranges, the find bar's matches, the brackets and the selections,
@@ -469,7 +480,7 @@ func (st *State) options() options {
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
 		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, blocks: st.Blocks, renderBlock: st.RenderBlock, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
-		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift, findBarAbove: st.FindBarAbove, paddingTop: st.PaddingTop,
+		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift, findBarAbove: st.FindBarAbove, paddingTop: st.PaddingTop, wideSidewaysRoom: st.WideSidewaysRoom,
 		gutter: st.Gutter, lineNotes: st.LineNotes, noteFont: st.NoteFont, straightUnderlines: st.StraightUnderlines, marginRight: st.MarginRight, findFromOrigin: st.FindFromOrigin, noOccurrences: st.NoOccurrences, filledBrackets: st.FilledBrackets, caretBeforeInlays: st.CaretBeforeInlays,
 		roundRanges: st.RoundRanges, caretRowOnly: st.CaretRowOnly, guidesFromBelow: st.GuidesFromBelow, caretSolidFor: st.CaretSolidFor, fontCarets: st.FontCarets, hintsFollowText: st.HintsFollowText,
 		guidesUnderRanges: st.GuidesUnderRanges, bandsInset: st.BandsInset, pageMovesCarets: st.PageMovesCarets, blockCaretWhenEmpty: st.BlockCaretWhenEmpty, plainClicks: st.PlainClicks,
