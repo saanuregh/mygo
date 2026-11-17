@@ -346,7 +346,7 @@ func (v *view) wrapLineNow(i int) {
 	if v.styled || len(l.reps) > 0 {
 		l.faces = v.facesOf(l, nil)
 	}
-	w.set(i, len(v.wrapBreaks(l.disp, l.faces, false))+1)
+	w.set(i, len(v.wrapBreaks(l.disp, l.faces, l.segs, false))+1)
 }
 
 // shownLines returns how many lines of a side's text the diff shows. A
