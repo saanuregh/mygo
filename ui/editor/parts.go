@@ -37,6 +37,11 @@ func (f *FindBar) WholeWord() *bool     { return &f.ed.find.wholeWord }
 func (f *FindBar) Regexp() *bool        { return &f.ed.find.regex }
 func (f *FindBar) InSelection() *bool   { return &f.ed.find.inSelection }
 
+// PreserveCase is the option of replacing, to bind a toggle to: each
+// replacement takes the case pattern of the text it replaces, as the
+// function PreserveCase gives it. It changes no match.
+func (f *FindBar) PreserveCase() *bool { return &f.ed.find.preserveCase }
+
 // Replacing reports whether the bar replaces too, as Cmd+Alt+F opens it,
 // and SetReplacing shows or hides replacing, which CanReplace reports a
 // read-only editor never does.
