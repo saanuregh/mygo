@@ -101,3 +101,37 @@ func TestCodeKeepsColor(t *testing.T) {
 		t.Error("code in a quote lost the Code color with CodeKeepsColor")
 	}
 }
+
+// A table of equal columns is ringed by TableBorder, with no lines between
+// its cells.
+func TestEqualTableRingedByTableBorder(t *testing.T) {
+	src := "| Package | Before |\n|---|---|\n| src/auth | FAIL |\n| src/db | ok |\n"
+	red := ui.RGB(255, 0, 0)
+	look := func(border ui.Color) (ring, between bool) {
+		t.Helper()
+		th := &Theme{TableEqualColumns: true, TableBorder: border, TableHeader: ui.RGB(255, 255, 255), TableRadius: 0.001}
+		tt := ui.NewTester(func(c *ui.Context) { View(c, src, &Options{Theme: th}) }, 400, 300)
+		tb, ok := tt.AccessByRole(ui.RoleTable, "")
+		if !ok {
+			t.Fatal("no table")
+		}
+		r := tb.Bounds
+		img := tt.Image()
+		isRed := func(x, y float32) bool {
+			c := img.RGBAAt(int(x), int(y))
+			return c.R > 200 && c.G < 60 && c.B < 60
+		}
+		ring = isRed(r.X+r.W/4, r.Y) && isRed(r.X, r.Y+r.H/2)
+		a, _ := tt.Find("Package")
+		b, _ := tt.Find("Before")
+		for x := a.X + a.W; x < b.X; x++ {
+			if isRed(x, a.Y+a.H/2) {
+				between = true
+			}
+		}
+		return ring, between
+	}
+	if ring, between := look(red); !ring || between {
+		t.Errorf("ring %v, a line between cells %v", ring, between)
+	}
+}
