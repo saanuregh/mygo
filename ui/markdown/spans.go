@@ -378,6 +378,11 @@ func (sb *spanBuilder) inlines(from, to int, s spanStyle) {
 			cs := s
 			cs.color = sb.th.Muted
 			alt := parser.PlainText(in[k+1 : n.Next])
+			if sb.th.ImageAltAsLink {
+				cs.color, cs.inLink = sb.th.Link, true
+				sb.add(alt, n.Start, n.End, false, cs, link)
+				continue
+			}
 			if alt == "" {
 				alt = "image"
 			}

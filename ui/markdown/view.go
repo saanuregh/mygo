@@ -249,6 +249,9 @@ type viewState struct {
 	fade          func(src int) float32
 	// placed are the top-level blocks built in the frame (Blocks).
 	placed []placed
+	// indent is how far in from the outermost list's edge the text of the
+	// list items being built starts, with Theme.MarkerGap.
+	indent float32
 	// nested are the views with ShareSelection built within this one's
 	// blocks, whose text this one's selection holds, for copying it as
 	// Markdown; cur is the block being built, which a nested view is
@@ -846,6 +849,9 @@ func (st *viewState) list(c *ui.Context, i int, base spanStyle) ui.Element {
 			depth++
 		}
 	}
+	if th.MarkerGap > 0 {
+		return st.textMarkerList(c, i, depth, base)
+	}
 	width := th.em(th.ListIndent)
 	if b.Ordered {
 		last := b.Number + max(0, st.countChildren(i)-1)
@@ -879,6 +885,85 @@ func (st *viewState) list(c *ui.Context, i int, base spanStyle) ui.Element {
 			first = false
 		}
 	})
+}
+
+// textMarkerList builds a list whose markers are text (Theme.MarkerGap),
+// depth lists deep.
+func (st *viewState) textMarkerList(c *ui.Context, i, depth int, base spanStyle) ui.Element {
+	d := st.doc
+	th := &st.th
+	b := d.Block(i)
+	// From the outermost list's edge, whatever the markers around: in a
+	// box of its own, whose margin the blocks around leave alone.
+	start := float32(depth) * th.NestIndent
+	box := ui.Column(c).AlignItems(ui.Stretch)
+	box.Children(func() {
+		ui.Column(c).Role(ui.RoleList).Margin(0, 0, 0, start-st.indent).Children(func() {
+			saved := st.indent
+			defer func() { st.indent = saved }()
+			n := b.Number
+			first := true
+			for j := i + 1; j < d.Block(i).Next; j = d.Block(j).Next {
+				item := d.Block(j)
+				row := ui.Row(c).AlignItems(ui.Start).Gap(th.MarkerGap).Role(ui.RoleListItem)
+				if !first {
+					gap := th.BlockSpacing
+					if b.Tight {
+						gap = th.ItemSpacing
+					}
+					row.Margin(th.em(gap), 0, 0, 0)
+				}
+				if st.scrollTo == j {
+					// An item an anchor named (Options.AnchorBlock).
+					row.ScrollIntoView()
+					st.scrollTo = -1
+				}
+				marker := "•"
+				switch {
+				case item.Task == parser.Checked:
+					marker = "☑"
+				case item.Task != parser.NoTask:
+					marker = "☐"
+				case b.Ordered:
+					marker = itoa(n) + string(b.Marker)
+				}
+				w, _ := c.MeasureText(0, ui.Span{Text: marker, Font: th.Font, Size: th.FontSize})
+				row.Children(func() {
+					m := ui.Text(c, marker).TextColor(th.Muted).NoWrap().Shrink(0).Unselectable()
+					if st.fade != nil {
+						if a := st.fade(item.Start); a < 1 {
+							m.Opacity(a)
+						}
+					}
+					if item.Task != parser.NoTask {
+						st.taskMarker(m, j)
+					}
+					st.indent = start + w + th.MarkerGap
+					ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Children(func() { st.blocks(c, j, b.Tight, base) })
+				})
+				n++
+				first = false
+			}
+		})
+	})
+	return box
+}
+
+// taskMarker makes m, the text marker of task item j, its check box, as
+// marker makes the drawn one: a control of Options.OnTask's when set.
+func (st *viewState) taskMarker(m ui.Element, j int) {
+	item := st.doc.Block(j)
+	checked := item.Task == parser.Checked
+	m.Role(ui.RoleCheckBox).Checked(checked)
+	onTask := st.o.OnTask
+	if onTask == nil {
+		m.ReadOnly(true)
+		return
+	}
+	m.Focusable().Label(st.taskName(j))
+	if m.Clicked() {
+		onTask(lineAt(st.doc.Source(), item.Start), !checked)
+	}
 }
 
 func (st *viewState) countChildren(i int) int {
