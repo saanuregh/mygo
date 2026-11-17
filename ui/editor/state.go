@@ -255,6 +255,9 @@ type State struct {
 	// the pointer and scrolling go by the text's box), rather than over
 	// the text's top right corner.
 	FindBarAbove bool
+	// PaddingTop is room above the text, in the editor's background, that
+	// lines never scroll into (below the find bar while it shows above).
+	PaddingTop float32
 	// Gutter, when set, lays the gutter out by its sizes in place of the
 	// editor's own (GutterLayout).
 	Gutter *GutterLayout
@@ -325,8 +328,8 @@ type State struct {
 	// editor's right edge, as zode's editor drew its rows' bands.
 	BandsInset float32
 	// PageMovesCarets has Page Up and Page Down move the carets a page of
-	// the text less two rows, scrolling only as far as keeps the caret in
-	// view, rather than scrolling a page.
+	// the text below PaddingTop less two rows, scrolling only as far as
+	// keeps the caret in view, rather than scrolling a page.
 	PageMovesCarets bool
 	// BlockCaretWhenEmpty draws CursorBlock's block only for a caret
 	// with nothing selected, a bar for a selection's, as zode's Vim.
@@ -459,7 +462,7 @@ func (st *State) options() options {
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
 		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, blocks: st.Blocks, renderBlock: st.RenderBlock, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
-		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift, findBarAbove: st.FindBarAbove,
+		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift, findBarAbove: st.FindBarAbove, paddingTop: st.PaddingTop,
 		gutter: st.Gutter, lineNotes: st.LineNotes, noteFont: st.NoteFont, straightUnderlines: st.StraightUnderlines, marginRight: st.MarginRight, findFromOrigin: st.FindFromOrigin, noOccurrences: st.NoOccurrences, filledBrackets: st.FilledBrackets, caretBeforeInlays: st.CaretBeforeInlays,
 		roundRanges: st.RoundRanges, caretRowOnly: st.CaretRowOnly, guidesFromBelow: st.GuidesFromBelow, caretSolidFor: st.CaretSolidFor, fontCarets: st.FontCarets, hintsFollowText: st.HintsFollowText,
 		guidesUnderRanges: st.GuidesUnderRanges, bandsInset: st.BandsInset, pageMovesCarets: st.PageMovesCarets, blockCaretWhenEmpty: st.BlockCaretWhenEmpty, plainClicks: st.PlainClicks,

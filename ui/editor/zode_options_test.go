@@ -81,20 +81,20 @@ func TestBlockCaretWhenEmpty(t *testing.T) {
 	}
 }
 
-// PageMovesCarets: Page Down moves the caret a page of the text less two
-// rows, and scrolls only to keep it in view.
+// PageMovesCarets: Page Down moves the caret a page of the text below
+// PaddingTop less two rows, and scrolls only to keep it in view.
 func TestPageMovesCarets(t *testing.T) {
 	text := "0"
 	for i := 1; i < 100; i++ {
 		text += "\nx"
 	}
-	st := &State{Buffer: NewBuffer(text), Font: ui.Font{Family: "monospace", Size: 14}, PageMovesCarets: true}
+	st := &State{Buffer: NewBuffer(text), Font: ui.Font{Family: "monospace", Size: 14}, PaddingTop: 6, PageMovesCarets: true}
 	tt := ui.NewTester(func(c *ui.Context) { View(c, st).Fill() }, 400, 300)
 	tt.Frame()
 	lh := st.ed.view.lineHeight
 	st.Run(MovePageDown)
 	tt.Frame()
-	want := int(st.ed.viewH/lh) - 2
+	want := int((st.ed.viewH-6)/lh) - 2
 	if line := st.ed.view.text.LineOf(st.Selection().Head); line != want {
 		t.Errorf("page down to line %d, want %d", line, want)
 	}
