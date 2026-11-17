@@ -109,7 +109,13 @@ type inlay struct {
 	// index is the inlay's in the app's list (SetInlays), which a
 	// hint's pointer events tell (OnInlayHover, OnInlayClick).
 	index int
+	// swatch is Inlay.Swatch, drawn over the start of text (swatchRoom).
+	swatch ui.Color
 }
+
+// swatchRoom starts a swatch inlay's text: the room its square is drawn
+// in, no-break spaces so that a hint's trimmed spaces keep it.
+const swatchRoom = "\u00a0\u00a0"
 
 // inlayNoNewline is the kind of inlay a diff marks the last line of a
 // text without a final newline with (markEnds).

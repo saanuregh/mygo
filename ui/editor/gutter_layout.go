@@ -86,6 +86,10 @@ func (ed *editor) paintInlayChips(p *ui.Painter, l *lineLayout, row *rowLayout, 
 			continue
 		}
 		a, b := sg.disp, sg.disp+segLen(l, i)
+		// A swatch's square has no chip; the text after it has.
+		if strings.HasPrefix(l.disp[a:b], swatchRoom) {
+			a += len(swatchRoom)
+		}
 		for a < b && l.disp[a] == ' ' {
 			a++
 		}
@@ -97,6 +101,40 @@ func (ed *editor) paintInlayChips(p *ui.Painter, l *lineLayout, row *rowLayout, 
 		}
 		x0, x1 := v.xOf(l, row, a), v.xOf(l, row, b)
 		p.Fill(ui.Rect{X: ox + x0 - 2, Y: y + (l.rowHeight-h)/2, W: x1 - x0 + 4, H: h}, c, 3)
+	}
+}
+
+// paintSwatches draws the square of each swatch inlay of a row
+// (Inlay.Swatch) in its room, centred, with a faint edge so that a color
+// close to the background still shows.
+func (ed *editor) paintSwatches(p *ui.Painter, l *lineLayout, row *rowLayout, ox, y float32) {
+	if len(l.segs) == 0 {
+		return
+	}
+	v := &ed.view
+	var inl []inlay
+	for _, sg := range l.segs {
+		if sg.kind != segInlay {
+			continue
+		}
+		if inl == nil {
+			inl = v.inlaysIn(l.start, l.start+len(l.text))
+		}
+		if sg.inlay >= len(inl) || inl[sg.inlay].swatch == (ui.Color{}) || !strings.HasPrefix(l.disp[sg.disp:], swatchRoom) {
+			continue
+		}
+		a, b := sg.disp, sg.disp+len(swatchRoom)
+		if a < row.from || b > row.to {
+			continue
+		}
+		x0, x1 := v.xOf(l, row, a), v.xOf(l, row, b)
+		side := float32(math.Round(float64(min(v.ascent*0.8, x1-x0-4))))
+		if side < 4 {
+			continue
+		}
+		sq := ui.Rect{X: ox + x0 + float32(math.Round(float64(x1-x0-side)/2)), Y: y + float32(math.Round(float64(l.rowHeight-side)/2)), W: side, H: side}
+		p.Fill(sq, inl[sg.inlay].swatch, 2)
+		p.Stroke(sq, ed.theme.Text.Alpha(0.35), 2, 1)
 	}
 }
 
