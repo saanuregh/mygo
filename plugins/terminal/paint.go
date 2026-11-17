@@ -39,6 +39,9 @@ type rowCache struct {
 	wide  []int16 // the columns of wide characters
 	// holders are the runs of placeholder cells, which show images.
 	holders []holderRun
+	// shift is how far the glyphs placed so far in the row pushed those
+	// after them right (FallbackFullSize).
+	shift float32
 	// filled tells that every cell has a background of its own, other
 	// than the default, from which PaddingExtend extends.
 	filled bool
@@ -619,7 +622,7 @@ func (v *view) shapeRun(line *rowCache, text []rune, cols []int16, widths []int8
 		fit := float32(max(span, 1)) * fw
 		group := shaped[i : j+1]
 		dy := float32(0)
-		if f := fit / (x1 - x0); f < 0.95 && x1 > x0 {
+		if f := fit / (x1 - x0); f < 0.95 && x1 > x0 && !v.t.opts.FallbackFullSize {
 			// Too wide: the same text, smaller.
 			f = max(f, 0.5)
 			small := v.shape(text[first:last+1], variant, f)
@@ -632,10 +635,15 @@ func (v *view) shapeRun(line *rowCache, text []rune, cols []int16, widths []int8
 			}
 		}
 		off := (room - (x1 - x0)) / 2
-		if math.Abs(float64(off)) < 0.5/float64(v.scale) {
+		if math.Abs(float64(off)) < 0.5/float64(v.scale) || v.t.opts.FallbackFullSize {
 			off = 0
 		}
-		cellX := float32(col) * cw
+		cellX := float32(col)*cw + line.shift
+		if v.t.opts.FallbackFullSize && x1-x0 > room+0.5/v.scale {
+			// Wider than its cells: what follows goes after it, as in a
+			// line of text.
+			line.shift += x1 - x0 - room
+		}
 		if dy != out.dy {
 			if len(out.glyphs) > 0 {
 				line.runs = append(line.runs, out)
