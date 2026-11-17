@@ -1515,9 +1515,14 @@ func (p *Painter) scrollbars(e *node) {
 	// A finger is no pointer hovering, on it or after it, however it ended: only
 	// a mouse or a trackpad, as on a tablet, shows them by being over them.
 	hovered = hovered && !rt.lastPointerTouch
-	st.barsShown = !hide && (keep || hovered || dragging)
 	style := *st.barStyle
 	fade := float32(1)
+	fading := style.FadeAfter > 0 && !keep && !hide
+	if fading {
+		fade = st.barFade(rt, e, hovered, style.FadeAfter, style.FadeOver)
+		hovered = false
+	}
+	st.barsShown = !hide && (keep || hovered || dragging || fading && fade > 0)
 	if !st.barsShown {
 		// A finger shows a thin thumb on no track for a moment as it moves
 		// the content, and it fades: no press takes it.
@@ -1573,9 +1578,8 @@ func (p *Painter) scrollbars(e *node) {
 	case keep || overH:
 		horizontal = style.Hover
 	}
-	if fade < 1 {
-		vertical.A = uint8(float32(vertical.A) * fade)
-		horizontal.A = uint8(float32(horizontal.A) * fade)
+	if fade < 1 && !dragging {
+		vertical, horizontal = vertical.Alpha(fade), horizontal.Alpha(fade)
 	}
 	grow := style.ThumbWidth+2 <= style.TrackWidth
 	if g.vertical {
@@ -1584,6 +1588,37 @@ func (p *Painter) scrollbars(e *node) {
 	if g.horizontal {
 		p.scrollThumbFill(g.h, true, grow && dragging && rt.scrollDrag.horizontal, horizontal, style.Radius)
 	}
+}
+
+// barFade is how opaque a fading container's bars are (ScrollbarStyle's
+// FadeAfter): 1 for after since its content last moved, then less over
+// over, 0 after; the pointer within 10 DIPs of the right edge while they
+// show keeps them opaque.
+func (st *state) barFade(rt *engine, e *node, hovered bool, after, over time.Duration) float32 {
+	now := rt.now()
+	switch {
+	case !st.barSeen:
+		st.barSeen, st.barX, st.barY = true, st.scrollX, st.scrollY
+	case st.scrollX != st.barX || st.scrollY != st.barY:
+		st.barX, st.barY, st.barMoved = st.scrollX, st.scrollY, now
+	}
+	if st.barMoved.IsZero() {
+		return 0
+	}
+	elapsed := now.Sub(st.barMoved)
+	if hovered && elapsed < after+over && rt.pointerX >= e.x+e.w-10 {
+		st.barMoved, elapsed = now, 0
+	}
+	switch {
+	case elapsed < after:
+		rt.scheduleAt(st.barMoved.Add(after))
+		return 1
+	case elapsed < after+over:
+		rt.animating = true
+		return 1 - float32(elapsed-after)/float32(over)
+	}
+	st.barMoved = time.Time{}
+	return 0
 }
 
 // rescale returns offset off of content scrolling as far as now as far

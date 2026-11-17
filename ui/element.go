@@ -3,6 +3,7 @@ package ui
 import (
 	"math"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/internal/imagesrc"
 	"github.com/egoist/mygo/internal/platform"
@@ -1106,6 +1107,22 @@ func (e *node) ScrollbarInsets(v ...float32) *node { e.barInset = edges(v); retu
 //		Active: ui.RGBA(191, 191, 191, 0.4),
 //	})
 func (e *node) ScrollbarStyle(s ScrollbarStyle) *node { e.barStyle = &s; return e }
+
+// FadingScrollbars shows a scroll container's bars only as it scrolls,
+// rather than while it is hovered: opaque for 0.8 s after the content
+// last moved, then fading out over 0.3 s, held while the pointer is over
+// the vertical bar, as an overlay scroller and nanoui's scroll_bar_fades.
+// It sets the FadeAfter and FadeOver of its ScrollbarStyle, which a
+// ScrollbarStyle given after it replaces. It is not inherited.
+func (e *node) FadingScrollbars() *node {
+	s := ScrollbarStyle{}
+	if e.barStyle != nil {
+		s = *e.barStyle
+	}
+	s.FadeAfter, s.FadeOver = 800*time.Millisecond, 300*time.Millisecond
+	e.barStyle = &s
+	return e
+}
 
 // Scrollbars controls the overlay indicators and their pointer hit targets on
 // this scroll container. They show on hover by default. With false, scrolling

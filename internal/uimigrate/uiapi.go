@@ -218,6 +218,7 @@ var elementChains = map[string]bool{
 	"Error":                 true,
 	"ErrorMessage":          true,
 	"Expanded":              true,
+	"FadingScrollbars":      true,
 	"Fill":                  true,
 	"FillEqually":           true,
 	"FillHeight":            true,

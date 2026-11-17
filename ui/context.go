@@ -906,6 +906,12 @@ type state struct {
 	// offset and its end as the last frame left them.
 	endStarted, endFollowing bool
 	endSeenY, endMaxY        float64
+	// barSeen is whether a fading container's bars (ScrollbarStyle's
+	// FadeAfter) noted the offset, barX and barY, and barMoved when it
+	// last changed (zero: not since shown).
+	barSeen    bool
+	barX, barY float64
+	barMoved   time.Time
 	// wheel is the notches of a mouse wheel on their way through the
 	// content (wheelScroll).
 	wheel *wheelGlide
