@@ -36,6 +36,13 @@ type Options struct {
 	// router around the view, a link to #a-heading scrolls to that
 	// heading, and links of other schemes do nothing.
 	OnLink func(url string)
+	// NoLinks shows the document's own links (Markdown links, autolinks
+	// and footnote references) as text in the link's color, which a click
+	// selects rather than follows: no hand cursor, no tooltip, nothing
+	// opened, and no LinkIcon or LinkMenu, as text whose links an app does
+	// not follow. The links Resolve and CodeLink make are the app's and
+	// stay links: leave those nil to have none.
+	NoLinks bool
 	// LinkIcon, when set, makes an object at the start of a link's text,
 	// from its destination and the size of the text around it in DIPs:
 	// one on the baseline, inside the link, which stays on the line of
@@ -600,6 +607,9 @@ func (st *viewState) para(i int, base spanStyle) *para {
 	sb.notes = st.noteNumber
 	sb.math = st.o.InlineMath
 	sb.linkIcon = st.o.LinkIcon
+	if st.o.NoLinks {
+		sb.linkIcon = nil
+	}
 	sb.resolve, sb.resolvers = nil, st.o.resolvers()
 	if sb.resolvers != 0 {
 		sb.resolve = st.o.resolveInline
@@ -699,6 +709,8 @@ func (st *viewState) piece(c *ui.Context, block int, pc *piece) {
 	switch {
 	case pc.link == -1:
 		ui.RichText(c, pc.spans...)
+	case st.o.NoLinks && pc.dest == "":
+		ui.RichText(c, pc.spans...).TextColor(st.th.Link)
 	case pc.link < -1:
 		// A footnote reference: it scrolls to the footnote.
 		in := st.doc.Inlines(block)[-2-pc.link]
