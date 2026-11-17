@@ -132,6 +132,8 @@ type options struct {
 	caretSolidFor time.Duration
 	// noCaretBlink is State's NoCaretBlink.
 	noCaretBlink bool
+	// stickyLines is State's StickyLines.
+	stickyLines []int
 	// fontCarets is State's FontCarets.
 	fontCarets bool
 	// hintsFollowText is State's HintsFollowText.
