@@ -25,6 +25,7 @@ type view struct {
 	version  uint64
 	hl       Highlighter // the buffer's, as of the last frame
 	hlGen    int         // counts the highlighters the view had
+	tokGen   uint64      // the highlighter's TokensGeneration the lines are of
 	readOnly bool
 
 	font       ui.Font
@@ -588,6 +589,17 @@ func (v *view) followHighlighter() Highlighter {
 		v.hl = hl
 		v.lines.m = nil
 		v.hlGen++
+		v.tokGen = 0
+		if g, ok := hl.(TokensGenerator); ok {
+			v.tokGen = g.TokensGeneration()
+		}
+	}
+	if g, ok := hl.(TokensGenerator); ok {
+		if gen := g.TokensGeneration(); gen != v.tokGen {
+			v.tokGen = gen
+			v.lines.m = nil
+			v.invalidateStyledLines()
+		}
 	}
 	return hl
 }
