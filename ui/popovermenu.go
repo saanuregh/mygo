@@ -1477,6 +1477,9 @@ func (m *menuParts) drawnItem(d *drawnMenu, it *platform.MenuItem, mi *MenuItem,
 			if it.Icon != nil {
 				tint := color
 				accent := row.highlighted && st.Hover == (Color{}) && !(row.expanded && m.s.levels[m.level+1].hi != 0)
+				if st.IconColor != (Color{}) && !mi.danger && !accent && (it.Enabled || st.DisabledOpacity > 0) {
+					tint = st.IconColor
+				}
 				if ic := it.IconColor; ic != nil && it.Enabled && !accent {
 					// Its own color, but on the highlight, the highlight's
 					// text color.
