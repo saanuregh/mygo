@@ -551,17 +551,22 @@ type TextRange struct {
 	Italic        bool
 	Strikethrough bool
 	// Background highlights the runes, and Radius rounds its corners,
-	// which then hug the glyphs, as Span's do: code within text.
+	// which then hug the glyphs, as Span's do: code within text. Chip,
+	// with Radius, sets the Background's box as Span.Chip does.
 	Background Color
 	Radius     float32
+	Chip       ChipBox
 	// Hidden draws the runes with no width, unless the caret or an end of
 	// the selection is within or at an edge of runes RevealStart up to
 	// RevealEnd: the asterisks around a word shown bold, shown while the
 	// caret is at the word. An empty reveal range never shows them. The
 	// text keeps them: while hidden, the caret stops only at their edges,
-	// and a click on them puts it at an edge.
+	// and a click on them puts it at an edge. HiddenWidth is the width in
+	// DIPs each hidden rune takes, drawing nothing: room kept beside what
+	// they mark, as inline code's chip keeps its room past its backticks.
 	Hidden                 bool
 	RevealStart, RevealEnd int
+	HiddenWidth            float32
 
 	// widget is 1 + the index of the TextWidget drawn over the runes.
 	widget int
@@ -646,9 +651,9 @@ func (r *TextRange) take(from *TextRange, a int) {
 	case attrStrike:
 		r.Strikethrough = true
 	case attrBackground:
-		r.Background, r.Radius = from.Background, from.Radius
+		r.Background, r.Radius, r.Chip = from.Background, from.Radius, from.Chip
 	case attrHidden:
-		r.Hidden, r.RevealStart, r.RevealEnd = true, from.RevealStart, from.RevealEnd
+		r.Hidden, r.RevealStart, r.RevealEnd, r.HiddenWidth = true, from.RevealStart, from.RevealEnd, from.HiddenWidth
 	case attrWidget:
 		r.widget = from.widget
 	}
