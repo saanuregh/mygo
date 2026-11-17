@@ -62,11 +62,17 @@ type finder struct {
 }
 
 // pattern is the query as a Go regular expression: multi-line, without
-// case unless told, its classes Unicode's (unicode).
+// case unless told, its classes Unicode's and whole words between word
+// boundaries (unicode).
 func (f *finder) pattern() string {
 	pat := f.query
 	if f.unicode {
 		pat = unicodeClasses(pat)
+	}
+	if f.unicode && f.wholeWord {
+		// zode's find.zig: whole words of a pattern are what it matches
+		// between word boundaries, not its matches that are whole words.
+		pat = `\b(?:` + pat + `)\b`
 	}
 	if !f.caseSens {
 		pat = "(?i)" + pat
@@ -319,7 +325,7 @@ func (f *finder) search(ed *editor) {
 func (f *finder) scan(ed *editor, text, lower string, base int, found func(m diffRange, sub []int) bool) {
 	extra := ed.wordChars()
 	keep := func(a, b int) bool {
-		if f.wholeWord && !isWholeWord(text, a, b, extra) {
+		if f.wholeWord && !(f.regex && f.unicode) && !isWholeWord(text, a, b, extra) {
 			return false
 		}
 		if f.inSelection && len(f.scope) > 0 {
@@ -348,9 +354,21 @@ func (f *finder) scan(ed *editor, text, lower string, base int, found func(m dif
 			}
 			return
 		}
-		all := re.FindAllStringSubmatchIndex(text, maxMatches)
-		if ed.o.findFromOrigin {
-			all = withAbuttingEmpty(pat, text, all)
+		var all [][]int
+		if words, hasWords, onlyBoundaries := rureWords(pat); f.unicode && hasWords && !(onlyBoundaries && isASCII(text)) {
+			// Word assertions as rure's (find_words.go): Go's \b is
+			// ASCII's, and it has no \< or \>.
+			m, err := compileWordMatcher(words)
+			if err != nil {
+				f.err = err
+				return
+			}
+			all = m.findAll(text, maxMatches)
+		} else {
+			all = re.FindAllStringSubmatchIndex(text, maxMatches)
+			if ed.o.findFromOrigin {
+				all = withAbuttingEmpty(pat, text, all)
+			}
 		}
 		for _, m := range all {
 			// Empty matches count as FindFromOrigin's (zode's rure) do.
