@@ -1125,6 +1125,39 @@ func TestReviewedEdges(t *testing.T) {
 	}
 }
 
+// With SetWholeTextWidths, a line of text that does not wrap is as wide
+// as its text rounded up to a whole DIP, as nanoui lays it out.
+func TestWholeTextWidths(t *testing.T) {
+	widths := func(on bool) (float32, float32) {
+		SetFractionalText(true)
+		SetWholeTextWidths(on)
+		defer SetFractionalText(false)
+		defer SetWholeTextWidths(false)
+		tt := coreNewTester(func(c *context) {
+			coreRow(c).Children(func() {
+				coreText(c, "Ln 9, Col 4").FontSize(12).SingleLine().Label("single")
+				coreText(c, "Ln 9, Col 4").FontSize(12).Label("wraps").Wrap()
+			})
+		}, 400, 100)
+		single, _ := tt.Find("single")
+		wraps, _ := tt.Find("wraps")
+		return single.W, wraps.W
+	}
+	fractional, _ := widths(false)
+	single, wraps := widths(true)
+	if fractional == float32(int(fractional)) {
+		t.Skipf("the text is %v wide already whole", fractional)
+	}
+	if want := float32(int(fractional) + 1); single != want {
+		t.Errorf("a single line is %v wide, want %v (%v rounded up)", single, want, fractional)
+	}
+	// Text that may wrap but fits on a line is rounded up too, as nanoui
+	// rounds every text it does not wrap.
+	if want := float32(int(fractional) + 1); wraps != want {
+		t.Errorf("text that may wrap is %v wide, want %v", wraps, want)
+	}
+}
+
 // With OverlaysKeepAlignment, an overlay below its target that passes the
 // window's end keeps below and is moved into the window, as nanoui's
 // kit.place does; without, it lines up with the target's other end.
