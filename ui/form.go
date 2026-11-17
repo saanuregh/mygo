@@ -408,13 +408,22 @@ func joinDescription(a, b string) string {
 
 // inputBorder is the border of the box of a text input: the theme's
 // Danger while the input is not valid, its Accent while it has the focus,
-// darker while the pointer is over the box.
+// with the theme's InputFocus, darker while the pointer is over the box.
 func inputBorder(t *Theme, box, in *node) {
 	switch {
 	case in.invalid:
 		box.borderC = t.Danger
 	case in.Focused():
 		box.borderC = t.Accent
+		// The shadows go back to the built ones after painting; a copy
+		// keeps them from writing into the built slice.
+		s := t.InputFocus
+		if spread := s.Width - box.border[0]; spread > 0 {
+			box.shadows = append(slices.Clip(box.shadows), shadow{spread: spread, color: t.Accent, inset: true})
+		}
+		if s.Glow > 0 && s.Opacity > 0 {
+			box.shadows = append(slices.Clip(box.shadows), shadow{blur: s.Glow, color: t.Accent.Alpha(s.Opacity)})
+		}
 	case !t.InputNoHover && box.Hovered():
 		box.borderC = t.Border.Mix(t.Text, 0.25)
 	}

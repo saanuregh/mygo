@@ -8728,6 +8728,19 @@ func (_handle Element) Tooltip(s string) Element {
 	return wrapElement(_node.Tooltip(s))
 }
 
+// TooltipAt is Tooltip on a side of the element: AnchorTop (Tooltip's),
+// AnchorBottom, AnchorLeft or AnchorRight, centered along it, or on the
+// other side where there is no room.
+func (_handle Element) TooltipAt(s string, side Anchor) Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.TooltipAt(s, side))
+}
+
 // Top, Right, Bottom and Left place an Absolute element. On an element in
 // its parent's layout, they move it from where the layout put it, as CSS's
 // relative positioning does, without moving its siblings.

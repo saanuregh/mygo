@@ -53,7 +53,9 @@ func (ed *editor) layout(w, h, scale float32) {
 	wrap := ed.o.wrap != ed.toggledWrap
 	ww := w - ed.textX - ed.trackWidth() - 4
 	if ed.o.wrapColumn > 0 {
-		ww = min(ww, float32(ed.o.wrapColumn)*v.charWidth)
+		// Rounded up: setWrap keeps whole DIPs, and fractional advances
+		// (text.SetFractional) make the columns a hair over them.
+		ww = min(ww, float32(math.Ceil(float64(float32(ed.o.wrapColumn)*v.charWidth))))
 	}
 	v.hintsFollowText = ed.o.hintsFollowText
 	v.setWrap(wrap, max(ww, v.charWidth*8))
