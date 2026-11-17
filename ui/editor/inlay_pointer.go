@@ -119,3 +119,24 @@ func (ed *editor) pressOnInlay(x float32, y float64, ev ui.InputEvent) bool {
 	i, _, ok := ed.inlayAt(x, y)
 	return ok && ed.o.onInlayClick(InlayClick{Index: i, Mods: ev.Mods, Clicks: ev.Clicks})
 }
+
+// pressOnTrailingInlay offers a press at content x, y to the app if it is
+// on a trailing inlay's text; whether the app took it.
+func (ed *editor) pressOnTrailingInlay(x float32, y float64) bool {
+	if ed.o.onTrailingInlayClick == nil {
+		return false
+	}
+	i, ok := ed.trailingInlayAt(x, y)
+	return ok && ed.o.onTrailingInlayClick(i)
+}
+
+// pointerOnTrailingInlay is whether the pointer at x, y of the editor is on
+// a trailing inlay's text that the app takes presses on.
+func (ed *editor) pointerOnTrailingInlay(x, y float32) bool {
+	if ed.o.onTrailingInlayClick == nil || ed.regionAt(x, y) != regionText {
+		return false
+	}
+	cx, cy := ed.toContent(x, y)
+	_, ok := ed.trailingInlayAt(cx, float64(cy))
+	return ok
+}

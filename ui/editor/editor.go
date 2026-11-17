@@ -23,49 +23,50 @@ const (
 type options struct {
 	// diffSide is the side of a diff viewer the editor shows, which
 	// names it.
-	diffSide         int8
-	readOnly         bool
-	font             ui.Font
-	lineHeight       float32
-	tabSize          int
-	indent           IndentStyle
-	wrap             bool
-	wrapColumn       int
-	wrapAtSpaces     bool
-	lineNumbers      LineNumbers
-	whitespace       Whitespace
-	wrapGuides       []int
-	indentGuides     bool
-	scrollPastEnd    bool
-	scrollMargin     int
-	autoClose        bool
-	folding          bool
-	activeLine       bool
-	cursorShape      CursorShape
-	fitContent       bool
-	placeholder      string
-	label            string
-	theme            *Theme
-	bindings         []Binding
-	gutterMarks      []GutterMark
-	backgrounds      []LineBackground
-	textBgs          []TextBackground
-	diffBase         *Buffer
-	diffPlain        bool // State.DiffPlain
-	onCompletion     func(CompletionRequest)
-	onHover          func(HoverRequest)
-	onDefinition     func(int)
-	onGutterClick    func(int)
-	onChangeBarClick func(DiffHunk) bool
-	onInlayHover     func(InlayHover)
-	onInlayClick     func(InlayClick) bool
-	contextMenu      func(m *ui.Menu)
-	menu             func(m *ui.Menu)
-	blocks           []Block
-	renderBlock      func(*ui.Context, ui.Element, Block)
-	gutterMenu       func(m *ui.Menu, line int)
-	noContextMenu    bool
-	hoverBelow       bool
+	diffSide             int8
+	readOnly             bool
+	font                 ui.Font
+	lineHeight           float32
+	tabSize              int
+	indent               IndentStyle
+	wrap                 bool
+	wrapColumn           int
+	wrapAtSpaces         bool
+	lineNumbers          LineNumbers
+	whitespace           Whitespace
+	wrapGuides           []int
+	indentGuides         bool
+	scrollPastEnd        bool
+	scrollMargin         int
+	autoClose            bool
+	folding              bool
+	activeLine           bool
+	cursorShape          CursorShape
+	fitContent           bool
+	placeholder          string
+	label                string
+	theme                *Theme
+	bindings             []Binding
+	gutterMarks          []GutterMark
+	backgrounds          []LineBackground
+	textBgs              []TextBackground
+	diffBase             *Buffer
+	diffPlain            bool // State.DiffPlain
+	onCompletion         func(CompletionRequest)
+	onHover              func(HoverRequest)
+	onDefinition         func(int)
+	onGutterClick        func(int)
+	onChangeBarClick     func(DiffHunk) bool
+	onInlayHover         func(InlayHover)
+	onInlayClick         func(InlayClick) bool
+	onTrailingInlayClick func(int) bool
+	contextMenu          func(m *ui.Menu)
+	menu                 func(m *ui.Menu)
+	blocks               []Block
+	renderBlock          func(*ui.Context, ui.Element, Block)
+	gutterMenu           func(m *ui.Menu, line int)
+	noContextMenu        bool
+	hoverBelow           bool
 	// completionScore is State.CompletionScore, hoverAppOnly
 	// State.HoverAppOnly.
 	completionScore func(query, text string) (int, bool)
@@ -299,6 +300,9 @@ type editor struct {
 	// inlayHovered is the hint the app was told the pointer is on, -1
 	// for none (OnInlayHover).
 	inlayHovered int
+	// onTrailingInlay: the pointer is on a trailing inlay's text that
+	// OnTrailingInlayClick takes presses on, which its cursor shows.
+	onTrailingInlay bool
 	// note is the last note drawn, shaped (State.LineNotes).
 	note noteGlyphs
 	// region is the part of the editor under the pointer, which its
@@ -689,13 +693,20 @@ func (ed *editor) offsetAt(x float32, y float64) int {
 // decoration, rather than in the blank space after it. Such decoration keeps
 // the source caret before it, so caretRect alone cannot hit-test it.
 func (ed *editor) overTrailingInlay(x float32, y float64) bool {
+	_, ok := ed.trailingInlayAt(x, y)
+	return ok
+}
+
+// trailingInlayAt is the trailing inlay whose text is at a content point:
+// its index in the list given to SetInlays.
+func (ed *editor) trailingInlayAt(x float32, y float64) (int, bool) {
 	v := &ed.view
 	if v.text.LineCount() == 0 {
-		return false
+		return -1, false
 	}
 	line := v.heights.lineAt(y)
 	if v.heights.isHidden(line) {
-		return false
+		return -1, false
 	}
 	l := v.line(line)
 	inlays := v.inlaysIn(l.start, l.start+len(l.text))
@@ -716,11 +727,11 @@ func (ed *editor) overTrailingInlay(x float32, y float64) bool {
 			}
 			left, right := v.xOf(l, row, from), v.xOf(l, row, to)
 			if x >= left && x < right {
-				return true
+				return inlays[segment.inlay].index, true
 			}
 		}
 	}
-	return false
+	return -1, false
 }
 
 // verticalMove returns where a caret at off with goal x goes moving rows
