@@ -30,6 +30,9 @@ type diffModel struct {
 	// final newline is no line. An edited diff compares lines without
 	// them, as typing after the final newline adds that line.
 	eol bool
+	// plain: every change of either text compares the whole texts with
+	// diff.Plain (State.DiffPlain).
+	plain bool
 	// job compares the whole texts off the main thread, nil when none
 	// does: until it is done there are no hunks, and the texts are the
 	// buffers' as they are now.
@@ -128,7 +131,7 @@ func (d *diffModel) update() bool {
 		}
 		return changed
 	}
-	if oldVer != d.oldVer || newText.Len() == 0 || d.newText.Len() == 0 {
+	if d.plain || oldVer != d.oldVer || newText.Len() == 0 || d.newText.Len() == 0 {
 		d.full(oldText, newText, oldVer, newVer)
 		return true
 	}
@@ -210,7 +213,7 @@ func (d *diffModel) full(oldText, newText rope.Text, oldVer, newVer uint64) {
 	d.hunks = nil
 	j := &diffJob{oldText: oldText, newText: newText, oldVer: oldVer, newVer: newVer}
 	d.job = j
-	cmp := diffModel{eol: d.eol}
+	cmp := diffModel{eol: d.eol, plain: d.plain}
 	old, new := d.old, d.new
 	startDiff(func() {
 		j.hunks = cmp.compare(j.oldText, j.newText)
@@ -225,8 +228,11 @@ func (d *diffModel) full(oldText, newText rope.Text, oldVer, newVer uint64) {
 var startDiff = func(job func()) { go job() }
 
 // compare returns the hunks between the whole texts, from any goroutine:
-// it reads only eol of d.
+// it reads only eol and plain of d.
 func (d *diffModel) compare(oldText, newText rope.Text) []diff.Hunk {
+	if d.plain {
+		return diff.Plain(wholeLines(oldText), wholeLines(newText))
+	}
 	return offFinalLine(newText, diff.Lines(d.lines(oldText, 0, oldText.LineCount()), d.lines(newText, 0, newText.LineCount())))
 }
 
@@ -238,6 +244,16 @@ func ropeLines(r rope.Text, from, to int) []string {
 	}
 	s := r.Slice(r.LineStart(from), r.LineEnd(to-1))
 	return strings.Split(s, "\n")
+}
+
+// wholeLines returns the lines of r as diff.Plain takes them: a final
+// newline begins no other line.
+func wholeLines(r rope.Text) []string {
+	lines := ropeLines(r, 0, r.LineCount())
+	if n := len(lines); n > 0 && lines[n-1] == "" {
+		lines = lines[:n-1]
+	}
+	return lines
 }
 
 // lines returns the lines from to to of r the diff compares: with their
