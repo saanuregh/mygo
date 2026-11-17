@@ -101,6 +101,21 @@ type Theme struct {
 	TableEqualColumns                       bool
 	TableSize, TableRadius, TableLineHeight float32
 
+	// TableAlignsLeft sets every cell's text at its start, whatever
+	// alignment the table's delimiter row asks.
+	TableAlignsLeft bool
+
+	// MarkerGap, when set, draws list markers as text: "•" at every depth,
+	// an ordered item's number, "☐" or "☑" for a task (still the check box
+	// Options.OnTask makes a control), in Muted, MarkerGap DIPs before the
+	// item's text, which moves with the marker's width; a nested list
+	// starts NestIndent DIPs in per level from the edge of the outermost
+	// (zode's Zig chat, markdown_view.zig).
+	MarkerGap, NestIndent float32
+	// ImageAltAsLink shows an image within text as its description alone,
+	// in the link's look, rather than in brackets in Muted.
+	ImageAltAsLink bool
+
 	// Mark is the background of text marked with <mark>.
 	Mark Color
 	// Checkbox colors the check boxes of task lists that are checked.

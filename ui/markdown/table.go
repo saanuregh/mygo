@@ -106,10 +106,11 @@ func (st *viewState) table(c *ui.Context, i int, base spanStyle) ui.Element {
 							box.BorderWidth(0, 0, 0, 1).BorderColor(th.TableBorder)
 						}
 						align := ui.Start
-						switch b.Align[k] {
-						case parser.AlignCenter:
+						switch a := b.Align[k]; {
+						case th.TableAlignsLeft:
+						case a == parser.AlignCenter:
 							align = ui.Center
-						case parser.AlignRight:
+						case a == parser.AlignRight:
 							align = ui.End
 						}
 						box.Children(func() { st.paragraph(c, cell, s).TextAlign(align) })
@@ -174,10 +175,11 @@ func (st *viewState) equalTable(c *ui.Context, i int, base spanStyle) ui.Element
 						role = ui.RoleColumnHeader
 					}
 					align := ui.Start
-					switch b.Align[k] {
-					case parser.AlignCenter:
+					switch a := b.Align[k]; {
+					case th.TableAlignsLeft:
+					case a == parser.AlignCenter:
 						align = ui.Center
-					case parser.AlignRight:
+					case a == parser.AlignRight:
 						align = ui.End
 					}
 					box := ui.Column(c).Grow(1).Basis(0).MinWidth(0).Padding(padY, padX).Role(role)
