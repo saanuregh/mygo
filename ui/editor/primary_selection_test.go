@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -16,7 +17,7 @@ func TestSelectionGoesToPrimary(t *testing.T) {
 		tt.Frame()
 		tt.Key(ui.Shift, ui.KeyRight)
 		tt.Key(ui.Shift, ui.KeyRight)
-		tt.Frame()
+		tt.Advance(primaryIdle)
 		want := ""
 		if on {
 			want = "ab"
@@ -56,11 +57,17 @@ func TestSelectionGoesToPrimary(t *testing.T) {
 		t.Errorf("a caret changed primary to %q", got)
 	}
 
+	tt.SetPrimary("kept")
+	tt.Advance(primaryIdle)
+	if got := tt.Primary(); got != "kept" {
+		t.Errorf("an unchanged selection was offered again: %q", got)
+	}
+
 	// An editor without the focus leaves it to the one that has it.
 	st.SetSelections(Selection{Anchor: 0, Head: 3})
 	tt.SetFocused(false)
 	tt.Frame()
-	if got := tt.Primary(); got != "ghi" {
+	if got := tt.Primary(); got != "kept" {
 		t.Errorf("an unfocused editor wrote primary %q", got)
 	}
 }
@@ -99,5 +106,33 @@ func TestMiddlePressPastesPrimaryAtThePointer(t *testing.T) {
 		if got := tt.Clipboard(); got != "CLIP" {
 			t.Errorf("%+v: clipboard became %q", c, got)
 		}
+	}
+}
+
+// Selecting by keyboard offers the selection once it rests, not on each
+// change: a large selection is copied once, not once per key.
+func TestKeyboardSelectionIsOfferedOnceItRests(t *testing.T) {
+	text := strings.Repeat("abcdefgh\n", 50)
+	st := &State{Buffer: NewBuffer(text), Font: ui.Font{Family: "monospace", Size: 14}, PrimarySelection: true}
+	tt := ui.NewTester(func(c *ui.Context) { View(c, st).Fill().AutoFocus() }, 400, 200)
+	tt.Frame()
+	for range 20 {
+		tt.Key(ui.Shift, ui.KeyDown)
+		tt.Advance(primaryIdle / 4)
+		if got := tt.Primary(); got != "" {
+			t.Fatalf("offered while selecting: %q", got)
+		}
+	}
+	tt.Advance(primaryIdle)
+	if want := text[:20*9]; tt.Primary() != want {
+		t.Fatalf("after resting primary %q, want %q", tt.Primary(), want)
+	}
+	// Nothing changed: not offered again.
+	tt.SetPrimary("other")
+	tt.Key(ui.Shift, ui.KeyDown)
+	tt.Key(ui.Shift, ui.KeyUp)
+	tt.Advance(2 * primaryIdle)
+	if got := tt.Primary(); got != "other" {
+		t.Fatalf("the same selection was offered again: %q", got)
 	}
 }
