@@ -145,6 +145,14 @@ type Options struct {
 	// the Markdown of its own source.
 	ShareSelection bool
 
+	// Marks highlights ranges of the source, as a find bar's matches:
+	// Theme.Mark under the text of each one's bytes, Theme.MarkCurrent
+	// under the current one's. Text written otherwise than its source,
+	// as an entity, is marked whole when a mark touches it. Marks reach
+	// the text of paragraphs, headings, lists, quotes and tables, not
+	// code blocks or what Block and HTML build.
+	Marks []Mark
+
 	images sync.Map // url → *imageEntry
 }
 
@@ -600,7 +608,7 @@ func (st *viewState) para(i int, base spanStyle) *para {
 	st.doc.Inlines(i) // their revision
 	pc := &st.paras[i]
 	fading := st.fade != nil && st.fade(max(b.End-1, b.Start)) < 1
-	if pc.ok && pc.start == b.Start && pc.end == b.End && pc.kind == b.Kind && pc.rev == b.Revision() && pc.base == base && !pc.p.fading && !fading && !b.Healed() && st.sameResolved(i, &pc.p) {
+	if pc.ok && pc.start == b.Start && pc.end == b.End && pc.kind == b.Kind && pc.rev == b.Revision() && pc.base == base && !pc.p.fading && !fading && !b.Healed() && st.sameResolved(i, &pc.p) && sameMarks(pc.p.marked, st.o.Marks, b.Start, b.End) {
 		return &pc.p
 	}
 	pc.start, pc.end, pc.kind, pc.rev, pc.base, pc.ok = b.Start, b.End, b.Kind, b.Revision(), base, true
@@ -617,7 +625,9 @@ func (st *viewState) para(i int, base spanStyle) *para {
 	if sb.resolvers != 0 {
 		sb.resolve = st.o.resolveInline
 	}
+	sb.marks = marksWithin(sb.marks[:0], st.o.Marks, b.Start, b.End)
 	sb.build(&pc.p, base)
+	pc.p.marked = append(pc.p.marked[:0], sb.marks...)
 	return &pc.p
 }
 
