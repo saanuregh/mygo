@@ -581,6 +581,7 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 			}
 		}
 		ed.paintInlayChips(p, l, row, ox, y)
+		ed.paintSwatches(p, l, row, ox, y)
 		// The word Cmd+click goes from, as a link.
 		var link func(int, ui.Color) ui.Color
 		if a, z := ed.link[0], ed.link[1]; z > a && a >= l.start && z <= l.start+len(l.text) {
