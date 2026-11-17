@@ -79,6 +79,9 @@ type options struct {
 	renderHover       func(*ui.Context, ui.Element, *HoverCard)
 	caretCard         func(*ui.Context, ui.Element)
 	caretCardShift    float32 // State.CaretCardShift
+	// findBarAbove puts the find bar in a strip above the text
+	// (State.FindBarAbove).
+	findBarAbove bool
 	// decor shows a diff in the editor.
 	decor decor
 	// noScrollbar draws no vertical scroll bar, as the old side of a split
@@ -219,7 +222,15 @@ type editor struct {
 	anchorLine int
 	anchorOff  float64
 	reveal     reveal
-	r          ui.Rect // the element's box of the last frame, in the window
+	r          ui.Rect // the text's box of the last frame, in the window: the element's, less top
+	// top is how far the text starts below the element's top: the find
+	// bar's strip (findBarAbove) as last laid out, else 0. Pointer
+	// positions and the boxes of children placed over the text count
+	// from the element's top, so they are moved by it.
+	top float32
+	// findBarEl is the find bar's element of the frame built, which
+	// paint measures the strip by.
+	findBarEl ui.Element
 	// laidW is the width the editor was laid out at last, which an editor
 	// as high as its content lays out at again as it builds: the element's,
 	// or the half of a split diff's its row's Draw gives it while the

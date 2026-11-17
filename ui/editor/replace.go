@@ -392,7 +392,7 @@ func (ed *editor) buildReplacements(c *ui.Context) {
 	if ed.o.fitContent {
 		h = float32(v.heights.total())
 	}
-	ui.Box(c).Key("code replacements").Absolute().Left(ed.gutterW).Top(0).
+	ui.Box(c).Key("code replacements").Absolute().Left(ed.gutterW).Top(ed.top).
 		Width(max(0, ed.laidW-ed.gutterW)).Height(h).Clip().PassThrough().Children(func() {
 		for _, p := range ed.placed {
 			r, ok := v.replacementAt(p.start)

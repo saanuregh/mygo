@@ -59,6 +59,11 @@ func (ed *editor) retry(fn func() bool) bool {
 func (ed *editor) dispatch(ev ui.InputEvent) bool {
 	ed.frameNow = ev.Time
 	switch ev.Kind {
+	case ui.InputPointerDown, ui.InputPointerMove, ui.InputPointerUp, ui.InputScroll:
+		// Points of the text, below the find bar's strip.
+		ev.Y -= ed.top
+	}
+	switch ev.Kind {
 	case ui.InputKeyDown:
 		return ev.Key != ui.KeyUnknown && ed.key(ev)
 	case ui.InputCommand:
@@ -938,12 +943,12 @@ func (ed *editor) BoundsForRange(r ui.TextInputRange) (ui.Rect, ui.TextInputRang
 			w = max(1, cz.X-cr.X)
 		}
 	}
-	return ui.Rect{X: x, Y: y, W: w, H: cr.H}, r, true
+	return ui.Rect{X: x, Y: y + ed.top, W: w, H: cr.H}, r, true
 }
 
 func (ed *editor) IndexForPoint(p ui.Point) (int, bool) {
 	ed.sync()
-	cx, cy := ed.toContent(p.X, p.Y)
+	cx, cy := ed.toContent(p.X, p.Y-ed.top)
 	off := ed.offsetAt(cx, cy)
 	return ed.view.text.UTF16(off), true
 }

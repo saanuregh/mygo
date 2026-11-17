@@ -260,14 +260,21 @@ func DefaultFindBar(c *ui.Context, bar ui.Element, f *FindBar) {
 }
 
 // buildFindBar places the find bar over the editor's top right corner,
-// no wider than the editor, and builds it. Its margins, unlike its insets,
-// narrow the room it fits its content in.
+// no wider than the editor, or across its top (findBarAbove), and builds
+// it. Its margins, unlike its insets, narrow the room it fits its content
+// in.
 func (ed *editor) buildFindBar(c *ui.Context) {
 	f := &ed.find
 	f.update(ed)
 	t := c.Theme()
-	bar := ui.Box(c).Key("code find").Absolute().Top(t.Space(1)).Right(0).Margin(0, t.Space(4), 0, t.Space(1)).
-		Role(ui.RoleToolbar).Label(l10n.In(c.Locale()).Find()).Cursor(ui.CursorDefault).HandleInput(shield)
+	bar := ui.Box(c).Key("code find").Absolute()
+	if ed.o.findBarAbove {
+		bar.Top(0).Left(0).Right(0)
+		ed.findBarEl = bar
+	} else {
+		bar.Top(t.Space(1)).Right(0).Margin(0, t.Space(4), 0, t.Space(1))
+	}
+	bar.Role(ui.RoleToolbar).Label(l10n.In(c.Locale()).Find()).Cursor(ui.CursorDefault).HandleInput(shield)
 	f.builtW = ed.fitWidth()
 	render := ed.o.renderFindBar
 	if render == nil {
