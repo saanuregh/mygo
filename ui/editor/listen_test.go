@@ -3,6 +3,8 @@ package editor
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -74,6 +76,25 @@ func TestEditRemoteTellsListeners(t *testing.T) {
 	b.EditRemote(Edit{Start: 0, End: 0})
 	if len(*told) != 7 {
 		t.Fatalf("an empty remote edit was told: %q", *told)
+	}
+}
+
+// Edits from two goroutines at once are all told: the one that tells
+// the listeners last cannot stop telling just as the other's edit, seeing
+// it still telling, leaves the version it made to it.
+func TestConcurrentEditRemoteTellsTheLastVersion(t *testing.T) {
+	for round := range 3000 {
+		b := NewBuffer("")
+		var told atomic.Uint64
+		b.Listen(func(_, new Snapshot, _ []Change) { told.Store(new.Version()) })
+		var wg sync.WaitGroup
+		for range 2 {
+			wg.Go(func() { b.EditRemote(Edit{Start: 0, End: 0, Text: "x"}) })
+		}
+		wg.Wait()
+		if got, want := told.Load(), b.Snapshot().Version(); got != want {
+			t.Fatalf("round %d: told version %d after both edits returned, want %d", round, got, want)
+		}
 	}
 }
 
