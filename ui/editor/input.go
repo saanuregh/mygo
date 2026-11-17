@@ -207,6 +207,9 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		}
 		return false
 	}
+	if ed.region != regionVScroll && ed.pressStickyLine(ev) {
+		return true
+	}
 	switch ed.region {
 	case regionVScroll:
 		return ed.scrollbarPress(ev, false)

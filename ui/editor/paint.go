@@ -205,6 +205,7 @@ func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 		ed.paintLines(p, r, &f)
 	})
 	ed.paintGutter(p, r, &f)
+	ed.paintStickyLines(p, r, &f)
 	ed.paintScrollbars(p, r, &f)
 	if v.approx || more {
 		p.AnimationFrame()
