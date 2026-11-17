@@ -504,7 +504,8 @@ func (rt *engine) pointerMove(x, y float32) {
 	}
 	if moved {
 		for _, id := range rt.hover {
-			if s := rt.states[id]; s != nil && s.flags&flagTrackPointer != 0 {
+			if s := rt.states[id]; s != nil && (s.flags&flagTrackPointer != 0 ||
+				s.barsShown && s.barStyle != nil && s.barStyle.HoverWidth > 0 && s.inBarStrip(rt) != s.barWide) {
 				rt.requestFrame()
 				break
 			}

@@ -896,6 +896,9 @@ type state struct {
 	// scroll bars: they show only while it is hovered or a bar is
 	// dragged, unless it keeps them (KeepScrollbars).
 	barsShown bool
+	// barWide is whether the last frame painted the vertical thumb at its
+	// style's HoverWidth.
+	barWide bool
 	// barFlags contains the enabled scroll axes and, if any, the keep bit.
 	barFlags uint32
 	// track is the ScrollState of the last frame's element, which events

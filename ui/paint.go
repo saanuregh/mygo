@@ -1516,6 +1516,7 @@ func (p *Painter) scrollbars(e *node) {
 	// a mouse or a trackpad, as on a tablet, shows them by being over them.
 	hovered = hovered && !rt.lastPointerTouch
 	style := *st.barStyle
+	over := hovered
 	fade := float32(1)
 	fading := style.FadeAfter > 0 && !keep && !hide
 	if fading {
@@ -1582,12 +1583,29 @@ func (p *Painter) scrollbars(e *node) {
 		vertical, horizontal = vertical.Alpha(fade), horizontal.Alpha(fade)
 	}
 	grow := style.ThumbWidth+2 <= style.TrackWidth
+	vRadius := style.Radius
+	if style.HoverWidth > 0 {
+		// The vertical thumb at its hover width under the pointer at the
+		// edge, or dragged; neither widens by 2 then.
+		grow = false
+		st.barWide = g.vertical && (dragging && !rt.scrollDrag.horizontal || over && st.inBarStrip(rt))
+		if st.barWide {
+			g.v, vRadius = widenThumb(g.v, style, e.rtl())
+		}
+	}
 	if g.vertical {
-		p.scrollThumbFill(g.v, false, grow && dragging && !rt.scrollDrag.horizontal, vertical, style.Radius)
+		p.scrollThumbFill(g.v, false, grow && dragging && !rt.scrollDrag.horizontal, vertical, vRadius)
 	}
 	if g.horizontal {
 		p.scrollThumbFill(g.h, true, grow && dragging && rt.scrollDrag.horizontal, horizontal, style.Radius)
 	}
+}
+
+// inBarStrip reports whether the pointer is within 10 DIPs of the
+// element's right edge, where a vertical thumb widens (nanoui's over_bar).
+func (s *state) inBarStrip(rt *engine) bool {
+	lx, _ := s.local(s.pointer(rt))
+	return lx >= s.w-10
 }
 
 // barFade is how opaque a fading container's bars are (ScrollbarStyle's
