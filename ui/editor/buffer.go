@@ -343,6 +343,34 @@ func (b *Buffer) Edit(edits ...Edit) {
 	b.edit(edits, editOther, nil, nil)
 }
 
+// EditJoined applies edits as Edit does, but as part of the last step of
+// undo, which takes them back with it: edits that follow another edit at
+// once, as the same text typed into a second place. Typing after them
+// still joins the step as it would have without them. With no step to
+// join, they make one.
+func (b *Buffer) EditJoined(edits ...Edit) {
+	defer b.tell()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n := len(b.undo)
+	if n == 0 || b.openTx != nil {
+		b.edit(edits, editOther, nil, nil)
+		return
+	}
+	before, beforeEnds := b.text, b.ends
+	text, ends, changes, kept := b.replace(edits, nil)
+	if changes == nil {
+		return
+	}
+	b.text, b.ends = text, ends
+	b.record(changes)
+	b.redo = nil
+	back, backEnds := inverse(before, beforeEnds, changes, kept)
+	tx := &b.undo[n-1]
+	tx.edits = append(tx.edits, back)
+	tx.ends = append(tx.ends, backEnds)
+}
+
 // Transact groups the edits fn makes, through Edit and the editors
 // showing the buffer, into one step of undo.
 func (b *Buffer) Transact(fn func()) {
