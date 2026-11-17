@@ -163,6 +163,13 @@ type Highlighter interface {
 	Tokens(i int, text string, dst []Token) ([]Token, bool)
 }
 
+// TokensGenerator is a Highlighter whose tokens may change with no edit
+// of the text (colours from elsewhere, as a language server's): editors
+// lay their lines out again whenever TokensGeneration changes.
+type TokensGenerator interface {
+	TokensGeneration() uint64
+}
+
 // Range is a range of a text's bytes, Start to End.
 type Range struct{ Start, End int }
 
