@@ -549,6 +549,21 @@ func TestCodeEditorCaretBlinks(t *testing.T) {
 	}
 }
 
+// NoCaretBlink keeps a focused editor's caret shown past its blinks.
+func TestNoCaretBlinkKeepsCaretShown(t *testing.T) {
+	ct := newEditorTest(t, "", "hello|")
+	ct.st.NoCaretBlink = true
+	tt := ct.tt
+	ct.key(0, ui.KeyLeft)
+	shown := bytes.Clone(tt.Image().Pix)
+	for range 2 {
+		tt.Advance(blinkInterval)
+		if !bytes.Equal(tt.Image().Pix, shown) {
+			t.Fatal("the caret blinked off")
+		}
+	}
+}
+
 func TestCodeEditorUndo(t *testing.T) {
 	ct := newEditorTest(t, "", "|")
 	ct.typ("abc")
