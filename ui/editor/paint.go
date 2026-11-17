@@ -594,7 +594,7 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 			}
 			ed.ruleRange(p, f, l, row, ox, y, da, dz, c)
 		}
-		v.paintRow(p, l, row, ox, y, &f.colors, link)
+		v.paintRow(p, l, row, ox, y, &f.colors, ed.fadeDiagnostics(l, link))
 		if ri == len(l.rows)-1 && len(ed.o.lineNotes) > 0 {
 			ed.paintNote(p, line, ox+row.indent+row.width, y, lh)
 		}
@@ -606,6 +606,15 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				continue
 			}
 			a, b := max(d.Start-l.start, 0), min(max(d.End, d.Start+1)-l.start, len(l.text))
+			if d.Struck && d.End > d.Start {
+				f.rects = v.rangeRects(l, row, l.toDisp(a, false), l.toDisp(b, false), f.rects[:0])
+				for _, rc := range f.rects {
+					p.Fill(ui.Rect{X: ox + rc.X, Y: y + lh/2, W: rc.W, H: 1}, ct.Text, 0)
+				}
+			}
+			if d.Faded && d.Severity == SeverityHint {
+				continue
+			}
 			if ed.o.straightUnderlines && a == b {
 				// No character to underline (an empty range widened to
 				// one reaches the line's end): a mark 2 DIPs wide where
