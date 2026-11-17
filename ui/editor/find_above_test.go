@@ -118,3 +118,52 @@ func TestFindBarAboveMovesTheBlocks(t *testing.T) {
 		t.Fatalf("block at %v, was %v: want it %v lower", got.Y, before.Y, barH)
 	}
 }
+
+// TestPaddingTopMovesTheTextAndBlocks checks that the room above the text
+// (PaddingTop) moves the lines, an app's block and a click by it, and
+// adds to the find bar's strip.
+func TestPaddingTopMovesTheTextAndBlocks(t *testing.T) {
+	ct := newEditorTest(t, "", "one\ntwo")
+	st := ct.st
+	st.Blocks = []Block{{Line: 0, Below: true, Height: 20}}
+	st.RenderBlock = func(c *ui.Context, box ui.Element, b Block) {
+		box.Children(func() { ui.Text(c, "the block") })
+	}
+	ct.tt.Frame()
+	before, _ := ct.tt.Find("the block")
+	caretBefore, _ := ct.tt.TextCaret()
+	st.PaddingTop = 6
+	ct.tt.Frame()
+	ct.tt.Frame()
+	if got, _ := ct.tt.Find("the block"); got.Y != before.Y+6 {
+		t.Errorf("block at %v, was %v: want it 6 lower", got.Y, before.Y)
+	}
+	if got, _ := ct.tt.TextCaret(); got.Y != caretBefore.Y+6 {
+		t.Errorf("caret at %v, was %v: want it 6 lower", got.Y, caretBefore.Y)
+	}
+	lh := st.ed.view.lineHeight
+	// The second line is below the block.
+	ct.tt.ClickAt(st.ed.textX+1, 6+lh*1.5+20)
+	ct.tt.Frame()
+	if got := st.CursorPos(); got.Line != 1 {
+		t.Errorf("click on the second line put the caret at %+v", got)
+	}
+	ct.tt.ClickAt(st.ed.textX+1, 6+lh*0.5)
+	ct.tt.Frame()
+	if got := st.CursorPos(); got.Line != 0 {
+		t.Errorf("click on the first line put the caret at %+v", got)
+	}
+	st.FindBarAbove = true
+	st.RenderFindBar = func(c *ui.Context, bar ui.Element, f *FindBar) {
+		bar.Height(40).Children(func() { ui.Text(c, "the bar") })
+	}
+	st.Run(Find)
+	ct.tt.Frame()
+	ct.tt.Frame()
+	if st.ed.top != 46 || st.ViewportHeight() != 400-46 {
+		t.Errorf("top %v, viewport %v: want the padding below the bar", st.ed.top, st.ViewportHeight())
+	}
+	if bar, _ := ct.tt.Find("the bar"); bar.Y > 1 {
+		t.Errorf("bar at %v, want it at the top", bar.Y)
+	}
+}

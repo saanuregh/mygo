@@ -83,6 +83,8 @@ type options struct {
 	// findBarAbove puts the find bar in a strip above the text
 	// (State.FindBarAbove).
 	findBarAbove bool
+	// paddingTop is State.PaddingTop.
+	paddingTop float32
 	// decor shows a diff in the editor.
 	decor decor
 	// noScrollbar draws no vertical scroll bar, as the old side of a split
@@ -225,7 +227,7 @@ type editor struct {
 	reveal     reveal
 	r          ui.Rect // the text's box of the last frame, in the window: the element's, less top
 	// top is how far the text starts below the element's top: the find
-	// bar's strip (findBarAbove) as last laid out, else 0. Pointer
+	// bar's strip (findBarAbove) as last laid out, then paddingTop. Pointer
 	// positions and the boxes of children placed over the text count
 	// from the element's top, so they are moved by it.
 	top float32

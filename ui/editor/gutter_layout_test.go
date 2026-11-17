@@ -6,16 +6,20 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// An app's gutter sizes (State.Gutter) place the text, and the app's
-// margin (MarginRight) narrows the wrap.
-func TestGutterLayoutAndMargin(t *testing.T) {
+// An app's gutter sizes (State.Gutter) place the text, the room above it
+// (PaddingTop) shortens the view, and the app's margin (MarginRight)
+// narrows the wrap.
+func TestGutterLayoutPaddingAndMargin(t *testing.T) {
 	st := &State{Buffer: NewBuffer("one\ntwo"), Font: ui.Font{Family: "monospace", Size: 14},
-		Gutter: &GutterLayout{Left: 18, Right: 14, TextGap: 6, MinDigits: 3}}
+		Gutter: &GutterLayout{Left: 18, Right: 14, TextGap: 6, MinDigits: 3}, PaddingTop: 6}
 	tt := ui.NewTester(func(c *ui.Context) { View(c, st).Fill() }, 400, 200)
 	tt.Frame()
 	cw := st.ed.view.charWidth
 	if got, want := st.TextLeft(), 18+3*cw+14+6; got != want {
 		t.Fatalf("text at %v, want %v", got, want)
+	}
+	if got := st.ViewportHeight(); got != 194 {
+		t.Fatalf("view %v high, want 194 under the padding", got)
 	}
 	st.MarginRight = 100
 	st.NoScrollbars = true

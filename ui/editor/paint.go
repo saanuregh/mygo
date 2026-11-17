@@ -90,18 +90,21 @@ func mergeSpans(spans []lineSpan) []lineSpan {
 }
 
 // textBox is the box of the text in r, the element's: below the find
-// bar's strip while it shows (findBarAbove), as laid out this frame. A
+// bar's strip while it shows (findBarAbove), as laid out this frame, and
+// the room above the text (paddingTop) below that. A
 // strip of another height than the frame was built for builds it again,
 // for what is placed over the text.
 func (ed *editor) textBox(r ui.Rect) ui.Rect {
 	top := float32(0)
 	if ed.o.findBarAbove && ed.find.open {
-		top = ed.top
+		// The strip as last laid out, until the bar's layout says.
+		top = ed.top - ed.o.paddingTop
 		if b := ed.findBarEl.LayoutBounds(); b.H > 0 {
 			top = b.Y + b.H - r.Y
 		}
 		top = max(0, min(top, r.H))
 	}
+	top += ed.o.paddingTop
 	if top != ed.top {
 		ed.top = top
 		ed.services.Invalidate()

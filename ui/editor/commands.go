@@ -43,6 +43,9 @@ func (ed *editor) run(cmd Command) bool {
 		}
 		rows := 1
 		page := max(1, int(ed.viewH/ed.view.lineHeight)-2)
+		if ed.o.pageMovesCarets {
+			page = max(1, int((ed.viewH-ed.o.paddingTop)/ed.view.lineHeight)-2)
+		}
 		switch cmd {
 		case MoveUp, SelectUp:
 			rows = -1
