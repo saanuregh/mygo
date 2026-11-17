@@ -75,6 +75,10 @@ type Diagnostic struct {
 	Severity   Severity
 	Message    string
 	Source     string
+	// Faded draws the range's text faded (unused code: LSP's
+	// DiagnosticTag.Unnecessary), with no underline when its severity is
+	// SeverityHint. Struck draws a line through it (deprecated code).
+	Faded, Struck bool
 	// Line is the line Start was on as SetDiagnostics was given it (a
 	// language server's line), kept while edits move Start. SetDiagnostics
 	// sets it.
@@ -448,6 +452,35 @@ func (ed *editor) diagnosticsAt(off int) []Diagnostic {
 		}
 	}
 	return out
+}
+
+// fadedAlpha is how much of its color a Faded diagnostic's text keeps.
+const fadedAlpha = 0.5
+
+// fadeDiagnostics returns color with the text of l's Faded diagnostics'
+// ranges faded, given display offsets; color itself when l has none.
+func (ed *editor) fadeDiagnostics(l *lineLayout, color func(int, ui.Color) ui.Color) func(int, ui.Color) ui.Color {
+	var spans [][2]int
+	for _, d := range ed.diags {
+		if d.Faded && d.End > l.start && d.Start < l.start+len(l.text) {
+			a, b := max(d.Start-l.start, 0), min(d.End-l.start, len(l.text))
+			spans = append(spans, [2]int{l.toDisp(a, false), l.toDisp(b, false)})
+		}
+	}
+	if len(spans) == 0 {
+		return color
+	}
+	return func(d int, c ui.Color) ui.Color {
+		if color != nil {
+			c = color(d, c)
+		}
+		for _, s := range spans {
+			if d >= s[0] && d < s[1] {
+				return c.Alpha(fadedAlpha)
+			}
+		}
+		return c
+	}
 }
 
 // SeverityColor returns the color of diagnostics of a severity.
