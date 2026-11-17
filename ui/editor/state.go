@@ -147,6 +147,19 @@ type State struct {
 	// place of the editor's, for that line, as a debugger's breakpoint
 	// menu; the selections stay as they are.
 	GutterMenu func(m *ui.Menu, line int)
+	// Blocks are rows between the lines that are not text, as the lines
+	// an inline diff deleted, each showing what RenderBlock builds in
+	// it: the carets and the keys moving them pass over them, and a
+	// fold hiding a line hides its blocks. As LineBackgrounds, they keep
+	// their lines as the text is edited: compute them again when the
+	// buffer's Version changes.
+	Blocks []Block
+	// RenderBlock builds a block in the element the editor places over
+	// it, as wide as the editor but its vertical scroll bar's track and
+	// as high as the block: the editor's background shows unless it is
+	// given one, and its content lines up with the text from TextLeft.
+	// The wheel over it scrolls the editor; presses are its own.
+	RenderBlock func(c *ui.Context, box ui.Element, b Block)
 	// HoverBelow places the hover as zode's hover_card.zig: from a rect 10
 	// above the resting pointer and 26 high, or the caret's (the keyboard
 	// asked), 4 below it while there is room below for its height or 160,
@@ -431,7 +444,7 @@ func (st *State) options() options {
 		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, onCompletion: st.OnCompletion, completionScore: st.CompletionScore, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
-		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
+		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, blocks: st.Blocks, renderBlock: st.RenderBlock, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift,
 		gutter: st.Gutter, lineNotes: st.LineNotes, noteFont: st.NoteFont, straightUnderlines: st.StraightUnderlines, marginRight: st.MarginRight, findFromOrigin: st.FindFromOrigin, noOccurrences: st.NoOccurrences, filledBrackets: st.FilledBrackets, caretBeforeInlays: st.CaretBeforeInlays,

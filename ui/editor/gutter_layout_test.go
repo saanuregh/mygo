@@ -14,7 +14,7 @@ func TestGutterLayoutAndMargin(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) { View(c, st).Fill() }, 400, 200)
 	tt.Frame()
 	cw := st.ed.view.charWidth
-	if got, want := st.ed.textX, 18+3*cw+14+6; got != want {
+	if got, want := st.TextLeft(), 18+3*cw+14+6; got != want {
 		t.Fatalf("text at %v, want %v", got, want)
 	}
 	st.MarginRight = 100

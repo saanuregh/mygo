@@ -68,6 +68,8 @@ func (ed *editor) layout(w, h, scale float32) {
 	var blocks []block
 	if ds, ok := ed.o.decor.(*diffSide); ok {
 		blocks = ds.blocks()
+	} else if len(ed.o.blocks) > 0 {
+		blocks = ed.appBlocks()
 	}
 	v.heights.setHidden(ed.hiddenLines())
 	v.heights.setBlocks(blocks)
@@ -113,6 +115,7 @@ func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 	if ed.autoscroll() {
 		p.AnimationFrame()
 	}
+	ed.rebuildBlocks()
 	ct := ed.theme
 	// The lines in view: those the window shows of the element, for an
 	// editor as high as its content.

@@ -177,6 +177,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		if ds, ok := ed.o.decor.(*diffSide); ok {
 			ds.buildBlocks(c, ed)
 		} else {
+			ed.buildBlocks(c)
 			// A diff's viewer builds a side's bars over its separators.
 			ed.buildBars(c)
 		}
