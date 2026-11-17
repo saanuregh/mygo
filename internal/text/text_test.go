@@ -1582,6 +1582,30 @@ func TestSpans(t *testing.T) {
 	}
 }
 
+// A line height given as a multiple of the size is that multiple of the
+// line's largest text, as CSS's unitless line-height is.
+func TestSpansScaleLineHeight(t *testing.T) {
+	s := newSystem()
+	lay := func(text string, spans ...Span) *Layout {
+		return s.Layout(Params{Text: text, Style: Style{Size: 14, LineHeight: 1.5}, Spans: EncodeSpans(spans)})
+	}
+	plain := lay("small")
+	if h := plain.Lines[0].Height; h != 21 {
+		t.Fatalf("a line of 14 at 1.5 is %v tall, want 21", h)
+	}
+	big := lay("small\nLARGE small", Span{End: 6}, Span{End: 11, Size: 20})
+	if h := big.Lines[0].Height; h != 21 {
+		t.Errorf("a line without the large span is %v tall, want 21", h)
+	}
+	if h := big.Lines[1].Height; h != 30 {
+		t.Errorf("a line with a span of 20 is %v tall, want 30", h)
+	}
+	small := lay("tiny small", Span{End: 4, Size: 10})
+	if h := small.Lines[0].Height; h != 21 {
+		t.Errorf("a smaller span leaves the line %v tall, want 21", h)
+	}
+}
+
 func TestEncodeSpans(t *testing.T) {
 	spans := []Span{{End: 3, Family: "A, B", Size: 1.5, Weight: 600, Italic: true, LetterSpacing: -0.5, Features: "tnum", Lang: "ja"}, {End: 5, BaselineShift: -2.5}, {End: 7, SpacingSet: true, PaddingX: 3}, {End: 8, PaddingStart: 16}, {End: 9}}
 	if got := DecodeSpans(EncodeSpans(spans)); !slices.Equal(got, spans) {

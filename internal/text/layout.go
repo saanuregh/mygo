@@ -1712,6 +1712,10 @@ func line(p Params, text []rune, sl shapedLine, offset int, rtl bool, m lineMetr
 	size := p.Style.FontSize()
 	x0 := float32(math.MaxFloat32)
 	starts := *buf
+	// The largest size of the line's text: a line height given as a
+	// multiple of the size is that multiple of it, as CSS's unitless
+	// line-height is of each inline box's font.
+	largest := size
 	for _, run := range sl.runs {
 		runSize := size
 		if f := run.font; f != nil {
@@ -1720,6 +1724,9 @@ func line(p Params, text []rune, sl shapedLine, offset int, rtl bool, m lineMetr
 			if f.Size > 0 {
 				runSize = f.Size // a span of another size
 			}
+		}
+		if len(run.glyphs) > 0 {
+			largest = max(largest, runSize)
 		}
 		// A cluster holds the runes up to the next one of its run: the next
 		// glyph's, as for most text, whose clusters ascend one to a glyph.
@@ -1790,7 +1797,11 @@ func line(p Params, text []rune, sl shapedLine, offset int, rtl bool, m lineMetr
 		x0 = 0
 	}
 	line.Width = max(line.Width, 0)
-	line.Height = max(m.lineHeight, line.Ascent+line.Descent)
+	lineHeight := m.lineHeight
+	if p.Style.LineHeight > 0 && largest > size {
+		lineHeight = p.Style.LineHeight * largest
+	}
+	line.Height = max(lineHeight, line.Ascent+line.Descent)
 	line.Y = *y
 	line.Baseline = *y + (line.Height-line.Ascent-line.Descent)/2 + line.Ascent
 	if m.fractional {
