@@ -421,7 +421,7 @@ func (ed *editor) move(extend bool, fn func(sel) int) bool {
 // as moving the carets does, and closes the completions.
 func (ed *editor) endGroup() {
 	if b := ed.buf(); b != nil {
-		b.endGroup()
+		b.EndGroup()
 	}
 	ed.complete.close()
 }

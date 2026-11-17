@@ -63,6 +63,17 @@ type Buffer struct {
 	// wake are the windows showing the buffer, which a highlighter
 	// working in the background has draw again.
 	wake []ui.Services
+	// listeners are told of the edits (Listen); telling is set while
+	// tell tells them.
+	listeners []*listener
+	telling   bool
+}
+
+// listener is a function Listen told of edits, and the text it was last
+// told of.
+type listener struct {
+	fn   func(old, new Snapshot, changes []Change)
+	text Snapshot
 }
 
 // Edit replaces the bytes Start to End of a Buffer's text with Text.
@@ -291,9 +302,19 @@ func (b *Buffer) MarkSaved() {
 	b.saved, b.savedEnds = b.text, b.ends
 }
 
+// MarkSavedAt makes the text of s, a Snapshot of the buffer, the saved
+// one, as a save writing s finishes after edits made meanwhile: they
+// leave the buffer modified, and undoing them makes it unmodified again.
+func (b *Buffer) MarkSavedAt(s Snapshot) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.saved, b.savedEnds = s.t, s.ends
+}
+
 // Reset replaces the text and forgets the undo history, as for a file
 // loaded anew, and makes it the saved text.
 func (b *Buffer) Reset(text string) {
+	defer b.tell()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	old := b.text
@@ -306,6 +327,7 @@ func (b *Buffer) Reset(text string) {
 
 // Set replaces the whole text as one edit, which Undo takes back.
 func (b *Buffer) Set(text string) {
+	defer b.tell()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.edit([]Edit{{Start: 0, End: b.text.Len(), Text: text}}, editOther, nil, nil)
@@ -315,6 +337,7 @@ func (b *Buffer) Set(text string) {
 // in the text before any of them; overlapping edits are cut to follow
 // the one before.
 func (b *Buffer) Edit(edits ...Edit) {
+	defer b.tell()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.edit(edits, editOther, nil, nil)
@@ -353,6 +376,7 @@ func (b *Buffer) CanRedo() bool {
 // Undo takes back the last step of edits, and reports whether there was
 // one.
 func (b *Buffer) Undo() bool {
+	defer b.tell()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	_, ok := b.undoStep()
@@ -362,6 +386,7 @@ func (b *Buffer) Undo() bool {
 // Redo makes the step Undo took back again, and reports whether there
 // was one.
 func (b *Buffer) Redo() bool {
+	defer b.tell()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	_, ok := b.redoStep()
@@ -460,6 +485,7 @@ func inverse(before rope.Text, ends lineEnds, changes []change, kept []byte) ([]
 // text: call MarkSaved when the text is what was saved, as edits read
 // from the file on disk.
 func (b *Buffer) EditRemote(edits ...Edit) {
+	defer b.tell()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	text, ends, changes, _ := b.replace(edits, nil)
@@ -637,9 +663,11 @@ func (b *Buffer) replace(edits []Edit, codes []string) (_ rope.Text, _ lineEnds,
 	return text, ends, changes, kept
 }
 
-// endGroup ends the group of typing, so that the next edit makes a step
-// of undo of its own, as moving the caret does.
-func (b *Buffer) endGroup() {
+// EndGroup ends the group of typing that undo takes back as one step,
+// so that the next edit makes a step of its own, as moving the caret
+// does: typing within 300 ms of the last edit joins it otherwise, as in
+// Zed. A save ends it, as a mode of the app's leaving insertion does.
+func (b *Buffer) EndGroup() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.lastEdit = time.Time{}

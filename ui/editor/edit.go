@@ -26,6 +26,9 @@ func (ed *editor) applyEnds(edits []Edit, ends func(lineEnds) []string, kind edi
 	if b == nil || ed.o.readOnly || len(edits) == 0 || !ed.inExcerpt(edits) {
 		return false
 	}
+	// The buffer's listeners hear of the edit once the selections are
+	// where it puts them.
+	defer b.tell()
 	before := slices.Clone(ed.sels)
 	b.mu.Lock()
 	if b.version != ed.view.version {
@@ -422,6 +425,7 @@ func (ed *editor) undo(redo bool) bool {
 	if b == nil || ed.o.readOnly {
 		return false
 	}
+	defer b.tell()
 	b.mu.Lock()
 	var tx transaction
 	var ok bool
