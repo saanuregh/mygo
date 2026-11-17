@@ -49,6 +49,12 @@ type MenuStyle struct {
 	// IconSize is the size an item's icon (MenuItem.Icon) is drawn at; 0
 	// is 16.
 	IconSize float32
+	// IconColor draws the template icons (MenuItem.Icon) of the items
+	// that are not Danger in it, as nanoui's kit.menu drew them muted,
+	// highlighted under a Hover fill too; an item's own IconColor wins.
+	// On the Accent highlight they take its AccentText. 0 draws them in
+	// their label's color.
+	IconColor Color
 	// MarkSize is the width of the room for check marks; 0 is Space(4).
 	MarkSize float32
 	// SeparatorSpace is the room above and below a separator, whose line
