@@ -422,6 +422,9 @@ type pangoEngine struct {
 	// uiFamily is the desktop's interface font, which system-ui stands for
 	// before fontconfig's default.
 	uiFamily string
+	// fallbacks are the app's fallback families, a list Pango takes
+	// after every style's (setFallbacks).
+	fallbacks string
 	// The cairo antialiasing, hint style and subpixel order of the
 	// desktop's settings (setFontRendering), as GTK has its labels draw.
 	antialias, hintStyle, subpixels int32
@@ -482,6 +485,24 @@ func (e *pangoEngine) setFractional(on bool) {
 		pangoLib.cairoScaledFontDestroy(sf)
 	}
 	clear(e.scaled)
+}
+
+func (e *pangoEngine) setFallbacks(families []string) {
+	e.fallbacks = strings.Join(families, ",")
+	for _, d := range e.descs {
+		pangoLib.descFree(d)
+	}
+	clear(e.descs)
+}
+
+// family is the family list Pango takes for list: pangoFamily's, then the
+// fallbacks the app gave.
+func (e *pangoEngine) family(list string, before func(generic string) string) string {
+	f := pangoFamily(list, e.uiFamily, before)
+	if e.fallbacks != "" {
+		f += "," + e.fallbacks
+	}
+	return f
 }
 
 func (e *pangoEngine) setUIFamily(family string) {
@@ -682,7 +703,7 @@ func (e *pangoEngine) desc(style Style) uintptr {
 		clear(e.descs)
 	}
 	d := l.descNew()
-	l.descSetFamily(d, pangoFamily(key.Family, e.uiFamily, nil))
+	l.descSetFamily(d, e.family(key.Family, nil))
 	l.descSetWeight(d, int32(key.Weight))
 	if key.Italic {
 		l.descSetStyle(d, pangoStyleItalic)
@@ -1004,7 +1025,7 @@ func (e *pangoEngine) attributes(style Style, spans []Span, text []rune, kept []
 			continue
 		}
 		if sp.Family != "" {
-			add(l.attrFamilyNew(pangoFamily(sp.Family, e.uiFamily, nil)), b0, b1)
+			add(l.attrFamilyNew(e.family(sp.Family, nil)), b0, b1)
 		}
 		if sp.Size > 0 {
 			add(l.attrSizeAbsoluteNew(int32(math.Round(float64(sp.Size)*pangoScale))), b0, b1)
@@ -1038,7 +1059,7 @@ func (e *pangoEngine) attributes(style Style, spans []Span, text []rune, kept []
 	// font the language picks goes before the generic families.
 	for _, r := range han {
 		before := func(generic string) string { return e.hanFamily(r.lang, generic) }
-		add(l.attrFamilyNew(pangoFamily(r.family, e.uiFamily, before)), at[r.start], at[r.end])
+		add(l.attrFamilyNew(e.family(r.family, before)), at[r.start], at[r.end])
 	}
 	for _, k := range kept {
 		add(l.attrAllowBreaksNew(int32(gFalse)), at[k[0]], at[k[1]])

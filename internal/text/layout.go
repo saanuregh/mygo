@@ -444,6 +444,9 @@ type System struct {
 	// rasterizing text, if the app gave them (SetFontRendering).
 	uiFamily  string
 	rendering *[3]string
+	// fallbacks are the families tried for what a style's families lack,
+	// before the system's choice (SetFallbackFamilies).
+	fallbacks []string
 	// families are the system's font families as FontFamilies last listed
 	// them, while listed; RegisterFont forgets them, counting familiesGen.
 	families    []FontFamily
@@ -501,8 +504,8 @@ type System struct {
 	subpixel bool
 	// fractional: SetFractional.
 	fractional bool
-	// appGen is the app's settings (SetAppFractional) a System New made
-	// took last.
+	// appGen is the app's settings (SetAppFractional,
+	// SetAppFallbackFamilies) a System New made took last.
 	appGen uint64
 	// rooms counts MakeRoom calls during the frame.
 	rooms int
@@ -616,6 +619,7 @@ var appSettings struct {
 	mu         sync.Mutex
 	gen        atomic.Uint64
 	fractional bool
+	fallbacks  []string
 }
 
 // SetAppFractional sets SetFractional in Shared and in every System New
@@ -630,17 +634,29 @@ func SetAppFractional(on bool) {
 	Shared().SetFractional(on)
 }
 
+// SetAppFallbackFamilies sets SetFallbackFamilies in Shared and in every
+// System New makes, as SetAppFractional does.
+func SetAppFallbackFamilies(families ...string) {
+	appSettings.mu.Lock()
+	appSettings.fallbacks = slices.Clone(families)
+	appSettings.gen.Add(1)
+	appSettings.mu.Unlock()
+	Shared().SetFallbackFamilies(families...)
+}
+
 // takeAppSettings takes in a System New made the app's settings changed
-// since it last looked (SetAppFractional). s.mu is held.
+// since it last looked (SetAppFractional, SetAppFallbackFamilies). s.mu
+// is held.
 func (s *System) takeAppSettings() {
 	if !s.apart || appSettings.gen.Load() == s.appGen {
 		return
 	}
 	appSettings.mu.Lock()
 	s.appGen = appSettings.gen.Load()
-	fractional := appSettings.fractional
+	fractional, fallbacks := appSettings.fractional, appSettings.fallbacks
 	appSettings.mu.Unlock()
 	s.setFractional(fractional)
+	s.setFallbackFamilies(fallbacks)
 }
 
 // takeAppFonts registers in a System New made the app's fonts registered
@@ -671,6 +687,9 @@ func (s *System) engine() engine {
 		s.eng = newEngine()
 		if u, ok := s.eng.(uiFamilySetter); ok {
 			u.setUIFamily(s.uiFamily)
+		}
+		if f, ok := s.eng.(fallbackSetter); ok && len(s.fallbacks) > 0 {
+			f.setFallbacks(s.fallbacks)
 		}
 		if f, ok := s.eng.(fontRenderer); ok && s.rendering != nil {
 			r := s.rendering
@@ -709,6 +728,10 @@ type shapingKeeper interface {
 // uiFamilySetter is an engine that takes the family of the desktop's
 // interface font from the app.
 type uiFamilySetter interface{ setUIFamily(family string) }
+
+// fallbackSetter is an engine that takes the families to try for
+// characters a style's families lack from the app.
+type fallbackSetter interface{ setFallbacks(families []string) }
 
 // fontRenderer is an engine that takes the desktop's settings for
 // rasterizing text from the app (platform.FontRendering).
@@ -799,6 +822,35 @@ func (s *System) SetUIFamily(family string) {
 		clear(s.fonts)
 		s.clearLayouts()
 		clear(s.marks)
+	}
+}
+
+// SetFallbackFamilies sets the families tried, in order, for a character
+// a style's own families lack, before the system's choice: after every
+// family list, as if it went on with them. Pango on Linux takes them;
+// other engines, whose system fallbacks know the platform's fonts,
+// ignore them. A System New makes takes SetAppFallbackFamilies' families
+// at its next layout after the app changes them, which a call here
+// overrides until then.
+func (s *System) SetFallbackFamilies(families ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.setFallbackFamilies(families)
+}
+
+// setFallbackFamilies is SetFallbackFamilies with s.mu held.
+func (s *System) setFallbackFamilies(families []string) {
+	if slices.Equal(families, s.fallbacks) {
+		return
+	}
+	s.fallbacks = slices.Clone(families)
+	if f, ok := s.eng.(fallbackSetter); ok {
+		f.setFallbacks(s.fallbacks)
+		s.gen++
+		clear(s.fonts)
+		s.clearLayouts()
+		clear(s.marks)
+		clear(s.digitCells)
 	}
 }
 

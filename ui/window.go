@@ -51,6 +51,13 @@ func RegisterFont(data []byte, family string) error {
 // positions. A Tester's window measures as the app's windows do.
 func SetFractionalText(on bool) { text.SetAppFractional(on) }
 
+// SetFallbackFonts sets the families, in order, that draw the characters
+// a text's own fonts lack, before the system's choice, as an app drawing
+// text itself would (nanoui: Noto Sans, then DejaVu Sans). On Linux;
+// other systems keep their own fallbacks. A Tester's window takes them
+// too.
+func SetFallbackFonts(families ...string) { text.SetAppFallbackFamilies(families...) }
+
 // A FontFamily is a font family text can use, as FontFamilies lists it.
 type FontFamily struct {
 	// Name is the family as Font and Theme take it.
