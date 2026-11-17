@@ -11,7 +11,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -74,7 +73,13 @@ func (a *Application) RequestSingleInstanceLock() bool {
 		}
 		return true
 	}
-	path := singleInstanceSocket(singleInstanceKey(a.Name()))
+	path, err := singleInstanceSocket(singleInstanceKey(a.Name()))
+	if err != nil {
+		// A socket others could reach would take their command lines,
+		// or hand ours to them: run as the only instance instead.
+		log.Printf("mygo: %s runs without the single instance lock: %v (RequestSingleInstanceLock)", a.Name(), err)
+		return true
+	}
 	wd, _ := os.Getwd()
 	// Read before GTK starts in this process: it takes the token from the
 	// environment.
@@ -201,6 +206,11 @@ func acceptSecondInstances(ln net.Listener) {
 		if err != nil {
 			return
 		}
+		if !peerAllowed(conn) {
+			log.Printf("mygo: refused a command line from a process of another user (RequestSingleInstanceLock)")
+			conn.Close()
+			continue
+		}
 		go func() {
 			defer conn.Close()
 			_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
@@ -249,17 +259,17 @@ func singleInstanceKey(name string) string {
 	return name
 }
 
-// singleInstanceSocket returns a short per-user socket path; Unix socket
-// paths are limited to about 100 bytes.
-func singleInstanceSocket(name string) string {
+// singleInstanceSocket returns the socket path of the app named name, in
+// a folder only the user can reach (singleInstanceFolder), or why there is
+// none.
+func singleInstanceSocket(name string) (string, error) {
 	sum := sha256.Sum256([]byte(name))
-	file := "mygo-" + strconv.Itoa(os.Getuid()) + "-" + hex.EncodeToString(sum[:6]) + ".sock"
-	for _, dir := range []string{os.Getenv("XDG_RUNTIME_DIR"), os.TempDir(), "/tmp"} {
-		if dir != "" && len(filepath.Join(dir, file)) < 100 {
-			return filepath.Join(dir, file)
-		}
+	file := hex.EncodeToString(sum[:6]) + ".sock"
+	dir, err := singleInstanceFolder(file)
+	if err != nil {
+		return "", err
 	}
-	return filepath.Join("/tmp", file)
+	return filepath.Join(dir, file), nil
 }
 
 // singleInstanceLockPath returns the path of the lock file next to the
