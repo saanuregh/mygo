@@ -150,6 +150,12 @@ type Options struct {
 	// a DIP, as nanoui's terminals have them; without it cells are whole
 	// pixels, rounded up. The program is told whole pixels either way.
 	FractionalCells bool
+	// FallbackFullSize draws every glyph at its font's size from its
+	// cell's start, a fallback font's wider than its cells (✘, ⇡) pushing
+	// the row's text after it right rather than shrunk and centered, as
+	// nanoui's terminals drew a row as a line of text (backgrounds, the
+	// cursor and the selection keep the cells).
+	FallbackFullSize bool
 	// Scrollback is about how many bytes of output the terminal keeps above
 	// the screen: 10 MB when zero, none when negative.
 	Scrollback int
