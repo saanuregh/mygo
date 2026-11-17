@@ -150,6 +150,11 @@ type State struct {
 	// OnGutterClick is called for a click on a line's number, as to set a
 	// breakpoint.
 	OnGutterClick func(line int)
+	// OnChangeBarClick is told of a press on a change bar (or a deletion's
+	// wedge) against DiffBase, with that bar's hunk; true takes the press
+	// (OnGutterClick is not called). The bar's strip is its 3 DIPs and 3
+	// more each side. The pointer is a hand over a bar while it is set.
+	OnChangeBarClick func(h DiffHunk) bool
 	// ContextMenu adds items to the editor's context menu, after its
 	// own (or Menu's).
 	ContextMenu func(m *ui.Menu)
@@ -496,7 +501,7 @@ func (st *State) options() options {
 		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, diffPlain: st.DiffPlain, onCompletion: st.OnCompletion, completionScore: st.CompletionScore, onHover: st.OnHover, onDefinition: st.OnDefinition,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
-		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, menu: st.Menu, blocks: st.Blocks, renderBlock: st.RenderBlock, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
+		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onGutterClick: st.OnGutterClick, onChangeBarClick: st.OnChangeBarClick, contextMenu: st.ContextMenu, menu: st.Menu, blocks: st.Blocks, renderBlock: st.RenderBlock, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover, caretCard: st.CaretCard, caretCardShift: st.CaretCardShift, findBarAbove: st.FindBarAbove, paddingTop: st.PaddingTop, wideSidewaysRoom: st.WideSidewaysRoom, sidewaysCut: st.SidewaysCut,
 		gutter: st.Gutter, lineNotes: st.LineNotes, noteFont: st.NoteFont, straightUnderlines: st.StraightUnderlines, marginRight: st.MarginRight, findFromOrigin: st.FindFromOrigin, noOccurrences: st.NoOccurrences, filledBrackets: st.FilledBrackets, caretBeforeInlays: st.CaretBeforeInlays,
@@ -881,4 +886,18 @@ func (st *State) ensure() {
 		ed.init(st.Buffer, st.options(), ui.LightTheme())
 	}
 	ed.sync()
+}
+
+// ChangeHunks returns the hunks the gutter's bars show (nil without a
+// DiffBase), as the editor last compared them.
+func (st *State) ChangeHunks() []DiffHunk {
+	g := st.ed.gitDiff
+	if g == nil {
+		return nil
+	}
+	out := make([]DiffHunk, len(g.d.hunks))
+	for i, h := range g.d.hunks {
+		out[i] = DiffHunk{h.A0, h.A1, h.B0, h.B1}
+	}
+	return out
 }

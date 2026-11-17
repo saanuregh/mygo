@@ -646,8 +646,8 @@ func (ed *editor) bar(horizontal bool) ui.Scrollbar {
 	}
 }
 
-// gutterPress folds at a fold marker, selects lines at a number, or
-// calls OnGutterClick.
+// gutterPress gives a change bar's press to OnChangeBarClick, folds at a
+// fold marker, selects lines at a number, or calls OnGutterClick.
 func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 	_, cy := ed.toContent(ev.X, ev.Y)
 	line := ed.view.heights.lineAt(cy)
@@ -662,6 +662,9 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 		if ed.o.decor.blockInput(ed, nil, ev, ui.Rect{Y: float32(g.rows - ed.scrollY), H: ed.view.lineHeight, W: ed.gutterW}) {
 			return true
 		}
+	}
+	if h, ok := ed.changeBarAt(ev.X, line); ok && ed.o.onChangeBarClick(h) {
+		return true
 	}
 	inFolds := ev.X >= ed.foldX()
 	if g := ed.gutterLayout(); g != nil {

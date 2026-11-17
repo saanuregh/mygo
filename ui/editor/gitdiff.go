@@ -131,3 +131,46 @@ func (ed *editor) revertHunks() bool {
 	}
 	return ed.apply(edits, editOther, nil)
 }
+
+// changeBarX is where the change bars start, from the editor's left
+// edge.
+func (ed *editor) changeBarX() float32 {
+	if g := ed.gutterLayout(); g != nil {
+		return ed.gutterW - g.BarRight
+	}
+	x := ed.gutterW - 4 - 3
+	if ed.o.folding && ed.o.decor == nil {
+		x -= ed.view.lineHeight * 0.8
+	}
+	return x
+}
+
+// changeBarAt returns the hunk of line's bar when x, from the editor's
+// left edge, is on its strip (the bar and 3 DIPs each side) and
+// OnChangeBarClick is set.
+func (ed *editor) changeBarAt(x float32, line int) (DiffHunk, bool) {
+	g := ed.gitDiff
+	if g == nil || ed.o.onChangeBarClick == nil || g.status(line) == 0 {
+		return DiffHunk{}, false
+	}
+	if bx := ed.changeBarX(); x < bx-3 || x >= bx+3+3 {
+		return DiffHunk{}, false
+	}
+	h := g.d.hunks[g.d.hunkAtNew(line)]
+	return DiffHunk{h.A0, h.A1, h.B0, h.B1}, true
+}
+
+// onChangeBar reports whether the pointer is on a bar OnChangeBarClick
+// would be told of.
+func (ed *editor) onChangeBar() bool {
+	if ed.gitDiff == nil || ed.o.onChangeBarClick == nil {
+		return false
+	}
+	_, cy := ed.toContent(ed.pointer.X, ed.pointer.Y)
+	line := ed.view.heights.lineAt(cy)
+	if g := ed.view.heights.geometry(line); cy < g.rows || cy >= g.below {
+		return false
+	}
+	_, ok := ed.changeBarAt(ed.pointer.X, line)
+	return ok
+}

@@ -1069,12 +1069,9 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 				ed.paintGutterMark(p, hm, r.X, numLeft, ny, lh)
 			}
 			// Change bars.
-			barX := r.X + ed.gutterW - 4 - 3
-			if ed.o.folding && ed.o.decor == nil {
-				barX -= lh * 0.8
-			}
+			barX := r.X + ed.changeBarX()
 			if gl != nil {
-				ed.paintChangeBar(p, r.X+ed.gutterW-gl.BarRight, y, rowsH, line)
+				ed.paintChangeBar(p, barX, y, rowsH, line)
 			} else if ed.gitDiff != nil {
 				switch ed.gitDiff.status(line) {
 				case 1:

@@ -95,6 +95,8 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 	switch {
 	case ed.link[1] > ed.link[0]:
 		e.Cursor(ui.CursorPointer)
+	case ed.region == regionGutter && ed.pointerIn && ed.onChangeBar():
+		e.Cursor(ui.CursorPointer)
 	case ed.region == regionText:
 		e.Cursor(ui.CursorText)
 	default:
