@@ -97,6 +97,8 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		e.Cursor(ui.CursorPointer)
 	case ed.region == regionGutter && ed.pointerIn && ed.onChangeBar():
 		e.Cursor(ui.CursorPointer)
+	case ed.onMark():
+		e.Cursor(ui.CursorPointer)
 	case ed.region == regionText && ed.onTrailingInlay && ed.o.onTrailingInlayClick != nil:
 		e.Cursor(ui.CursorPointer)
 	case ed.region == regionText:
@@ -152,6 +154,11 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		}
 	}
 	e.Children(func() {
+		// A clickable mark's tip, by a box over the mark that lets the
+		// press through to the editor.
+		if b, ok := ed.hoverMark(); ok && b.mark.Tip != "" {
+			ui.Box(c).Key("gutter mark tip").Absolute().Left(b.box.X).Top(ed.top+b.box.Y).Size(b.box.W, b.box.H).Cursor(ui.CursorPointer).Tooltip(b.mark.Tip)
+		}
 		// Popups attach to boxes at the caret, or at the text hovered.
 		anchor := func(key string, at int, shift float32) (ui.Element, bool) {
 			cr, ok := ed.caretRect(at)

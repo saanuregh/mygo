@@ -484,6 +484,12 @@ type GutterMark struct {
 	Shape  GutterShape
 	Size   float32
 	Beside bool
+	// OnClick, when set, is called for a press of the primary button in
+	// the mark's box, after a change bar's (OnChangeBarClick) and before
+	// OnGutterClick, which the press then does not reach. The pointer is
+	// a hand over it, and Tip a tooltip by it.
+	OnClick func()
+	Tip     string
 }
 
 // LineBackground fills lines First to Last, from 0, with Color. The lines

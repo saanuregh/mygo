@@ -1002,6 +1002,7 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 	h := &v.heights
 	lh := v.lineHeight
 	gutter := ui.Rect{X: r.X, Y: r.Y, W: ed.gutterW, H: r.H}
+	ed.markBoxes = ed.markBoxes[:0]
 	numbersOn := ed.numbersOn()
 	cur := v.text.LineOf(ed.primary().head)
 	p.Clip(gutter, 0, func() {

@@ -208,6 +208,9 @@ type editor struct {
 	// gutterMenuLine, with a GutterMenu: the menu is the gutter's.
 	onGutterMenu   bool
 	gutterMenuLine int
+	// markBoxes are the marks with OnClick as last drawn, in the text
+	// box's coordinates.
+	markBoxes []markBox
 	// onFoldStrip: the secondary press was on GutterLayout's fold strip
 	// (FoldStripClicksText), which has no menu.
 	onFoldStrip bool
