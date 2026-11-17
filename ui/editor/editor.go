@@ -85,8 +85,10 @@ type options struct {
 	findBarAbove bool
 	// paddingTop is State.PaddingTop.
 	paddingTop float32
-	// wideSidewaysRoom is State.WideSidewaysRoom.
+	// wideSidewaysRoom is State.WideSidewaysRoom, sidewaysCut
+	// State.SidewaysCut.
 	wideSidewaysRoom bool
+	sidewaysCut      float32
 	// decor shows a diff in the editor.
 	decor decor
 	// noScrollbar draws no vertical scroll bar, as the old side of a split
@@ -818,7 +820,7 @@ func (ed *editor) doReveal() {
 		x := cr.X
 		em := v.charWidth * 2
 		if ed.o.wideSidewaysRoom {
-			w = ed.r.W - ed.textX - ed.o.marginRight
+			w = ed.r.W - ed.textX - ed.o.marginRight - ed.o.sidewaysCut
 			em = min(48, w/4)
 		}
 		if x-em < ed.scrollX {
