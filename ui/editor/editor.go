@@ -23,48 +23,49 @@ const (
 type options struct {
 	// diffSide is the side of a diff viewer the editor shows, which
 	// names it.
-	diffSide      int8
-	readOnly      bool
-	font          ui.Font
-	lineHeight    float32
-	tabSize       int
-	indent        IndentStyle
-	wrap          bool
-	wrapColumn    int
-	wrapAtSpaces  bool
-	lineNumbers   LineNumbers
-	whitespace    Whitespace
-	wrapGuides    []int
-	indentGuides  bool
-	scrollPastEnd bool
-	scrollMargin  int
-	autoClose     bool
-	folding       bool
-	activeLine    bool
-	cursorShape   CursorShape
-	fitContent    bool
-	placeholder   string
-	label         string
-	theme         *Theme
-	bindings      []Binding
-	gutterMarks   []GutterMark
-	backgrounds   []LineBackground
-	textBgs       []TextBackground
-	diffBase      *Buffer
-	diffPlain     bool // State.DiffPlain
-	onCompletion  func(CompletionRequest)
-	onHover       func(HoverRequest)
-	onDefinition  func(int)
-	onGutterClick func(int)
-	onInlayHover  func(InlayHover)
-	onInlayClick  func(InlayClick) bool
-	contextMenu   func(m *ui.Menu)
-	menu          func(m *ui.Menu)
-	blocks        []Block
-	renderBlock   func(*ui.Context, ui.Element, Block)
-	gutterMenu    func(m *ui.Menu, line int)
-	noContextMenu bool
-	hoverBelow    bool
+	diffSide         int8
+	readOnly         bool
+	font             ui.Font
+	lineHeight       float32
+	tabSize          int
+	indent           IndentStyle
+	wrap             bool
+	wrapColumn       int
+	wrapAtSpaces     bool
+	lineNumbers      LineNumbers
+	whitespace       Whitespace
+	wrapGuides       []int
+	indentGuides     bool
+	scrollPastEnd    bool
+	scrollMargin     int
+	autoClose        bool
+	folding          bool
+	activeLine       bool
+	cursorShape      CursorShape
+	fitContent       bool
+	placeholder      string
+	label            string
+	theme            *Theme
+	bindings         []Binding
+	gutterMarks      []GutterMark
+	backgrounds      []LineBackground
+	textBgs          []TextBackground
+	diffBase         *Buffer
+	diffPlain        bool // State.DiffPlain
+	onCompletion     func(CompletionRequest)
+	onHover          func(HoverRequest)
+	onDefinition     func(int)
+	onGutterClick    func(int)
+	onChangeBarClick func(DiffHunk) bool
+	onInlayHover     func(InlayHover)
+	onInlayClick     func(InlayClick) bool
+	contextMenu      func(m *ui.Menu)
+	menu             func(m *ui.Menu)
+	blocks           []Block
+	renderBlock      func(*ui.Context, ui.Element, Block)
+	gutterMenu       func(m *ui.Menu, line int)
+	noContextMenu    bool
+	hoverBelow       bool
 	// completionScore is State.CompletionScore, hoverAppOnly
 	// State.HoverAppOnly.
 	completionScore func(query, text string) (int, bool)
