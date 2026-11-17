@@ -5169,6 +5169,22 @@ func (_handle Element) Expanded(open bool) Element {
 	return wrapElement(_node.Expanded(open))
 }
 
+// FadingScrollbars shows a scroll container's bars only as it scrolls,
+// rather than while it is hovered: opaque for 0.8 s after the content
+// last moved, then fading out over 0.3 s, held while the pointer is over
+// the vertical bar, as an overlay scroller and nanoui's scroll_bar_fades.
+// It sets the FadeAfter and FadeOver of its ScrollbarStyle, which a
+// ScrollbarStyle given after it replaces. It is not inherited.
+func (_handle Element) FadingScrollbars() Element {
+	_node := _handle.node()
+	if _node == nil {
+		return Element{}
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return wrapElement(_node.FadingScrollbars())
+}
+
 // FileDragOver reports whether files dragged from another app are over
 // the element, which takes them if they are dropped, for showing it would.
 func (_handle Element) FileDragOver() bool {

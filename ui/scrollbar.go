@@ -1,5 +1,7 @@
 package ui
 
+import "time"
+
 // Scrollbar is the scroll bar of a view that scrolls itself rather than
 // through a scroll container, as a code editor or a terminal does, laid
 // out and painted as a scroll container's are, so that every bar of an app
@@ -78,6 +80,12 @@ type ScrollbarStyle struct {
 	// bar, and Active while it is dragged. Zero Thumb takes the theme's
 	// Scrollbar; zero Hover and Active take Thumb.
 	Thumb, Hover, Active Color
+	// FadeAfter, when set, shows the bars only as the content scrolls,
+	// not while the container is hovered: opaque for FadeAfter after the
+	// content last moved, then fading out over FadeOver, held while the
+	// pointer is over the vertical bar's edge, as an overlay scroller.
+	// Zero shows them on hover. It applies to scroll containers only.
+	FadeAfter, FadeOver time.Duration
 }
 
 // Resolve returns s with its zero fields filled from t, as Painter.Scrollbar
@@ -121,6 +129,9 @@ func (s ScrollbarStyle) Resolve(t *Theme) ScrollbarStyle {
 	if s.Active != (Color{}) {
 		base.Active = s.Active
 	}
+	if s.FadeAfter > 0 {
+		base.FadeAfter, base.FadeOver = s.FadeAfter, s.FadeOver
+	}
 	thumbWidth := base.ThumbWidth
 	if thumbWidth <= 0 {
 		thumbWidth = t.scrollbarWidth()
@@ -156,6 +167,7 @@ func (s ScrollbarStyle) Resolve(t *Theme) ScrollbarStyle {
 	return ScrollbarStyle{
 		TrackWidth: width, ThumbWidth: thumbWidth, Radius: radius, Square: base.Square, Flush: base.Flush,
 		MinLength: minLength, Track: base.Track, Thumb: thumb, Hover: hover, Active: active,
+		FadeAfter: base.FadeAfter, FadeOver: base.FadeOver,
 	}
 }
 
