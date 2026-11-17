@@ -15,17 +15,18 @@ import (
 // search: a query, case sensitive or not, whole words, a regular
 // expression, in the selections or everywhere, and its replacement.
 type finder struct {
-	open        bool
-	replacing   bool
-	query       string
-	replace     string
-	caseSens    bool
-	wholeWord   bool
-	regex       bool
-	inSelection bool
-	scope       []sel
-	focusQuery  bool
-	typed       string // the query as the matches were last chosen for
+	open         bool
+	replacing    bool
+	query        string
+	replace      string
+	caseSens     bool
+	wholeWord    bool
+	regex        bool
+	inSelection  bool
+	preserveCase bool
+	scope        []sel
+	focusQuery   bool
+	typed        string // the query as the matches were last chosen for
 	// The matches of the last search, and the text and options it was of;
 	// subs are a regular expression's submatches, as found in the text.
 	matches  []diffRange
@@ -551,9 +552,10 @@ func (f *finder) replaceAll(ed *editor) {
 }
 
 // textForReplacing returns the text a regular expression's replacements
-// expand their submatches from, nothing else needing it.
+// expand their submatches from, and preserving case reads the matches
+// from, nothing else needing it.
 func (f *finder) textForReplacing(ed *editor) string {
-	if !f.regex || len(f.subs) == 0 {
+	if !f.preserveCase && (!f.regex || len(f.subs) == 0) {
 		return ""
 	}
 	return ed.view.text.String()
@@ -561,16 +563,19 @@ func (f *finder) textForReplacing(ed *editor) string {
 
 // replacement returns the replacement of match i: the replace text, with
 // $1 and ${name} expanded for a regular expression, from the submatches
-// found in the whole text, as \b and ^ need the text around a match.
+// found in the whole text, as \b and ^ need the text around a match, and
+// given the match's case when preserving case.
 func (f *finder) replacement(text string, i int) string {
-	if !f.regex || i >= len(f.subs) {
-		return f.replace
+	with := f.replace
+	if f.regex && i < len(f.subs) {
+		if re, err := regexp.Compile(f.pattern()); err == nil {
+			with = string(re.ExpandString(nil, f.replace, text, f.subs[i]))
+		}
 	}
-	re, err := regexp.Compile(f.pattern())
-	if err != nil {
-		return f.replace
+	if f.preserveCase && i < len(f.matches) {
+		with = PreserveCase(text[f.matches[i].start:f.matches[i].end], with)
 	}
-	return string(re.ExpandString(nil, f.replace, text, f.subs[i]))
+	return with
 }
 
 // status is what the bar says of the matches, in the language of tx.
