@@ -41,6 +41,9 @@ type headless struct {
 	cursor        Cursor
 	ime           platform.TextInputState
 	opened        []string
+	// primary is the primary selection's text, as a Linux desktop's.
+	primary string
+
 	// escapes counts the Escapes nothing handled.
 	escapes int
 	// stack is the system's stack of screens tests give the window.
@@ -176,6 +179,9 @@ func (h *headless) writeClipboardData(d transfer.Data) {
 }
 
 func (h *headless) clipboardFormats() []transfer.Format { return h.readClipboardData(nil).Formats() }
+
+func (h *headless) readPrimary() string   { return h.primary }
+func (h *headless) writePrimary(s string) { h.primary = s }
 
 func (h *headless) startDataDrag(d transfer.Data, local any, o transfer.DragOptions, x, y float32) error {
 	h.dragData, h.dragLocal, h.dragOptions = d.Snapshot(), local, o
@@ -1207,6 +1213,12 @@ func (t *Tester) Clipboard() string { return t.h.clipboard }
 
 // SetClipboard sets the clipboard's text.
 func (t *Tester) SetClipboard(s string) { t.h.clipboard, t.h.clipboardData = s, transfer.Data{} }
+
+// Primary returns the primary selection's text the view wrote, as a Linux
+// desktop keeps it; SetPrimary sets the text a middle click pastes.
+func (t *Tester) Primary() string { return t.h.primary }
+
+func (t *Tester) SetPrimary(s string) { t.h.primary = s }
 
 // ClipboardData returns what the view copied with Services.WriteClipboardData,
 // or the text it copied; SetClipboardData puts data on the clipboard, as

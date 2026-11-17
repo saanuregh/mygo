@@ -379,6 +379,12 @@ type State struct {
 	// unfolding it: Alt+Shift+click extends the selection as Shift+click,
 	// Alt+click adds a caret.
 	PlainClicks bool
+	// PrimarySelection keeps the primary selection as Linux desktops'
+	// editors do: what the focused editor selects goes there once the
+	// selection settles, and a middle press puts the caret at the pointer
+	// and pastes it there. The clipboard is left as it is; where the
+	// system has no primary selection it does nothing.
+	PrimarySelection bool
 
 	ed editor
 }
@@ -513,6 +519,7 @@ func (st *State) options() options {
 		gutter: st.Gutter, lineNotes: st.LineNotes, noteFont: st.NoteFont, straightUnderlines: st.StraightUnderlines, marginRight: st.MarginRight, findFromOrigin: st.FindFromOrigin, noOccurrences: st.NoOccurrences, filledBrackets: st.FilledBrackets, caretBeforeInlays: st.CaretBeforeInlays,
 		roundRanges: st.RoundRanges, caretRowOnly: st.CaretRowOnly, guidesFromBelow: st.GuidesFromBelow, caretSolidFor: st.CaretSolidFor, noCaretBlink: st.NoCaretBlink, stickyLines: st.StickyLines, fontCarets: st.FontCarets, hintsFollowText: st.HintsFollowText,
 		guidesUnderRanges: st.GuidesUnderRanges, bandsInset: st.BandsInset, pageMovesCarets: st.PageMovesCarets, blockCaretWhenEmpty: st.BlockCaretWhenEmpty, plainClicks: st.PlainClicks,
+		primarySelection: st.PrimarySelection,
 	}
 }
 

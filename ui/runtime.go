@@ -51,6 +51,10 @@ type host interface {
 	readClipboardData(formats []transfer.Format) transfer.Data
 	clipboardFormats() []transfer.Format
 	writeClipboardData(transfer.Data)
+	// readPrimary and writePrimary are the primary selection's text,
+	// "" and nothing where the system has none.
+	readPrimary() string
+	writePrimary(string)
 	startDrag()
 	startDataDrag(transfer.Data, any, transfer.DragOptions, float32, float32) error
 	cancelDataDrag()

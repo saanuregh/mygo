@@ -9,3 +9,11 @@ var ErrClipboardChanged = errors.New("mygo: clipboard contents changed while rea
 // ErrClipboardPersistence means the desktop has no storage for clipboard
 // data after the owner exits (for example, X11 without a clipboard manager).
 var ErrClipboardPersistence = errors.New("mygo: desktop cannot persist clipboard contents")
+
+// PrimarySelection is the selection X11 and Wayland desktops keep beside
+// the clipboard: what was last selected, which a middle click pastes. A
+// Clipboard that has one implements it; others have none.
+type PrimarySelection interface {
+	ReadPrimaryText() string
+	WritePrimaryText(text string)
+}

@@ -125,6 +125,21 @@ func clip() ptr {
 func (clipboard) ReadText() string        { return takeStr(gtkClipboardWaitForText(clip())) }
 func (c clipboard) WriteText(text string) { _ = c.WriteData(transfer.TextData(text), false, nil) }
 
+var _ platform.PrimarySelection = clipboard{}
+
+// primary is GTK's PRIMARY selection, which owns the text written to it.
+func primary() ptr { return gtkClipboardGet(gdkAtomIntern(cs("PRIMARY"), false)) }
+
+func (clipboard) ReadPrimaryText() string { return takeStr(gtkClipboardWaitForText(primary())) }
+
+func (clipboard) WritePrimaryText(text string) {
+	if text == "" {
+		return
+	}
+	b := []byte(text)
+	gtkClipboardSetText(primary(), &b[0], int32(len(b)))
+}
+
 func (clipboard) ReadHTML() string {
 	sd := gtkClipboardWaitForContents(clip(), gdkAtomIntern(cs("text/html"), false))
 	if sd == 0 {

@@ -51,6 +51,8 @@ type Backend struct {
 	hotkeyNames      map[int]string
 	clipboard        transfer.Data
 	clipboardRelease func()
+	// Primary is the primary selection's text, as a Linux desktop's.
+	Primary string
 	// ClipboardConcealed is whether the last write marked its content
 	// confidential.
 	ClipboardConcealed bool
@@ -1194,6 +1196,10 @@ func (b *Backend) EmitClipboardChange() {
 func (c clipboard) ReadText() string   { b, _ := c.b.clipboard.Read(transfer.Text); return string(b) }
 func (c clipboard) WriteText(s string) { _ = c.WriteData(transfer.TextData(s), false, nil) }
 func (c clipboard) ReadHTML() string   { b, _ := c.b.clipboard.Read(transfer.HTML); return string(b) }
+
+func (c clipboard) ReadPrimaryText() string      { return c.b.Primary }
+func (c clipboard) WritePrimaryText(text string) { c.b.Primary = text }
+
 func (c clipboard) WriteHTML(s string) {
 	_ = c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.HTML, []byte(s)))), false, nil)
 }
