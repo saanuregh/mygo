@@ -288,6 +288,12 @@ type editor struct {
 	// primarySels are the selections as the primary selection last heard
 	// of them (State.PrimarySelection), as anchor and head.
 	primarySels [][2]int
+	// primaryRest are the selections as the last frame saw them, unchanged
+	// since primaryRestAt; primaryDragged is a drag ended since the last
+	// offer (offered at once).
+	primaryRest    [][2]int
+	primaryRestAt  time.Time
+	primaryDragged bool
 
 	// inlayHovered is the hint the app was told the pointer is on, -1
 	// for none (OnInlayHover).
