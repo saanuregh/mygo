@@ -463,6 +463,7 @@ type Window struct {
 	onLeaveFullScreen  listeners[func()]
 	onPageTitleUpdated listeners[func(*TitleEvent)]
 	onWillNavigate     listeners[func(*NavigateEvent)]
+	onWillLoadResponse listeners[func(*ResponseEvent)]
 	onDidNavigate      listeners[func(string)]
 	onDOMReady         listeners[func()]
 	onDidFinishLoad    listeners[func()]
