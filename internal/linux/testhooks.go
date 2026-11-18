@@ -1071,3 +1071,17 @@ func TestTitleButtonSizes(handle uintptr) [][2]int {
 	}
 	return sizes
 }
+
+// TestSandboxEnabled reports whether WebKit sandboxes the web processes
+// of the web context of a window's page (webkit_web_context_get_sandbox_enabled).
+func TestSandboxEnabled(handle uintptr) bool {
+	w := windowByHandle(handle)
+	if w == nil || w.web == 0 {
+		return false
+	}
+	var get func(ctx ptr) bool
+	if !bind(libWebKit, &get, "webkit_web_context_get_sandbox_enabled") {
+		return false
+	}
+	return get(webkitWebViewGetContext(w.web))
+}
