@@ -115,6 +115,8 @@ func TestWebViewIframe(t *testing.T) {
 	v.LoadURL("http://zode.test:4000/")
 	want("src", attr("src"), "http://zode.test:4000/")
 	want("sandbox of another origin", attr("sandbox"), crossOriginSandbox)
+	// The page's address (a ticket, a token) is no frame's referrer.
+	want("referrer policy", attr("referrerpolicy"), "no-referrer")
 	if !v.IsLoading() || v.URL() != "http://zode.test:4000/" {
 		t.Errorf("loading %v at %q", v.IsLoading(), v.URL())
 	}
