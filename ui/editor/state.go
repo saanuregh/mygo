@@ -143,6 +143,13 @@ type State struct {
 	// NoDefinitionLink shows no link under the pointer with Cmd held,
 	// though Cmd+click still goes to the definition.
 	NoDefinitionLink bool
+	// OnDefinitionLink, when set, asks the app what Cmd+click would go
+	// from at offset, as the pointer comes there with Cmd held: answer
+	// with SetDefinitionLink. The link then shows only over the range
+	// answered, not over every word. A place is asked once, and not while
+	// the pointer stays in the range last answered, until the text
+	// changes.
+	OnDefinitionLink func(offset int)
 	// OnInlayHover is told which inlay hint the pointer is over as it
 	// comes onto one, moves to another and leaves them (Index -1), as to
 	// show a hint's tooltip once it rests there (ShowHover at the hint's
@@ -527,7 +534,7 @@ func (st *State) options() options {
 		keepScrollbars: st.KeepScrollbars, hideScrollbars: st.NoScrollbars, scrollbar: st.Scrollbar,
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, cursorShape: st.CursorShape, fitContent: st.FitContent,
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, gutterMarks: st.GutterMarks,
-		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, diffPlain: st.DiffPlain, onCompletion: st.OnCompletion, completionScore: st.CompletionScore, onHover: st.OnHover, onDefinition: st.OnDefinition,
+		backgrounds: st.LineBackgrounds, textBgs: st.TextBackgrounds, diffBase: st.DiffBase, diffPlain: st.DiffPlain, onCompletion: st.OnCompletion, completionScore: st.CompletionScore, onHover: st.OnHover, onDefinition: st.OnDefinition, onDefinitionLink: st.OnDefinitionLink,
 		hoverDelay: st.HoverDelay, noPointerHover: st.NoPointerHover,
 		noDefinitionClick: st.NoDefinitionClick, noDefinitionLink: st.NoDefinitionLink,
 		onInlayHover: st.OnInlayHover, onInlayClick: st.OnInlayClick, onTrailingInlayClick: st.OnTrailingInlayClick, onGutterClick: st.OnGutterClick, onChangeBarClick: st.OnChangeBarClick, contextMenu: st.ContextMenu, menu: st.Menu, blocks: st.Blocks, renderBlock: st.RenderBlock, gutterMenu: st.GutterMenu, noContextMenu: st.NoContextMenu, hoverBelow: st.HoverBelow, hoverAppOnly: st.HoverAppOnly, gutterHoverMark: st.GutterHoverMark, onInput: st.OnInput, onType: st.OnType, noInputMethod: st.NoInputMethod, minDigits: 3,
@@ -820,6 +827,16 @@ func (st *State) ShowCompletions(start int, items []Completion) {
 // at a time (Cancel), before the find bar or the selections.
 func (st *State) CompletionsShown() bool { st.ensure(); return st.ed.complete.open() }
 func (st *State) HoverShown() bool       { st.ensure(); return st.ed.hover.open() }
+
+// SetDefinitionLink answers OnDefinitionLink: Cmd+click from start to
+// end goes somewhere, in the text as it is now. end <= start answers
+// that nothing there does.
+func (st *State) SetDefinitionLink(start, end int) {
+	st.ensure()
+	d := &st.ed.definitionLink
+	d.forget(st.ed.view.version)
+	d.start, d.end = start, max(start, end)
+}
 
 // ShowHover shows what the text from start to end is: text in the
 // editor's font, and what build adds, as a hover of a language server.

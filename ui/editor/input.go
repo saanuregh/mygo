@@ -325,11 +325,16 @@ func (ed *editor) clickGoesToDefinition(mods ui.Modifiers) bool {
 // go to the definition of, as the editor's link holds it.
 func (ed *editor) linkAt(mods ui.Modifiers) [2]int {
 	if !ed.clickGoesToDefinition(mods) || ed.o.noDefinitionLink || !ed.pointerIn || ed.gesture.active || ed.scrollbar.active {
+		// Cmd held again asks again, as what is there may have changed.
+		ed.definitionLink.asked = -1
 		return [2]int{}
 	}
 	off := ed.textAt(ed.pointer.X, ed.pointer.Y)
 	if off < 0 {
 		return [2]int{}
+	}
+	if ed.o.onDefinitionLink != nil {
+		return ed.askedLink(off)
 	}
 	extra := ed.wordChars()
 	a, z := wordAt(ed.view.text, off, extra)

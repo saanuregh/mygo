@@ -55,6 +55,7 @@ type options struct {
 	onCompletion         func(CompletionRequest)
 	onHover              func(HoverRequest)
 	onDefinition         func(int)
+	onDefinitionLink     func(int)
 	onGutterClick        func(int)
 	onChangeBarClick     func(DiffHunk) bool
 	onInlayHover         func(InlayHover)
@@ -314,10 +315,13 @@ type editor struct {
 	// link is the word under the pointer that Cmd+click would go to the
 	// definition of, which shows as a link while Cmd is held; none when
 	// its ends are equal.
-	link       [2]int
-	scrollbar  scrollbarDrag
-	frameNow   time.Time
-	needsBuild bool
+	link [2]int
+	// definitionLink is what the app answered of the link with Cmd held
+	// (State.OnDefinitionLink).
+	definitionLink definitionLink
+	scrollbar      scrollbarDrag
+	frameNow       time.Time
+	needsBuild     bool
 	// stale tells that an edit found the buffer edited since the editor
 	// followed it, for its command to run again (retry).
 	stale bool
