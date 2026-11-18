@@ -550,6 +550,19 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 			focus = s
 		}
 	}
+	// A value's source taking no click of its own, as a list row's
+	// content dragged to a folder, leaves the press to the element
+	// around it taking clicks, as the row, which chooses; the source
+	// takes the press once the pointer moves (handPress).
+	var dragger *state
+	if target != nil && target.drags() && target.flags&interactive == flagDraggable {
+		for _, id := range chain[slices.Index(chain, target.id)+1:] {
+			if s := rt.states[id]; s != nil && s.flags&flagClickable != 0 && s.flags&flagDisabled == 0 {
+				dragger, target = target, s
+				break
+			}
+		}
+	}
 	keep := slices.ContainsFunc(chain, func(id uint64) bool {
 		s := rt.states[id]
 		return s != nil && s.flags&flagKeepFocus != 0
@@ -603,6 +616,9 @@ func (rt *engine) pointerDown(x, y float32, button int, mods Modifiers, clicks i
 	}
 	rt.pressed, rt.pressButton, rt.pressClicks = target, button, clicks
 	rt.pressDragger = pressDragger(rt, chain, target)
+	if dragger != nil {
+		rt.pressDragger = dragger.id
+	}
 	target.pressed, target.pressButton, target.pressMods = true, button, mods
 	target.pressPointer, target.pressPressure = rt.pointerType, rt.pressure
 	target.pressPending = true

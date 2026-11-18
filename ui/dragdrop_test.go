@@ -472,3 +472,45 @@ func TestDragTargetBuiltUnderPointer(t *testing.T) {
 		t.Fatalf("dropped %q", dropped)
 	}
 }
+
+// A row's content that drags a value, as a file of a tree dragged to a
+// folder, leaves the row its clicks: a click chooses the row, a double
+// click submits it, and only a press that moves drags.
+func TestDragInListRow(t *testing.T) {
+	items := []string{"a", "b", "c"}
+	sel := -1
+	s := ListState{Selected: &sel}
+	submitted := 0
+	var dropped []string
+	tt := coreNewTester(func(c *context) {
+		coreColumn(c).Fill().Children(func() {
+			list := coreList(c, &s, len(items), func(i int) {
+				coreRow(c).Padding(8).Drag(items[i]).Children(func() { coreText(c, items[i]) })
+			}).Height(200)
+			if list.Submitted() {
+				submitted++
+			}
+			target := coreBox(c).Size(200, 60).Label("Target")
+			if v, ok := coreDrop[string](target); ok {
+				dropped = append(dropped, v)
+			}
+		})
+	}, 300, 400)
+	b, _ := tt.Find("b")
+	if err := tt.Click("b"); err != nil {
+		t.Fatal(err)
+	}
+	if sel != 1 {
+		t.Fatalf("a click on b chose %d", sel)
+	}
+	tt.ClickAt(b.X+b.W/2, b.Y+b.H/2)
+	if submitted != 1 {
+		t.Fatalf("a double click submitted %d times", submitted)
+	}
+	target, _ := tt.Find("Target")
+	c, _ := tt.Find("c")
+	drag(tt, c.X+4, c.Y+4, target.X+20, target.Y+20)
+	if !slices.Equal(dropped, []string{"c"}) || sel != 1 {
+		t.Errorf("dragging c: dropped %q, chose %d", dropped, sel)
+	}
+}
