@@ -644,10 +644,13 @@ func (st *State) GoTo(p Pos) {
 	st.ed.setSels([]sel{st.ed.newSel(off, off)}, revealCenter)
 }
 
-// ScrollTo scrolls a line to the top of the editor.
+// ScrollTo scrolls a line to the top of the editor. It drops a pending
+// reveal of the selections set before it, as SetScrollY does: the scroll
+// asked for stands.
 func (st *State) ScrollTo(line int) {
 	st.ensure()
 	st.ed.setScroll(st.ed.view.heights.top(line))
+	st.ed.reveal = revealNone
 }
 
 // ScrollY returns how far the editor's lines are scrolled up, in DIPs, 0
@@ -658,6 +661,7 @@ func (st *State) ScrollY() float64 { return st.ed.scrollY }
 func (st *State) SetScrollY(y float64) {
 	st.ensure()
 	st.ed.setScroll(y)
+	st.ed.reveal = revealNone
 }
 
 // ViewportHeight returns the height of the part of the text the editor
