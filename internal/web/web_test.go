@@ -149,12 +149,11 @@ func TestDroppedFiles(t *testing.T) {
 	}
 }
 
-// TestWebViewAvailable: browsers have no system webview, so the call says
-// so, and an app opens a window of native UI instead of one showing a page
-// it could not show.
+// TestWebViewAvailable: browsers show web views as iframes, so the call
+// says they work.
 func TestWebViewAvailable(t *testing.T) {
-	if New().WebViewAvailable() {
-		t.Error("WebViewAvailable = true in a browser, which has no webview")
+	if !New().WebViewAvailable() {
+		t.Error("WebViewAvailable = false in a browser, which shows web views as iframes")
 	}
 }
 

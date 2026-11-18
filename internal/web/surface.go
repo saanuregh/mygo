@@ -5,6 +5,7 @@ package web
 import (
 	"log"
 	"math"
+	"slices"
 	"strconv"
 	"syscall/js"
 	"unicode/utf8"
@@ -52,6 +53,9 @@ type surface struct {
 	// downX and downY place the last press, where a context menu opens.
 	downX, downY float64
 	clicks       platform.ClickCounter
+
+	// webViews are the window's web views, as iframes over the canvas.
+	webViews []*webView
 }
 
 func newSurface(w *window) (*surface, error) {
@@ -842,18 +846,50 @@ func (s *surface) SetTextInput(t platform.TextInputState) {
 	st.Set("height", ftoa(max(t.Caret.H, 1))+"px")
 }
 
-func (s *surface) UpdateAccessibility(*platform.AccessTree)  {}
-func (s *surface) StartDataDrag(platform.DragRequest)        {}
-func (s *surface) CancelDataDrag()                           {}
-func (s *surface) SetDropFormats([]transfer.Format)          {}
-func (s *surface) PlaceWebViews([]platform.WebViewPlacement) {}
+func (s *surface) UpdateAccessibility(*platform.AccessTree) {}
+func (s *surface) StartDataDrag(platform.DragRequest)       {}
+func (s *surface) CancelDataDrag()                          {}
+func (s *surface) SetDropFormats([]transfer.Format)         {}
 
-func (s *surface) NewWebView(*platform.WindowOptions, platform.WindowHandler) (platform.WebView, error) {
-	return nil, errUnsupported
+// PlaceWebViews shows the iframes of the web views placed and hides the
+// others, which keep their pages.
+func (s *surface) PlaceWebViews(views []platform.WebViewPlacement) {
+	placed := make(map[*webView]bool, len(views))
+	for i := range views {
+		if v, ok := views[i].WebView.(*webView); ok && !v.closed {
+			v.place(&views[i])
+			placed[v] = true
+		}
+	}
+	for _, v := range s.webViews {
+		if !placed[v] {
+			v.hide()
+		}
+	}
+}
+
+func (s *surface) NewWebView(o *platform.WindowOptions, h platform.WindowHandler) (platform.WebView, error) {
+	if s.closed {
+		return nil, errUnsupported
+	}
+	origin := ""
+	if loc := js.Global().Get("location"); loc.Truthy() {
+		origin = loc.Get("origin").String()
+	}
+	v := newWebView(s.w.el, origin, h, s.w.b.sync)
+	if c := o.BackgroundColor; c != nil {
+		v.SetBackgroundColor(*c)
+	}
+	v.onClose = func() { s.webViews = slices.DeleteFunc(s.webViews, func(w *webView) bool { return w == v }) }
+	s.webViews = append(s.webViews, v)
+	return v, nil
 }
 
 func (s *surface) close() {
 	s.closed = true
+	for _, v := range slices.Clone(s.webViews) {
+		v.Close()
+	}
 	if s.pending {
 		js.Global().Call("cancelAnimationFrame", s.request)
 	}
