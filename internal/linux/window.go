@@ -1527,6 +1527,15 @@ func (w *window) useWithAutoplay(decision ptr) bool {
 func (w *window) decideResponse(decision ptr) bool {
 	resp := webkitResponsePolicyDecisionGetResponse(decision)
 	uri := goStr(webkitURIResponseGetURI(resp))
+	// The main frame's own response is the app's to stop (OnWillLoadResponse);
+	// without WebKitGTK 2.40's main-frame test, none is offered.
+	if webkitResponsePolicyDecisionIsMainFrameMain != nil && webkitResponsePolicyDecisionIsMainFrameMain(decision) {
+		r := platform.Response{URL: uri, MIMEType: goStr(webkitURIResponseGetMIMEType(resp)), IsMainFrame: true}
+		if !w.h.WillLoadResponse(r) {
+			webkitPolicyDecisionIgnore(decision)
+			return true
+		}
+	}
 	disposition := ""
 	if h := webkitURIResponseGetHTTPHeaders(resp); h != 0 {
 		disposition = goStr(soupMessageHeadersGetOne(h, cs("Content-Disposition")))

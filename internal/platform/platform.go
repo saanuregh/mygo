@@ -957,6 +957,9 @@ type WindowHandler interface {
 	Message(msg string)
 	// WillNavigate is called before a navigation; returning false cancels it.
 	WillNavigate(nav Navigation) bool
+	// WillLoadResponse is called when a response arrives, before the page
+	// shows or downloads it; returning false drops it. Linux only.
+	WillLoadResponse(r Response) bool
 	NavigationStarted(url string)
 	NavigationCommitted(url string)
 	LoadFinished()
@@ -1670,4 +1673,13 @@ type TabsHandler interface {
 // window off its stack (the back button, a swipe, Android's back).
 type NavigationHandler interface {
 	Popped()
+}
+
+// Response is a response a page is about to load.
+type Response struct {
+	URL      string
+	MIMEType string
+	// IsMainFrame: the response of the page's own document, not of a
+	// subframe or a resource.
+	IsMainFrame bool
 }

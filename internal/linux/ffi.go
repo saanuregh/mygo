@@ -412,6 +412,8 @@ var (
 	webkitPolicyDecisionDownload                      func(d ptr)
 	webkitURIResponseGetURI                           func(r ptr) ptr
 	webkitURIResponseGetHTTPHeaders                   func(r ptr) ptr
+	webkitURIResponseGetMIMEType                      func(r ptr) ptr
+	webkitResponsePolicyDecisionIsMainFrameMain       func(d ptr) bool // 2.40+
 	webkitSecurityManagerRegisterSecure               func(m ptr, scheme *byte)
 	webkitSecurityManagerRegisterCORS                 func(m ptr, scheme *byte)
 	webkitUserContentManagerNew                       func() ptr
@@ -944,6 +946,8 @@ func loadWebKit() error {
 	mustBind(w, &webkitPolicyDecisionDownload, "webkit_policy_decision_download")
 	mustBind(w, &webkitURIResponseGetURI, "webkit_uri_response_get_uri")
 	mustBind(w, &webkitURIResponseGetHTTPHeaders, "webkit_uri_response_get_http_headers")
+	mustBind(w, &webkitURIResponseGetMIMEType, "webkit_uri_response_get_mime_type")
+	bind(w, &webkitResponsePolicyDecisionIsMainFrameMain, "webkit_response_policy_decision_is_main_frame_main_resource")
 	mustBind(w, &webkitSecurityManagerRegisterSecure, "webkit_security_manager_register_uri_scheme_as_secure")
 	mustBind(w, &webkitSecurityManagerRegisterCORS, "webkit_security_manager_register_uri_scheme_as_cors_enabled")
 	mustBind(w, &webkitUserContentManagerNew, "webkit_user_content_manager_new")
