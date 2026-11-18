@@ -419,6 +419,7 @@ var (
 	webkitUserContentManagerAddScript                 func(ucm, script ptr)
 	webkitUserContentManagerRemoveAllScripts          func(ucm ptr)
 	webkitUserScriptNew                               func(src *byte, frames, time int32, allow, block ptr) ptr
+	webkitUserScriptNewForWorld                       func(src *byte, frames, time int32, world *byte, allow, block ptr) ptr
 	webkitUserScriptUnref                             func(s ptr)
 	webkitWebViewNewWithUserContentManager            func(ucm ptr) ptr
 	webkitWebViewGetSettings                          func(wv ptr) ptr
@@ -949,6 +950,7 @@ func loadWebKit() error {
 	mustBind(w, &webkitUserContentManagerAddScript, "webkit_user_content_manager_add_script")
 	mustBind(w, &webkitUserContentManagerRemoveAllScripts, "webkit_user_content_manager_remove_all_scripts")
 	mustBind(w, &webkitUserScriptNew, "webkit_user_script_new")
+	mustBind(w, &webkitUserScriptNewForWorld, "webkit_user_script_new_for_world")
 	mustBind(w, &webkitUserScriptUnref, "webkit_user_script_unref")
 	mustBind(w, &webkitWebViewNewWithUserContentManager, "webkit_web_view_new_with_user_content_manager")
 	mustBind(w, &webkitWebViewGetSettings, "webkit_web_view_get_settings")

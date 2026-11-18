@@ -1766,7 +1766,8 @@ func (w *window) Eval(js string) {
 	})
 }
 
-func (w *window) CallAsyncFunction(body string, cb func(string, error)) {
+// CallAsyncFunction runs in the page's own world, whatever world says.
+func (w *window) CallAsyncFunction(body, _ string, cb func(string, error)) {
 	if !respondsTo(w.web, "callAsyncJavaScript:arguments:inFrame:inContentWorld:completionHandler:") {
 		cb("", errors.New("mygo: Eval requires macOS 11 or later"))
 		return
@@ -1974,7 +1975,7 @@ func (w *window) PictureInPictureActive(cb func(bool)) {
 		cb(w.isPictureInPictureActive())
 		return
 	}
-	w.CallAsyncFunction(platform.PictureInPictureActive, func(s string, err error) {
+	w.CallAsyncFunction(platform.PictureInPictureActive, "", func(s string, err error) {
 		cb(err == nil && s == "true")
 	})
 }

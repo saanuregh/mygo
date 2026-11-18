@@ -76,6 +76,9 @@ func (w *Window) pageScripts() []platform.UserScript {
 	if w.preload != "" {
 		scripts = append(scripts, platform.UserScript{Source: w.preload, AllFrames: w.preloadAllFrames})
 	}
+	for _, s := range w.worldScripts {
+		scripts = append(scripts, platform.UserScript{Source: s.Source, World: s.World})
+	}
 	return scripts
 }
 
@@ -165,8 +168,9 @@ const (
 var evalCanceled func()
 
 // eval returns the JSON result of code, which shares the memory of the
-// page's answer.
-func (w *Window) eval(ctx context.Context, code string) (jsontext.Value, error) {
+// page's answer. world names the script world it runs in, "" for the
+// page's own.
+func (w *Window) eval(ctx context.Context, world, code string) (jsontext.Value, error) {
 	if w.content {
 		return nil, errNoPage
 	}
@@ -198,7 +202,7 @@ func (w *Window) eval(ctx context.Context, code string) (jsontext.Value, error) 
 		// The page of a closed window never answers.
 		off = w.onClosed.add(func() { deliver(ch, result{err: errDestroyed}) }, false)
 		expr := strings.TrimRight(code, " \t\r\n;")
-		n.CallAsyncFunction(fmt.Sprintf(evalExpr, expr), func(res string, err error) {
+		n.CallAsyncFunction(fmt.Sprintf(evalExpr, expr), world, func(res string, err error) {
 			if err == nil {
 				deliver(ch, result{raw: res})
 				return
@@ -216,7 +220,7 @@ func (w *Window) eval(ctx context.Context, code string) (jsontext.Value, error) 
 					deliver(ch, result{err: errDestroyed})
 					return
 				}
-				w.native.CallAsyncFunction(fmt.Sprintf(evalBody, code), func(res string, err error) {
+				w.native.CallAsyncFunction(fmt.Sprintf(evalBody, code), world, func(res string, err error) {
 					deliver(ch, result{raw: res, err: err})
 				})
 			})

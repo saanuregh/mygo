@@ -1238,8 +1238,13 @@ func (w *window) IsLoading() bool    { return webkitWebViewIsLoading(w.web) }
 // addUserScripts adds the user scripts of the options to the content
 // manager, and the title bar's after them.
 func (w *window) addUserScripts() {
-	add := func(src string, frames, when int32) {
-		script := webkitUserScriptNew(cs(src), frames, when, 0, 0)
+	add := func(src, world string, frames, when int32) {
+		var script ptr
+		if world != "" {
+			script = webkitUserScriptNewForWorld(cs(src), frames, when, cs(world), 0, 0)
+		} else {
+			script = webkitUserScriptNew(cs(src), frames, when, 0, 0)
+		}
 		webkitUserContentManagerAddScript(w.ucm, script)
 		webkitUserScriptUnref(script)
 	}
@@ -1251,11 +1256,11 @@ func (w *window) addUserScripts() {
 		if s.AtDocumentEnd {
 			when = 1
 		}
-		add(s.Source, frames, when)
+		add(s.Source, s.World, frames, when)
 	}
 	if w.controls != nil {
 		// After the bridge, which it tells; top frame, document start.
-		add(w.titleBarScript(), 1, 0)
+		add(w.titleBarScript(), "", 1, 0)
 	}
 }
 
@@ -1279,7 +1284,7 @@ func (w *window) Eval(js string) {
 	}
 }
 
-func (w *window) CallAsyncFunction(body string, cb func(string, error)) {
+func (w *window) CallAsyncFunction(body, world string, cb func(string, error)) {
 	if webkitWebViewCallAsyncJavascriptFunction == nil {
 		cb("", errors.New("mygo: Eval requires WebKitGTK 2.40 or later"))
 		return
@@ -1295,7 +1300,7 @@ func (w *window) CallAsyncFunction(body string, cb func(string, error)) {
 		gObjectUnref(v)
 		cb(s, nil)
 	})
-	webkitWebViewCallAsyncJavascriptFunction(w.web, unsafe.StringData(body), len(body), 0, nil, nil, 0, cbAsyncReady, id)
+	webkitWebViewCallAsyncJavascriptFunction(w.web, unsafe.StringData(body), len(body), 0, optCS(world), nil, 0, cbAsyncReady, id)
 }
 
 // SetZoom zooms the page, a web view's as the content scales it too.

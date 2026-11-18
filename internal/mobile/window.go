@@ -374,7 +374,7 @@ func (w *window) SetUserScripts(scripts []platform.UserScript) {
 
 func (w *window) SetContentRules([]any) {}
 
-func (w *window) CallAsyncFunction(body string, cb func(string, error)) {
+func (w *window) CallAsyncFunction(body, _ string, cb func(string, error)) {
 	req := w.b.request(func(r wire.Reader) {
 		var e wire.AsyncResultEvent
 		e.Decode(&r)

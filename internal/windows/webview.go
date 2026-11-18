@@ -825,8 +825,9 @@ func (w *window) Eval(js string) {
 }
 
 // CallAsyncFunction evaluates through the DevTools protocol, which awaits
-// promises, reports syntax errors and ignores the page's CSP.
-func (w *window) CallAsyncFunction(body string, cb func(string, error)) {
+// promises, reports syntax errors and ignores the page's CSP. It runs in
+// the page's own world, whatever world says.
+func (w *window) CallAsyncFunction(body, _ string, cb func(string, error)) {
 	params, _ := json.Marshal(map[string]any{
 		"expression":    "(async () => {\n" + body + "\n})()",
 		"awaitPromise":  true,
@@ -1133,7 +1134,7 @@ func (w *window) PictureInPictureActive(cb func(bool)) {
 		cb(false)
 		return
 	}
-	w.CallAsyncFunction(platform.PictureInPictureActive, func(s string, err error) {
+	w.CallAsyncFunction(platform.PictureInPictureActive, "", func(s string, err error) {
 		cb(err == nil && s == "true")
 	})
 }
