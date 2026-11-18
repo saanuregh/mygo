@@ -54,6 +54,9 @@ func newWebView(parent js.Value, origin string, h platform.WindowHandler, run fu
 		st.Set(k, val)
 	}
 	v.frame.Call("setAttribute", "sandbox", opaqueSandbox)
+	// The app's address may hold what a page must not see (a ticket, a
+	// token): no frame gets it as its referrer.
+	v.frame.Call("setAttribute", "referrerpolicy", "no-referrer")
 	v.onLoad = js.FuncOf(func(js.Value, []js.Value) any {
 		v.run(v.loaded)
 		return nil
