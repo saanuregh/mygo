@@ -263,6 +263,7 @@ func initCallbacks() {
 		initSurfaceCallbacks()
 		initDownloadCallbacks()
 		initAuthCallbacks()
+		initScriptDialogCallbacks()
 		initContextMenuCallbacks()
 		initMenuCallbacks()
 		initSystemCallbacks()

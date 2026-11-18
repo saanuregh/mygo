@@ -995,6 +995,10 @@ type WindowHandler interface {
 	// leaves them to the web view otherwise.
 	CertificateError(e CertificateError) bool
 	HandlesCertificateErrors() bool
+	// ScriptDialog asks whether the app answers the page's alert,
+	// confirm, prompt or beforeunload dialog itself: true keeps the page
+	// waiting until d.Answer, false leaves the dialog to the web view.
+	ScriptDialog(d *ScriptDialog) bool
 	// ContextMenu asks what the page's context menu shows, as it is
 	// about to open, and HandlesContextMenu whether to ask at all: a
 	// backend describes its menu only while it does.

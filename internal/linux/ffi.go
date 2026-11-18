@@ -921,6 +921,7 @@ func loadWebKit() error {
 	}
 	bindCookies()
 	bindAuth()
+	bindScriptDialogs()
 
 	w := libWebKit
 	mustBind(w, &webkitWebContextGetDefault, "webkit_web_context_get_default")

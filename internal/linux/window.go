@@ -105,6 +105,9 @@ type window struct {
 	// tlsRetry is the page to load again once WebKit finished its load
 	// that failed with a certificate the app allowed (auth.go).
 	tlsRetry string
+	// dialogs are the page's JavaScript dialogs the app answers later
+	// (script_dialog.go).
+	dialogs []*scriptDialog
 	// requested holds bounds set with SetBounds until the window manager
 	// answers: GTK resizes and moves asynchronously. requestFrame is the
 	// window manager's frame they were asked for with, and requestInside
@@ -389,6 +392,7 @@ func (w *window) createWebView() {
 	connect(w.web, "permission-request", cbPermission, data)
 	connect(w.web, "context-menu", cbContextMenu, data)
 	w.connectAuth(data)
+	connect(w.web, "script-dialog", cbScriptDialog, data)
 	hookDownloads()
 }
 
@@ -434,6 +438,7 @@ func (w *window) cleanup() {
 	}
 	w.closeWebViews()
 	w.closed = true
+	w.releaseDialogs()
 	delete(w.b.windows, w.id)
 	w.leaveFlyout()
 	w.b.flyouts = slices.DeleteFunc(w.b.flyouts, func(x *window) bool { return x == w })
