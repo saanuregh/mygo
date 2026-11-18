@@ -632,6 +632,8 @@ type Window struct {
 	InputRegion []platform.Rect
 	// AsyncFunction answers CallAsyncFunction.
 	AsyncFunction func(body string) (string, error)
+	// AsyncWorlds are the worlds of the CallAsyncFunction calls, in order.
+	AsyncWorlds []string
 	// AsyncCallback, when set, receives CallAsyncFunction calls to answer
 	// through reply whenever it wants, on the main thread.
 	AsyncCallback func(body string, reply func(string, error))
@@ -980,7 +982,8 @@ func (w *Window) SetUserScripts(scripts []platform.UserScript) {
 	w.UserScriptUpdates++
 }
 
-func (w *Window) CallAsyncFunction(body string, cb func(string, error)) {
+func (w *Window) CallAsyncFunction(body, world string, cb func(string, error)) {
+	w.AsyncWorlds = append(w.AsyncWorlds, world)
 	if w.AsyncCallback != nil {
 		w.AsyncCallback(body, cb)
 		return

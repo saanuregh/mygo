@@ -300,8 +300,8 @@ func (n *webViewNative) SetUserScripts(scripts []platform.UserScript) {
 	n.web.SetUserScripts(scripts)
 }
 func (n *webViewNative) SetContentRules(lists []any) { n.web.SetContentRules(lists) }
-func (n *webViewNative) CallAsyncFunction(body string, cb func(string, error)) {
-	n.web.CallAsyncFunction(body, cb)
+func (n *webViewNative) CallAsyncFunction(body, world string, cb func(string, error)) {
+	n.web.CallAsyncFunction(body, world, cb)
 }
 func (n *webViewNative) SetZoom(factor float64) { n.web.SetZoom(factor) }
 func (n *webViewNative) Zoom() float64          { return n.web.Zoom() }

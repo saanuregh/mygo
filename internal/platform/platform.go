@@ -565,6 +565,11 @@ type UserScript struct {
 	AtDocumentEnd bool
 	// AllFrames injects into iframes too.
 	AllFrames bool
+	// World names the isolated script world the script runs in, "" for
+	// the page's own. A world shares the page's DOM, not its globals, and
+	// keeps its state for the document while a script of it is
+	// registered (Linux; elsewhere the page's own world).
+	World string
 }
 
 // Window is a native window hosting a webview.
@@ -712,7 +717,9 @@ type Page interface {
 	// main frame, awaits it and reports the returned value, which the
 	// caller arranges to be a string. err is non-nil when the body fails to
 	// compile or the evaluation fails natively. Page CSP does not apply.
-	CallAsyncFunction(body string, cb func(result string, err error))
+	// world names the isolated script world it runs in, "" for the page's
+	// own (UserScript.World); backends without worlds use the page's own.
+	CallAsyncFunction(body, world string, cb func(result string, err error))
 	SetZoom(factor float64)
 	Zoom() float64
 	SetUserAgent(ua string)

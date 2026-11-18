@@ -19,7 +19,9 @@ func pagesLocaleChanged(string) {}
 
 func decodeResult(raw []byte, v any) error { return errNoPage }
 
-func (w *Window) eval(ctx context.Context, code string) ([]byte, error) { return nil, errNoPage }
+func (w *Window) eval(ctx context.Context, world, code string) ([]byte, error) {
+	return nil, errNoPage
+}
 
 func (w *Window) sendTitleBar() {}
 

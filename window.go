@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -364,6 +365,8 @@ type Window struct {
 	// preloadAllFrames.
 	preload          string
 	preloadAllFrames bool
+	// worldScripts is PageOptions.WorldScripts, kept as preload is.
+	worldScripts []WorldScript
 
 	// native is only accessed on the main thread; nil once destroyed.
 	native    platform.Window
@@ -805,6 +808,7 @@ func (w *Window) platformOptions(o *WindowOptions) *platform.WindowOptions {
 		}
 	}
 	w.preload, w.preloadAllFrames = po.PreloadScript, po.PreloadAllFrames
+	w.worldScripts = slices.Clone(po.WorldScripts)
 	if w.fit != nil {
 		w.fit.zoom = p.Zoom
 	}
@@ -1847,7 +1851,21 @@ func (p *Page) Eval(code string) (any, error) {
 
 // EvalContext is Eval with a context that can abort the wait.
 func (p *Page) EvalContext(ctx context.Context, code string) (any, error) {
-	raw, err := p.w.eval(ctx, code)
+	return p.EvalInWorld(ctx, "", code)
+}
+
+// EvalInWorld is EvalContext in the isolated script world named world, as
+// a browser extension's content scripts run: the script shares the page's
+// DOM, so its events reach the page's listeners, but not the page's
+// globals, which it can neither read nor have replaced; "" is the page's
+// own world. A world keeps its globals for the document while a
+// PageOptions.WorldScripts script of it is registered; otherwise each
+// call may find it fresh. Errors are Eval's.
+//
+// Worlds are WebKitGTK's (Linux). Elsewhere the code runs in the page's
+// own world, where the page can see it.
+func (p *Page) EvalInWorld(ctx context.Context, world, code string) (any, error) {
+	raw, err := p.w.eval(ctx, world, code)
 	if err != nil || len(raw) == 0 {
 		return nil, err
 	}
@@ -1869,7 +1887,7 @@ func EvalAs[T any](p *Page, code string) (T, error) {
 	if p == nil {
 		return v, errNoPage
 	}
-	raw, err := p.w.eval(context.Background(), code)
+	raw, err := p.w.eval(context.Background(), "", code)
 	if err != nil || len(raw) == 0 {
 		return v, err
 	}

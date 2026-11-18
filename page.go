@@ -292,6 +292,16 @@ func (p *Page) IsPictureInPictureActive() bool {
 
 func nrgba(c platform.Color) color.NRGBA { return color.NRGBA{R: c.R, G: c.G, B: c.B, A: c.A} }
 
+// WorldScript is a script of PageOptions.WorldScripts.
+type WorldScript struct {
+	// World names the isolated script world, which Page.EvalInWorld
+	// takes. Pages' worlds of one name are their own: each document
+	// has its own globals in it.
+	World string
+	// Source is the JavaScript.
+	Source string
+}
+
 // PageOptions configure the web page of a window.
 type PageOptions struct {
 	// PreloadScript is JavaScript injected into every page before the
@@ -301,6 +311,12 @@ type PageOptions struct {
 	// every origin, as they start; window.mygo isn't there. A browser
 	// sees with it what a player embedded from another site loads.
 	PreloadAllFrames bool
+	// WorldScripts are injected into every page, top frame only, before
+	// the page's own scripts, each in its isolated script world, where
+	// Page.EvalInWorld reaches what it defines. Neither window.mygo nor
+	// the page's globals are there. Worlds are WebKitGTK's (Linux);
+	// elsewhere the scripts run in the page's own world.
+	WorldScripts []WorldScript
 	// TrustedOrigins lists extra origins, such as "https://example.com",
 	// whose pages may call bound Go methods. By default only the app's own
 	// content can: custom schemes registered with Protocol, file: and
