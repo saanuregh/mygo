@@ -256,6 +256,19 @@ func orShared(sys *text.System) *text.System {
 	return sys
 }
 
+// keep has the cache hold l, a layout it made, as if shaped this frame:
+// a line laid out before and painted as it was keeps its shapes for when
+// lines are laid out anew (an edit, a parse), which shaped them all again.
+func (c *shapeCache) keep(l *text.Layout) {
+	if l == nil || l.Params.Style != c.style {
+		return
+	}
+	if c.cur == nil {
+		c.cur = map[shapeKey]*text.Layout{}
+	}
+	c.cur[shapeKey{l.Params.Text, l.Params.Spans}] = l
+}
+
 func (c *shapeCache) endFrame() {
 	c.prev, c.cur = c.cur, c.prev
 	if c.cur != nil {
@@ -629,6 +642,11 @@ func (v *view) line(n int) *lineLayout {
 	}
 	if l, ok := v.lines.m[n]; ok {
 		l.used = v.lines.frame
+		for ri := range l.rows {
+			for pi := range l.rows[ri].pieces {
+				v.shaped.keep(l.rows[ri].pieces[pi].l)
+			}
+		}
 		if !l.exact {
 			// A guess: the highlighter may know better now. The layout
 			// depends on the tokens only through their faces.
