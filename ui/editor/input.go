@@ -252,7 +252,11 @@ func (ed *editor) pointerDown(ev ui.InputEvent) bool {
 		// leaves (as zode's view.zig).
 		ed.gesture.active = false
 		ed.setSels([]sel{ed.newSel(off, off)}, revealNone)
-		ed.o.onDefinition(off)
+		if mods&ui.Shift != 0 && ed.o.onTypeDefinition != nil {
+			ed.o.onTypeDefinition(off)
+		} else {
+			ed.o.onDefinition(off)
+		}
 		return true
 	case mods&ui.Alt != 0 && mods&ui.Shift != 0 && ev.Clicks == 1:
 		ed.gesture.mode = 3
@@ -326,7 +330,7 @@ func (ed *editor) clickGoesToDefinition(mods ui.Modifiers) bool {
 func (ed *editor) linkAt(mods ui.Modifiers) [2]int {
 	if !ed.clickGoesToDefinition(mods) || ed.o.noDefinitionLink || !ed.pointerIn || ed.gesture.active || ed.scrollbar.active {
 		// Cmd held again asks again, as what is there may have changed.
-		ed.definitionLink.asked = -1
+		ed.letGoOfLink()
 		return [2]int{}
 	}
 	off := ed.textAt(ed.pointer.X, ed.pointer.Y)
@@ -334,7 +338,7 @@ func (ed *editor) linkAt(mods ui.Modifiers) [2]int {
 		return [2]int{}
 	}
 	if ed.o.onDefinitionLink != nil {
-		return ed.askedLink(off)
+		return ed.askedLink(off, mods&ui.Shift != 0)
 	}
 	extra := ed.wordChars()
 	a, z := wordAt(ed.view.text, off, extra)

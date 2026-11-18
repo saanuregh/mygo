@@ -55,7 +55,8 @@ type options struct {
 	onCompletion         func(CompletionRequest)
 	onHover              func(HoverRequest)
 	onDefinition         func(int)
-	onDefinitionLink     func(int)
+	onDefinitionLink     func(DefinitionLinkRequest)
+	onTypeDefinition     func(int)
 	onGutterClick        func(int)
 	onChangeBarClick     func(DiffHunk) bool
 	onInlayHover         func(InlayHover)
