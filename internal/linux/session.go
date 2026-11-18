@@ -71,6 +71,7 @@ func (a appController) NewDataStore(opts platform.DataStoreOptions) (platform.Da
 	}
 	ctx := webkitWebContextNewWithWebsiteDataManager(manager)
 	gObjectUnref(manager) // the context holds it
+	sandbox(ctx)
 	s := &dataStore{b: a.b, ctx: ctx, schemes: map[string]bool{}}
 	a.b.stores = append(a.b.stores, s)
 	a.b.applyWebLanguages()
@@ -103,10 +104,32 @@ func webContext(store platform.DataStore) ptr {
 	return webkitWebContextGetDefault()
 }
 
+// defaultSandboxed is whether sandbox ran for the default web context.
+// Main thread only.
+var defaultSandboxed bool
+
+// sandbox turns WebKit's sandbox on for the web processes of ctx, which
+// must have none yet: WebKit aborts otherwise. Pages then run under
+// bubblewrap, which limits their access to the system, as WebKitGTK 6.0
+// always does and 4.1 only when asked. WebKit's
+// WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 still turns it off, for
+// systems where bubblewrap cannot run.
+func sandbox(ctx ptr) {
+	if webkitWebContextSetSandboxEnabled != nil {
+		webkitWebContextSetSandboxEnabled(ctx, true)
+	}
+}
+
 // newWebView makes the web view of w, with the web context of its store.
 func (w *window) newWebView() ptr {
 	s, ok := w.opts.DataStore.(*dataStore)
 	if !ok {
+		if !defaultSandboxed {
+			// Before the default context's first web view, so its first
+			// web process.
+			defaultSandboxed = true
+			sandbox(webkitWebContextGetDefault())
+		}
 		for _, scheme := range w.opts.Schemes {
 			w.b.registerScheme(webkitWebContextGetDefault(), w.b.schemes, scheme)
 		}
