@@ -413,6 +413,7 @@ type Window struct {
 	authHandler        func(AuthRequest) AuthResponse
 	certificateHandler func(CertificateError) bool
 	clientCertHandler  func(ClientCertificateRequest) ClientCertificateResponse
+	dialogHandler      func(*ScriptDialog) bool
 	pageCtx            context.Context
 	pageCancel         context.CancelFunc
 	// channels are those of the current page, by the page's id for them.
