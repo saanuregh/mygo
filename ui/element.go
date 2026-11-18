@@ -440,8 +440,6 @@ type node struct {
 	depth      int
 	// track is the ScrollState of a scroll container (TrackScroll).
 	track *ScrollState
-	// followEnd keeps a scroll container's end in view (FollowEnd).
-	followEnd bool
 	// cols and rows are the tracks of a grid.
 	cols, rows []Track
 
@@ -767,14 +765,18 @@ type node struct {
 	// element from the window's edges (AttachEdgeMargin), in place of
 	// windowMargin.
 	edgeMargin float32
-	// keepSide: AttachTo never moves it to target's other side (KeepSide).
-	keepSide bool
 	// zIndex orders the element's painting and its hits among its
 	// siblings (ZIndex); zOrder is set on an element with a child having
 	// one, which paints and commits its children in that order alone
 	// (zindex.go).
 	zIndex int32
 	zOrder bool
+	// keepSide: AttachTo never moves it to target's other side (KeepSide).
+	keepSide bool
+	// followEnd keeps a scroll container's end in view (FollowEnd). It is
+	// here, in zOrder's padding, rather than beside track, where it took a
+	// word of its own.
+	followEnd bool
 	// serial is the order the pass made the element in: of overlays, the
 	// one made last shows on top.
 	serial int32

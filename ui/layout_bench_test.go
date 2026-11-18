@@ -211,6 +211,20 @@ func TestFlexItemFitsCacheLine(t *testing.T) {
 	}
 }
 
+// The engine allocates elements from chunks strided by an element's size
+// (context.go), so a node is a whole number of cache lines: each element of
+// a chunk then begins on a line, and a field added to node must not leave
+// it between two. On 64-bit platforms: 32-bit ones lay node out smaller,
+// and upstream's arrangement does not aim at them.
+func TestNodeFitsCacheLines(t *testing.T) {
+	if unsafe.Sizeof(uintptr(0)) < 8 {
+		t.Skip("node's layout aims at 64-bit platforms")
+	}
+	if n := unsafe.Sizeof(node{}); n%64 != 0 {
+		t.Errorf("a node is %d bytes, not a whole number of 64-byte cache lines", n)
+	}
+}
+
 // A container's layout walks its children, reading these of each of them:
 // the tree's links and the flags, what lays the child out, and the box it is
 // given — and a child that is a container reads of itself how it lays its
