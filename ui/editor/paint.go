@@ -764,9 +764,16 @@ func (ed *editor) paintFontCaret(p *ui.Painter, l *lineLayout, row *rowLayout, s
 	lh := l.rowHeight
 	h := min(lh, v.ascent+v.descent+4)
 	top := y + (lh-h)/2
-	if ed.caretShape(s) == CursorBlock {
+	switch ed.caretShape(s) {
+	case CursorBlock:
 		w := max(2, ed.caretWidth(l, row, at, x-ox))
 		p.Fill(ui.Rect{X: x, Y: top, W: w, H: h}, ed.theme.Cursor.Alpha(0.55), 1)
+		return
+	case CursorUnderline:
+		// Under the character after the caret, at the foot of the font's
+		// box, as the block covers it.
+		w := max(2, ed.caretWidth(l, row, at, x-ox))
+		p.Fill(ui.Rect{X: x, Y: top + h - 2, W: w, H: 2}, ed.theme.Cursor, 1)
 		return
 	}
 	p.Fill(ui.Rect{X: x - 1, Y: top, W: 2, H: h}, ed.theme.Cursor, 1)
