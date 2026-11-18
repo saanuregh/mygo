@@ -7,6 +7,7 @@ import (
 	jsonv1 "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -157,6 +158,12 @@ func (w *Window) sendPreferences(prefs ThemePreferences, script string) {
 func decodeResult(raw []byte, v any) error { return json.Unmarshal(raw, v) }
 
 const (
+	// evalKind tells, without running it, which form code compiles as:
+	// "expr", "body", the SyntaxError of neither, or "" when the page's
+	// content security policy forbids compiling strings. A form that fails
+	// to compile would reach the page's error handlers as "Script error.".
+	// Its arguments are the expression and the code as JSON strings.
+	evalKind = "const F=(async function(){}).constructor;try{F('return await(\\n'+%[1]s+'\\n)');return 'expr'}catch(e){if(!(e instanceof SyntaxError))return ''}try{F(%[2]s);return 'body'}catch(e){return e instanceof SyntaxError?'SyntaxError: '+e.message:''}"
 	// The expression form: compile errors mean code is not an expression.
 	evalExpr = "try{return JSON.stringify({ok:true,v:await(\n%s\n)})}catch(e){return JSON.stringify({ok:false,e:String(e&&e.message||e)})}"
 	// The statement form runs code as a function body.
@@ -202,27 +209,56 @@ func (w *Window) eval(ctx context.Context, world, code string) (jsontext.Value, 
 		// The page of a closed window never answers.
 		off = w.onClosed.add(func() { deliver(ch, result{err: errDestroyed}) }, false)
 		expr := strings.TrimRight(code, " \t\r\n;")
-		n.CallAsyncFunction(fmt.Sprintf(evalExpr, expr), world, func(res string, err error) {
-			if err == nil {
-				deliver(ch, result{raw: res})
-				return
-			}
-			if !strings.HasPrefix(err.Error(), "SyntaxError") {
-				// It may have run (and then the page navigated or
-				// crashed): running it again could run it twice.
+		runBody := func() {
+			w.native.CallAsyncFunction(fmt.Sprintf(evalBody, code), world, func(res string, err error) {
+				deliver(ch, result{raw: res, err: err})
+			})
+		}
+		tryExpr := func() {
+			w.native.CallAsyncFunction(fmt.Sprintf(evalExpr, expr), world, func(res string, err error) {
+				if err == nil {
+					deliver(ch, result{raw: res})
+					return
+				}
+				if !strings.HasPrefix(err.Error(), "SyntaxError") {
+					// It may have run (and then the page navigated or
+					// crashed): running it again could run it twice.
+					deliver(ch, result{err: err})
+					return
+				}
+				// Not an expression: run it as a function body instead. The
+				// first attempt failed to compile, so nothing ran twice.
+				onMain(func() {
+					if w.native == nil {
+						deliver(ch, result{err: errDestroyed})
+						return
+					}
+					runBody()
+				})
+			})
+		}
+		quotedExpr, _ := json.Marshal(expr)
+		quotedCode, _ := json.Marshal(code)
+		n.CallAsyncFunction(fmt.Sprintf(evalKind, quotedExpr, quotedCode), world, func(kind string, err error) {
+			if err != nil {
 				deliver(ch, result{err: err})
 				return
 			}
-			// Not an expression: run it as a function body instead. The
-			// first attempt failed to compile, so nothing ran twice.
 			onMain(func() {
 				if w.native == nil {
 					deliver(ch, result{err: errDestroyed})
 					return
 				}
-				w.native.CallAsyncFunction(fmt.Sprintf(evalBody, code), world, func(res string, err error) {
-					deliver(ch, result{raw: res, err: err})
-				})
+				switch {
+				case kind == "body":
+					runBody()
+				case strings.HasPrefix(kind, "SyntaxError"):
+					deliver(ch, result{err: errors.New(kind)})
+				default:
+					// An expression, or compiling strings is forbidden: then
+					// the forms are tried in turn.
+					tryExpr()
+				}
 			})
 		})
 	})
