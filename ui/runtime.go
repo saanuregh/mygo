@@ -124,7 +124,8 @@ type engine struct {
 	arena           *elementOwner
 	handleChecks    bool
 	afterInputs     []inputAction
-	afterBuild      []func() // run once the view is built (onBuilt)
+	afterBuild      []func()           // run once the view is built (onBuilt)
+	warmUps         []func(c *Context) // built off screen as the frame ends (WarmUp)
 	inputs          []valueInput
 	inputAt         int
 	afterInputAt    int
@@ -1608,6 +1609,12 @@ func (rt *engine) dropFrame() {
 // during it.
 func (rt *engine) endFrame() {
 	rt.inFrame = false
+	if views := rt.warmUps; len(views) > 0 && !rt.closing && !rt.closed {
+		rt.warmUps = nil
+		for _, view := range views {
+			rt.warmUp(view)
+		}
+	}
 	if !rt.closing && !rt.closed {
 		rt.sweepVideos()
 	}

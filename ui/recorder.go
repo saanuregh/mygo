@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/internal/scene"
+	"github.com/egoist/mygo/internal/text"
 )
 
 // A Recorder builds the frames of a view without a window, one after
@@ -59,6 +60,13 @@ var recordEpoch = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // NewRecorder returns a Recorder of view, in frames of the size o gives.
 func coreNewRecorder(view func(c *context), o RecorderOptions) *Recorder {
+	return newRecorderIn(view, o, nil)
+}
+
+// newRecorderIn is NewRecorder laying out and painting in sys, a
+// window's text system, when not nil (WarmUp): its language stays as it
+// is.
+func newRecorderIn(view func(c *context), o RecorderOptions, sys *text.System) *Recorder {
 	if o.Width <= 0 || o.Height <= 0 {
 		panic("ui: a Recorder's frames must have a size")
 	}
@@ -79,9 +87,10 @@ func coreNewRecorder(view func(c *context), o RecorderOptions) *Recorder {
 	// Frames come as the Recorder asks for them, not at a display's
 	// refresh: the engine never waits for one to pace what moves.
 	h.atOnce = true
+	h.text = sys
 	r := &Recorder{h: &recordHost{h}, start: recordEpoch, now: recordEpoch}
 	r.rt = newRuntime(view, r.h)
-	if o.Locale != "" {
+	if o.Locale != "" && sys == nil {
 		r.rt.text.SetLanguage(o.Locale)
 	}
 	r.rt.clock = r.Now
