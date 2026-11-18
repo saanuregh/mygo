@@ -28,6 +28,14 @@ import (
 // what the view paints after it, as popovers and menus, while the view
 // builds it; it keeps its page while it does not show, until Destroy or
 // until its window closes. Its methods are safe from any goroutine.
+//
+// In browsers a web view is an iframe over the window's canvas, placed,
+// cut around what covers it and hidden as elsewhere. It loads URLs, HTML
+// (in srcdoc) and reloads, and reports loads (OnDidNavigate with the URL
+// it loaded, OnDidFinishLoad); a page of another origin keeps its own,
+// anything else gets an opaque one, and javascript: URLs fail to load.
+// The rest (Eval, CapturePage, history, zoom, the user agent, DevTools,
+// find, session state) is unsupported there, as the page is out of reach.
 type WebView struct{ w *Window }
 
 // WebViewOptions configure Window.NewWebView.

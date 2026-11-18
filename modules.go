@@ -1137,8 +1137,9 @@ func NotificationsSupported() bool {
 // whether a window showing a web page can work: WKWebView on macOS,
 // WebKitGTK on Linux, the WebView2 Runtime on Windows. A window showing
 // native UI (WindowOptions.Content) needs none, so an app whose windows all
-// do runs without one, and this reports false in browsers, which show
-// native UI only.
+// do runs without one. In browsers it reports true for web views
+// (Window.NewWebView), which show there as iframes, with fewer powers
+// (WebView); windows there still show native UI only.
 //
 // Ask before creating the first window showing a page, as NewWindow panics
 // when the platform has no webview. It may be called from any goroutine,
