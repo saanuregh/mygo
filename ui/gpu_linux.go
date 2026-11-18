@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/internal/gpu/gl"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/scene"
+	"image"
 )
 
 // newGPURenderer returns an OpenGL renderer for a surface drawing in a
@@ -38,4 +39,14 @@ type areaRenderer struct {
 func (r *areaRenderer) Render(s *scene.Scene) error {
 	gl.MakeAreaCurrent(r.area)
 	return r.Renderer.Render(s)
+}
+
+func (r *areaRenderer) Prepare(s *scene.Scene) ([]image.Rectangle, bool, error) {
+	gl.MakeAreaCurrent(r.area)
+	return r.Renderer.Prepare(s)
+}
+
+func (r *areaRenderer) DrawPrepared() error {
+	gl.MakeAreaCurrent(r.area)
+	return r.Renderer.DrawPrepared()
 }

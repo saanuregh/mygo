@@ -64,6 +64,23 @@ type DamageSurface interface {
 	PresentDamage(pix []byte, stride, width, height int, damage []image.Rectangle)
 }
 
+// StagedGLSurface is a Surface whose GPU frames are built before the
+// toolkit paints, so that it repaints only what a frame changed: Linux's
+// GtkGLArea, whose window GTK 3 otherwise repaints whole for every frame,
+// clearing a CPU surface of its size. While StagingGL reports true, the
+// content prepares the frame it builds and stages it rather than draw it.
+type StagedGLSurface interface {
+	// StagingGL reports whether the frame being built is staged, with the
+	// GPU renderer's context current.
+	StagingGL() bool
+	// StageGL tells what the staged frame redraws, in device pixels from
+	// the top left (whole: all of it, as when the damage is unknown), and
+	// draw, which draws it into the framebuffer bound as the toolkit
+	// paints. A nil draw has the toolkit's paint build and draw a frame
+	// whole instead, as when staging failed.
+	StageGL(damage []image.Rectangle, whole bool, draw func())
+}
+
 // OccludableSurface is a Surface that tells when nothing of it shows, as
 // when other windows cover its window, while the system may still give it
 // frames: the content then draws nothing that moves until it shows again.

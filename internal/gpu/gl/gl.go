@@ -182,6 +182,8 @@ type Renderer struct {
 	held      bool
 	redrew    redrawn
 	part      gpu.Part
+	// ready is the frame Prepare readied, which DrawPrepared draws.
+	ready prepared
 }
 
 // redrawn is how much of a frame was drawn.
@@ -661,8 +663,33 @@ func (r *Renderer) chromaTexture(img *scene.Image) uintptr {
 // Render draws s into the bound framebuffer, which is s.Width×s.Height
 // device pixels.
 func (r *Renderer) Render(s *scene.Scene) error {
+	if _, _, err := r.Prepare(s); err != nil {
+		return err
+	}
+	return r.DrawPrepared()
+}
+
+// prepared is the frame Prepare readied for DrawPrepared: s built, and
+// with Partial the part of the framebuffer to redraw (nil: all of it).
+// built is nil when there is nothing to draw.
+type prepared struct {
+	s, built *scene.Scene
+	part     *gpu.Part
+	partial  bool
+}
+
+// Prepare readies s to be drawn by DrawPrepared, with the renderer's
+// context current and any framebuffer bound: it draws the canvases,
+// uploads the textures the frame reads and builds it. It returns what
+// DrawPrepared will redraw, in device pixels from the top left: whole
+// when it draws the whole frame, else damage, empty when the framebuffer
+// holds the frame already (Partial). A GtkGLArea's window prepares a frame
+// before GTK paints, to repaint only its damage. s must not change until
+// DrawPrepared.
+func (r *Renderer) Prepare(s *scene.Scene) (damage []image.Rectangle, whole bool, err error) {
+	r.ready = prepared{}
 	if s.Width <= 0 || s.Height <= 0 {
-		return nil
+		return nil, false, nil
 	}
 	if c := currentContext(); c != r.context {
 		// GTK realized the area again, with a new context: the old one
@@ -670,58 +697,58 @@ func (r *Renderer) Render(s *scene.Scene) error {
 		r.forget()
 		r.context = c
 		if err := r.init(); err != nil {
-			return err
+			return nil, false, err
 		}
 	}
-	if err := r.draw(s); err != nil {
-		return err
-	}
-	if e := glGetError(); e != glNoError {
-		return fmt.Errorf("gl: drawing failed (error %#x)", e)
-	}
-	return nil
-}
-
-func (r *Renderer) draw(s *scene.Scene) error {
 	r.frame++
 	r.used = 0
 	glActiveTexture(glTexture0)
 	if err := r.syncAtlas(&r.mask, s.MaskAtlas, glR8, glRed); err != nil {
-		return err
+		return nil, false, err
 	}
 	if err := r.syncAtlas(&r.color, s.ColorAtlas, glRGBA8, glRGBA); err != nil {
-		return err
+		return nil, false, err
 	}
 	if err := r.drawCanvases(s); err != nil {
-		return err
+		return nil, false, err
 	}
-	if err := r.drawFrame(s); err != nil {
-		return err
+	damage, whole, err = r.prepareFrame(s)
+	if err != nil {
+		return nil, false, err
 	}
 	if r.frame%120 == 0 {
 		r.sweep()
 	}
-	return nil
+	if e := glGetError(); e != glNoError {
+		r.ready = prepared{}
+		return nil, false, fmt.Errorf("gl: preparing failed (error %#x)", e)
+	}
+	return damage, whole, nil
 }
 
-// drawFrame draws the frame s into the framebuffer bound, only where it
-// changed since the last frame drawn when it holds that one (Partial).
-func (r *Renderer) drawFrame(s *scene.Scene) error {
+// prepareFrame builds the frame s, finding where it changed since the
+// last frame drawn when the framebuffer holds that one (Partial).
+func (r *Renderer) prepareFrame(s *scene.Scene) (damage []image.Rectangle, whole bool, err error) {
 	if !r.Partial || noPartial {
 		r.redrew = redrewWhole
-		return r.drawScene(s, &r.b)
+		built, err := r.buildScene(s, &r.b)
+		if err != nil {
+			return nil, false, err
+		}
+		r.ready = prepared{s: s, built: built}
+		return nil, true, nil
 	}
 	damage, known := r.diff.Diff(s)
 	known = known && r.held
 	if known && len(damage) == 0 {
 		// The framebuffer holds the frame already.
 		r.redrew = redrewNothing
-		return nil
+		return nil, false, nil
 	}
 	built, err := r.buildScene(s, &r.b)
 	if err != nil {
 		r.held = false
-		return err
+		return nil, false, err
 	}
 	damage = r.pipelines.Damage(&r.b, r.batchKey, &r.diff, damage, known)
 	var part *gpu.Part
@@ -729,13 +756,39 @@ func (r *Renderer) drawFrame(s *scene.Scene) error {
 	if known && r.part.Set(damage, s.Width, s.Height, func(d []image.Rectangle) []image.Rectangle { return r.diff.AddBackdrops(s, d) }) {
 		part, r.redrew = &r.part, redrewPart
 	}
-	r.held = false
-	if err := r.drawBuilt(built, &r.b, part); err != nil {
+	r.ready = prepared{s: s, built: built, part: part, partial: true}
+	if part == nil {
+		return nil, true, nil
+	}
+	rects := make([]image.Rectangle, len(part.Rects))
+	for i, a := range part.Rects {
+		rects[i] = image.Rect(int(a.Left), int(a.Top), int(a.Right), int(a.Bottom))
+	}
+	return rects, false, nil
+}
+
+// DrawPrepared draws the frame Prepare readied into the bound framebuffer,
+// which is the frame's size, only where Prepare said it changed.
+func (r *Renderer) DrawPrepared() error {
+	f := r.ready
+	r.ready = prepared{}
+	if f.built == nil {
+		return nil
+	}
+	if f.partial {
+		r.held = false
+	}
+	if err := r.drawBuilt(f.built, &r.b, f.part); err != nil {
 		return err
 	}
-	r.held = true
-	r.diff.Remember(s)
-	r.pipelines.Remember()
+	if f.partial {
+		r.held = true
+		r.diff.Remember(f.s)
+		r.pipelines.Remember()
+	}
+	if e := glGetError(); e != glNoError {
+		return fmt.Errorf("gl: drawing failed (error %#x)", e)
+	}
 	return nil
 }
 

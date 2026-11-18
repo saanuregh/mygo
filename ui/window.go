@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"image"
 	"log"
 	"os"
 	"slices"
@@ -443,6 +444,14 @@ type gpuRenderer interface {
 	Release()
 }
 
+// preparer is a GPU renderer that readies a frame, telling what it will
+// redraw, before it draws it: a GtkGLArea's, for a surface that stages
+// frames (platform.StagedGLSurface).
+type preparer interface {
+	Prepare(s *scene.Scene) (damage []image.Rectangle, whole bool, err error)
+	DrawPrepared() error
+}
+
 // invalidator is a GPU renderer drawing only what changed into a target
 // that keeps what was drawn but as the surface resizes, even to the same
 // size, as a GtkGLArea makes its buffers anew as GTK allocates it:
@@ -531,6 +540,10 @@ func (h *windowHost) present(s *scene.Scene) {
 	h.armIdle(frameIdle)
 	h.useWide(s, now)
 	defer h.ready()
+	if st, ok := h.conn.Surface.(platform.StagedGLSurface); ok && st.StagingGL() {
+		h.stage(st, s)
+		return
+	}
 	if h.render(s) {
 		h.path = "drawn on the GPU"
 		if h.degraded {
@@ -547,6 +560,38 @@ func (h *windowHost) present(s *scene.Scene) {
 		h.conn.Surface.PresentPixels(m.Pix, m.Stride, m.W, m.H)
 	}
 	h.refreshPresented()
+}
+
+// stage prepares s with the GPU renderer, for the surface to draw as the
+// toolkit paints, repainting only what it changed. Without a renderer
+// that prepares, or when preparing fails, the toolkit's paint builds and
+// draws a frame whole, as present does.
+func (h *windowHost) stage(st platform.StagedGLSurface, s *scene.Scene) {
+	g := h.gpu
+	p, ok := g.(preparer)
+	if !ok {
+		st.StageGL(nil, true, nil)
+		return
+	}
+	damage, whole, err := p.Prepare(s)
+	if err != nil {
+		log.Printf("mygo: staging a frame failed, drawing it whole: %v", err)
+		st.StageGL(nil, true, nil)
+		return
+	}
+	h.path = "drawn on the GPU"
+	st.StageGL(damage, whole, func() {
+		if h.gpu != g {
+			return // replaced since: its frame was drawn whole
+		}
+		if err := p.DrawPrepared(); err != nil {
+			log.Printf("mygo: drawing without the GPU: %v", err)
+			g.Release()
+			h.gpu = nil
+			h.retryLater()
+			h.requestFrame()
+		}
+	})
 }
 
 // ready tells the surface, after the first frame, that the frame reached

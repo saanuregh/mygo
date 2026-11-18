@@ -75,6 +75,7 @@ var (
 	gtkGLAreaSetError           func(a, gerr ptr)
 	gtkGLAreaSetAutoRender      func(a ptr, auto bool)
 	gtkGLAreaQueueRender        func(a ptr)
+	gtkGLAreaMakeCurrent        func(a ptr)
 	gdkWindowPeekChildren       func(w ptr) ptr
 	gdkWindowGetUserData        func(w ptr, data *ptr)
 	gdkEventGetSourceDevice     func(e ptr) ptr
@@ -89,7 +90,7 @@ var (
 	cbSurfaceFocusIn, cbSurfaceFocusOut, cbSurfaceScale, cbIMCommit ptr
 	cbIMPreedit, cbIMPreeditEnd, cbSurfaceRender, cbAreaContext     ptr
 	cbSurfaceUnrealize, cbSurfaceTick, cbSurfaceGesture             ptr
-	cbRenderTick, cbDrawHidden, cbWindowGLDamage                    ptr
+	cbGLTick, cbAreaResize, cbDrawHidden, cbWindowGLDamage          ptr
 	surfaceCursors                                                  = map[platform.Cursor]ptr{}
 )
 
@@ -135,7 +136,8 @@ func loadSurface() {
 		if !bind(t, &gtkGLAreaNew, "gtk_gl_area_new") || !bind(t, &gtkGLAreaSetRequiredVersion, "gtk_gl_area_set_required_version") ||
 			!bind(t, &gtkGLAreaSetHasAlpha, "gtk_gl_area_set_has_alpha") || !bind(t, &gtkGLAreaGetError, "gtk_gl_area_get_error") ||
 			!bind(t, &gtkGLAreaSetError, "gtk_gl_area_set_error") ||
-			!bind(t, &gtkGLAreaSetAutoRender, "gtk_gl_area_set_auto_render") || !bind(t, &gtkGLAreaQueueRender, "gtk_gl_area_queue_render") {
+			!bind(t, &gtkGLAreaSetAutoRender, "gtk_gl_area_set_auto_render") || !bind(t, &gtkGLAreaQueueRender, "gtk_gl_area_queue_render") ||
+			!bind(t, &gtkGLAreaMakeCurrent, "gtk_gl_area_make_current") {
 			gtkGLAreaNew = nil
 		}
 	})
@@ -161,12 +163,17 @@ type surface struct {
 	// while it drew one, and ticking that it draws one.
 	tick           uint32
 	again, ticking bool
-	// renderAgain tells that a frame was asked for during the render
-	// signal.
-	renderAgain bool
-	// renderPending tells that a tick callback asks the area to render.
-	// It is not reset on unrealize: GTK keeps tick callbacks across it.
-	renderPending bool
+	// A GtkGLArea's frames are built in glTick, the tick callback, while
+	// they are asked for, before GTK paints: staging tells that the frame
+	// being built is staged (StagingGL), glAgain that another was asked for
+	// meanwhile. stagedDraw draws the frame staged as the area renders.
+	// glHeld tells that the area's buffers hold the last frame drawn, so
+	// that a frame can be staged; until they do (first paint, resize, new
+	// context, staging failed) the render signal builds a frame whole.
+	glTick           uint32
+	staging, glAgain bool
+	stagedDraw       func()
+	glHeld           bool
 	// drawn tells that the content's first frame reached the surface
 	// (FirstFrame), and hiddenFrame that the first frame of a window
 	// hidden, which GTK never paints, waits for its idle callback
@@ -307,13 +314,14 @@ func (s *surface) newArea(gl bool) {
 		// a renderbuffer it copies, which took a small window 50 MB more of
 		// the GPU's memory, and an animation half as much CPU again.
 		gtkGLAreaSetHasAlpha(s.area, s.w.opts.Transparent)
-		// GTK keeps the area's last frame as it paints the window, and
-		// renders it again only as the content asks (queueDraw): rendering
-		// on every paint, its default, built a frame for each one a web view
-		// under the area painted.
-		gtkGLAreaSetAutoRender(s.area, false)
+		// The render signal runs on every paint of the area, but builds a
+		// frame only when none was staged and its buffers hold none: a web
+		// view under the area painting builds none, and GTK paints the last
+		// frame, which the buffers keep.
+		gtkGLAreaSetAutoRender(s.area, true)
 		connect(s.area, "create-context", cbAreaContext, data)
 		connect(s.area, "render", cbSurfaceRender, data)
+		connect(s.area, "resize", cbAreaResize, data)
 	}
 	s.gl = gl
 	gtkWidgetSetCanFocus(s.area, true)
@@ -440,13 +448,14 @@ func (s *surface) RequestFrame() {
 	}
 	switch {
 	case s.w.closed:
-	case s.drawsGL() && s.rendering:
-		// gtk_gl_area_draw clears the area's render request after it
-		// emits the render signal (gtk/gtkglarea.c), so one asked for
-		// within it is lost: ask at the next tick instead.
-		s.renderAgain = true
+	case s.drawsGL() && s.staging:
+		s.glAgain = true
 	case s.drawsGL():
-		s.queueDraw()
+		// Built before GTK paints, so that it repaints what the frame
+		// changed: asking the area to render repaints all of it.
+		if s.glTick == 0 {
+			s.glTick = gtkWidgetAddTickCallback(s.area, cbGLTick, ptr(s.w.id), 0)
+		}
 	default:
 		s.again = true
 		if s.tick == 0 {
@@ -480,23 +489,52 @@ func (s *surface) drawHidden() {
 	}
 }
 
-// queueRenderLater asks the area to render at the next tick of its frame
-// clock, after the render signal now running has returned.
-func (s *surface) queueRenderLater() {
-	if !s.renderPending && !s.w.closed {
-		s.renderPending = true
-		gtkWidgetAddTickCallback(s.area, cbRenderTick, ptr(s.w.id), 0)
-	}
-}
-
-// queueDraw has the area paint again, a GtkGLArea rendering a frame in its
-// render signal as it does.
+// queueDraw has the area paint again, a GtkGLArea building and rendering
+// a frame whole in its render signal as it does.
 func (s *surface) queueDraw() {
 	if s.gl {
+		s.glHeld = false
 		gtkGLAreaQueueRender(s.area)
 	} else {
 		gtkWidgetQueueDraw(s.area)
 	}
+}
+
+// StagingGL reports whether the frame being built is staged
+// (platform.StagedGLSurface): it is built in glTick.
+func (s *surface) StagingGL() bool { return s.staging }
+
+// StageGL has GTK repaint what the frame staged changes, which draw draws
+// as the area renders; the whole area when whole, and a frame built whole
+// in the render signal when draw is nil.
+func (s *surface) StageGL(damage []image.Rectangle, whole bool, draw func()) {
+	s.stagedDraw = draw
+	switch {
+	case draw == nil:
+		s.queueDraw()
+	case whole:
+		gtkWidgetQueueDraw(s.area)
+	default:
+		for _, d := range damage {
+			s.queueDamage(d)
+		}
+	}
+}
+
+// queueDamage has GTK repaint d, in the area's device pixels, rounded out
+// to whole DIPs.
+func (s *surface) queueDamage(d image.Rectangle) {
+	scale := max(int(gtkWidgetGetScaleFactor(s.area)), 1)
+	// GTK takes the area to repaint in the coordinates of the widget's
+	// GdkWindow, whatever its documentation says: a GtkGLArea has none of
+	// its own, and its parent's starts above and left of it, by the title
+	// bar GTK draws, its shadow, or the menu bar.
+	var at gdkRectangle
+	if !gtkWidgetGetHasWindow(s.area) {
+		gtkWidgetGetAllocation(s.area, &at)
+	}
+	x0, y0 := d.Min.X/scale, d.Min.Y/scale
+	gtkWidgetQueueDrawArea(s.area, at.X+int32(x0), at.Y+int32(y0), int32((d.Max.X+scale-1)/scale-x0), int32((d.Max.Y+scale-1)/scale-y0))
 }
 
 // drawing tells that the area draws a frame: in its tick callback, its
@@ -514,18 +552,7 @@ func (s *surface) drawsGL() bool { return s.gl && gtkGLAreaGetError(s.area) == 0
 // the next frame.
 func (s *surface) PresentDamage(pix []byte, stride, width, height int, damage []image.Rectangle) {
 	scale := max(int(gtkWidgetGetScaleFactor(s.area)), 1)
-	// GTK takes the area to repaint in the coordinates of the widget's
-	// GdkWindow, whatever its documentation says: a GtkGLArea has none of
-	// its own, and its parent's starts above and left of it, by the title
-	// bar GTK draws, its shadow, or the menu bar.
-	var at gdkRectangle
-	if !gtkWidgetGetHasWindow(s.area) {
-		gtkWidgetGetAllocation(s.area, &at)
-	}
-	queue := func(d image.Rectangle) {
-		x0, y0 := d.Min.X/scale, d.Min.Y/scale
-		gtkWidgetQueueDrawArea(s.area, at.X+int32(x0), at.Y+int32(y0), int32((d.Max.X+scale-1)/scale-x0), int32((d.Max.Y+scale-1)/scale-y0))
-	}
+	queue := s.queueDamage
 	if !s.ticking {
 		s.PresentPixels(pix, stride, width, height)
 		if s.cr != 0 {
@@ -1207,26 +1234,58 @@ func initSurfaceCallbacks() {
 		}
 		return 0 // G_SOURCE_REMOVE
 	})
-	cbRenderTick = purego.NewCallback(func(widget, clock, data ptr) bool {
-		if s := b().surfaceOf(data); s != nil {
-			s.renderPending = false
-			s.queueDraw()
+	// The GtkGLArea's tick callback builds the frames asked for before GTK
+	// paints, with the area's context current, as long as they are asked
+	// for: the content stages each (StageGL).
+	cbGLTick = purego.NewCallback(func(widget, clock, data ptr) bool {
+		s := b().surfaceOf(data)
+		if s == nil {
+			return false
 		}
-		return false
+		s.glAgain = false
+		if !s.drawsGL() || !s.glHeld {
+			// The buffers hold no frame to change: the render signal builds
+			// one whole.
+			s.glTick = 0
+			s.queueDraw()
+			return false
+		}
+		s.paceFrameClock()
+		gtkGLAreaMakeCurrent(s.area)
+		s.staging = true
+		s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
+		s.staging = false
+		if !s.glAgain {
+			s.glTick = 0
+		}
+		return s.glAgain
+	})
+	// GTK made the GtkGLArea's buffers anew, as it is allocated: what they
+	// hold is undefined.
+	cbAreaResize = purego.NewCallback(func(area ptr, width, height int32, data ptr) {
+		if s := b().surfaceOf(data); s != nil {
+			s.glHeld = false
+		}
 	})
 	cbSurfaceRender = purego.NewCallback(func(area, context, data ptr) bool {
 		s := b().surfaceOf(data)
 		if s == nil {
 			return false
 		}
-		s.rendering, s.rendered, s.inMemory = true, true, false
-		s.paceFrameClock()
-		s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
-		s.rendering = false
-		if s.renderAgain {
-			s.renderAgain = false
-			s.queueRenderLater()
+		s.rendering, s.rendered = true, true
+		switch draw := s.stagedDraw; {
+		case !s.glHeld:
+			// Nothing to draw over: a frame built whole, now.
+			s.stagedDraw, s.inMemory = nil, false
+			s.paceFrameClock()
+			s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
+			s.glHeld = true
+		case draw != nil:
+			s.stagedDraw, s.inMemory = nil, false
+			draw()
 		}
+		// Else GTK paints the frame the buffers hold.
+		s.rendering = false
 		return true
 	})
 	cbSurfaceSize = purego.NewCallback(func(widget, allocation, data ptr) {
