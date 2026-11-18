@@ -12,11 +12,17 @@ import (
 	"github.com/egoist/mygo/internal/platform"
 )
 
-// TestEvalInWorld: EvalInWorld runs in the world it names, both attempts
-// of the statement form included, and Eval stays in the main world.
+// TestEvalInWorld: EvalInWorld runs in the world it names, the check of
+// which form the code is included, and Eval stays in the main world.
 func TestEvalInWorld(t *testing.T) {
 	w, fw := testWindow(t, WindowOptions{})
 	fw.AsyncFunction = func(body string) (string, error) {
+		if strings.HasPrefix(body, "const F=") {
+			if strings.Contains(body, "let x") {
+				return "body", nil
+			}
+			return "expr", nil
+		}
 		if strings.Contains(body, "await(\nlet x = 1; return x\n)") {
 			return "", errors.New("SyntaxError: Unexpected token")
 		}
@@ -31,7 +37,7 @@ func TestEvalInWorld(t *testing.T) {
 	if _, err := w.Page().Eval("1"); err != nil {
 		t.Errorf("Eval = %v", err)
 	}
-	if want := []string{"zode", "zode", "zode", ""}; !slices.Equal(fw.AsyncWorlds, want) {
+	if want := []string{"zode", "zode", "zode", "zode", "", ""}; !slices.Equal(fw.AsyncWorlds, want) {
 		t.Errorf("worlds = %q, want %q", fw.AsyncWorlds, want)
 	}
 }

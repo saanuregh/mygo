@@ -1298,7 +1298,15 @@ func TestEvalWindowCloses(t *testing.T) {
 func TestEvalAnsweredByNextPage(t *testing.T) {
 	w, fw := testWindow(t, WindowOptions{})
 	replies := make(chan func(string, error), 1)
-	fw.AsyncCallback = func(body string, reply func(string, error)) { replies <- reply }
+	fw.AsyncCallback = func(body string, reply func(string, error)) {
+		// The check of which form the code is answers at once: the
+		// navigation comes while the expression itself runs.
+		if strings.HasPrefix(body, "const F=") {
+			reply("expr", nil)
+			return
+		}
+		replies <- reply
+	}
 	type res struct {
 		v   any
 		err error
