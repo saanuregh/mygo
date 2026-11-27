@@ -181,8 +181,8 @@ func (b *Backend) Init(h platform.AppHandler, opts platform.AppOptions) error {
 }
 
 // findWaylandGlobals binds what the Wayland subsurface needs on GDK's
-// display, GDK's wl_compositor with the globals GDK keeps to itself, and
-// says what it found.
+// display, GDK's wl_compositor, or one of a later version, with the
+// globals GDK keeps to itself, and says what it found.
 func (b *Backend) findWaylandGlobals() {
 	var getDisplay, getCompositor func(display ptr) ptr
 	if !bind(libGDK, &getDisplay, "gdk_wayland_display_get_wl_display") ||

@@ -5,6 +5,9 @@ package linux
 import (
 	"errors"
 	"fmt"
+	"image"
+	"slices"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -17,9 +20,11 @@ import (
 // since the last frame, and Mesa's window surfaces keep no frame from one
 // swap to the next: frames are drawn into a framebuffer of the context's
 // own, a texture as large as the subsurface's buffers, which keeps the
-// last, and copied whole into the window's for each swap. At a fractional
-// scale, the framebuffer is mygo's frame, which may be a pixel larger than
-// the window's buffers: its top left is copied.
+// last, and copied into the window's for each swap: where EGL tells the
+// back buffer's age, only what changed since that buffer showed
+// (subsurface_blit.go), else all of it. At a fractional scale, the
+// framebuffer is mygo's frame, which may be a pixel larger than the
+// window's buffers: its top left is copied.
 
 // EGL's and GL's enumerations.
 const (
@@ -40,6 +45,8 @@ const (
 	eglContextMinorVersion   = 0x30FB
 	eglContextProfileMask    = 0x30FD
 	eglContextCoreProfileBit = 0x1
+	eglExtensions            = 0x3055
+	eglBufferAgeEXT          = 0x313D
 	glColorBufferBit         = 0x4000
 	glFramebuffer            = 0x8D40
 	glReadFramebuffer        = 0x8CA8
@@ -76,6 +83,9 @@ type eglLib struct {
 	destroyContext      func(display, context ptr) uint32
 	getCurrentContext   func() ptr
 	getError            func() int32
+	querySurface        func(display, surface ptr, attrib int32, value *int32) uint32
+	queryString         func(display ptr, name int32) string
+	getProcAddress      func(name *byte) ptr
 
 	windowCreate  func(surface ptr, width, height int32) ptr // wl_egl_window_create
 	windowResize  func(window ptr, width, height, dx, dy int32)
@@ -119,6 +129,8 @@ var loadEGL = sync.OnceValues(func() (*eglLib, error) {
 		{&l.makeCurrent, "eglMakeCurrent"}, {&l.swapBuffers, "eglSwapBuffers"}, {&l.swapInterval, "eglSwapInterval"},
 		{&l.destroySurface, "eglDestroySurface"}, {&l.destroyContext, "eglDestroyContext"},
 		{&l.getCurrentContext, "eglGetCurrentContext"}, {&l.getError, "eglGetError"},
+		{&l.querySurface, "eglQuerySurface"}, {&l.queryString, "eglQueryString"},
+		{&l.getProcAddress, "eglGetProcAddress"},
 	}
 	for _, f := range funcs {
 		if !bind(egl, f.fn, f.name) {
@@ -128,11 +140,8 @@ var loadEGL = sync.OnceValues(func() (*eglLib, error) {
 	// EGL 1.5's, else EXT_platform_base's, whose attributes are EGLint
 	// rather than EGLAttrib: none are passed. GDK looks them up so too.
 	if !bind(egl, &l.getPlatformDisplay, "eglGetPlatformDisplay") {
-		var getProcAddress func(name *byte) ptr
-		if bind(egl, &getProcAddress, "eglGetProcAddress") {
-			if p := getProcAddress(cs("eglGetPlatformDisplayEXT")); p != 0 {
-				purego.RegisterFunc(&l.getPlatformDisplay, p)
-			}
+		if p := l.getProcAddress(cs("eglGetPlatformDisplayEXT")); p != 0 {
+			purego.RegisterFunc(&l.getPlatformDisplay, p)
 		}
 	}
 
@@ -188,6 +197,13 @@ type subsurfaceEGL struct {
 	window, surface ptr
 	// unsynced tells that the surface's swaps wait for no frame callback.
 	unsynced bool
+	// bufferAge tells that EGL tells the back buffer's age
+	// (EGL_EXT_buffer_age) and swapWithDamage takes what a frame changed
+	// (EGL_KHR_swap_buffers_with_damage, or EXT's): frames are copied in
+	// part then. blits remembers what the last frames changed.
+	bufferAge      bool
+	swapWithDamage func(display, surface ptr, rects *int32, n int32) uint32
+	blits          blitHistory
 	// fb is the framebuffer frames are drawn into, of tex, w×h pixels;
 	// 0 until the first.
 	fb, tex uint32
@@ -232,10 +248,35 @@ func newSubsurfaceEGL(wlDisplay ptr) (*subsurfaceEGL, error) {
 			continue
 		}
 		if e.context = l.createContext(e.display, e.config, 0, &a.version[0]); e.context != 0 {
+			e.partialCopies()
 			return e, nil
 		}
 	}
 	return nil, fmt.Errorf("EGL makes no OpenGL 3.3 or OpenGL ES 3.0 context for a window (%#x)", l.getError())
+}
+
+// partialCopies finds whether the display tells back buffers' ages and
+// takes what a swap changed, which copying only that needs: without
+// either, frames are copied whole.
+func (e *subsurfaceEGL) partialCopies() {
+	l := e.l
+	exts := strings.Fields(l.queryString(e.display, eglExtensions))
+	if !slices.Contains(exts, "EGL_EXT_buffer_age") {
+		return
+	}
+	for _, f := range []struct{ ext, name string }{
+		{"EGL_KHR_swap_buffers_with_damage", "eglSwapBuffersWithDamageKHR"},
+		{"EGL_EXT_swap_buffers_with_damage", "eglSwapBuffersWithDamageEXT"},
+	} {
+		if !slices.Contains(exts, f.ext) {
+			continue
+		}
+		if p := l.getProcAddress(cs(f.name)); p != 0 {
+			purego.RegisterFunc(&e.swapWithDamage, p)
+			e.bufferAge = true
+			return
+		}
+	}
 }
 
 // chooseARGB8888 returns a configuration for windows rendering with the
@@ -276,6 +317,7 @@ func (e *subsurfaceEGL) attach(wlSurface ptr, bw, bh int) error {
 		return err
 	}
 	e.unsynced = false
+	e.blits.reset()
 	return nil
 }
 
@@ -284,6 +326,7 @@ func (e *subsurfaceEGL) resize(bw, bh int) {
 	if e.window != 0 {
 		e.l.windowResize(e.window, int32(bw), int32(bh), 0, 0)
 	}
+	e.blits.reset()
 }
 
 // detach lets go of the window surface, before its wl_surface goes.
@@ -358,6 +401,7 @@ func (e *subsurfaceEGL) target(bw, bh int) bool {
 	l.bindTexture(glTexture2D, 0)
 	l.framebufferTexture2D(glFramebuffer, glColorAttachment0, glTexture2D, e.tex, 0)
 	e.w, e.h = bw, bh
+	e.blits.reset()
 	if l.checkFramebuffer(glFramebuffer) != glFramebufferComplete {
 		l.deleteTextures(1, &e.tex)
 		e.tex, e.w, e.h = 0, 0, 0
@@ -369,28 +413,62 @@ func (e *subsurfaceEGL) target(bw, bh int) bool {
 	return true
 }
 
-// present copies the framebuffer frames are drawn into, whole, into the
-// window surface's, of bw×bh pixels, and swaps: the swap attaches the
-// buffer and commits the wl_surface. Both keep GL's rows, which go up, as
-// a GtkGLArea's framebuffer does: where the window's is smaller, the
-// framebuffer's top rows are copied, from the left.
-func (e *subsurfaceEGL) present(bw, bh int) error {
+// present copies the frame from the framebuffer it was drawn into to the
+// window surface's, of bw×bh pixels, and swaps: the swap attaches the buffer and
+// commits the wl_surface. damage is what the frame changed, in the
+// framebuffer's pixels from the top left, nil or whole for all of it: the
+// copy takes what changed since the back buffer last showed, where EGL
+// tells its age, else all of it, and the swap tells the compositor what
+// changed. Both framebuffers keep GL's rows, which go up, as a
+// GtkGLArea's does: where the window's is smaller, the framebuffer's top
+// rows are copied, from the left.
+func (e *subsurfaceEGL) present(bw, bh int, damage []image.Rectangle, whole bool) error {
 	if e.tex == 0 || !e.makeCurrent() {
 		return fmt.Errorf("EGL cannot make the context current (%#x)", e.l.getError())
 	}
 	l := e.l
-	w, h := int32(min(bw, e.w)), int32(min(bh, e.h))
-	top := int32(e.h)
+	bounds := image.Rect(0, 0, min(bw, e.w), min(bh, e.h))
+	all := []image.Rectangle{bounds}
+	copies, shown := all, all
+	if e.bufferAge {
+		// The query picks the back buffer the frame draws into.
+		var age int32
+		if l.querySurface(e.display, e.surface, eglBufferAgeEXT, &age) == 0 {
+			age = 0
+		}
+		if c := e.blits.copies(damage, whole, int(age), bounds); c != nil {
+			copies = c
+		}
+		if c := e.blits.copies(damage, whole, 1, bounds); c != nil {
+			shown = c
+		}
+	}
 	l.bindFramebuffer(glReadFramebuffer, e.fb)
 	l.bindFramebuffer(glDrawFramebuffer, 0)
 	l.disable(glScissorTest)
-	l.blitFramebuffer(0, top-h, w, top, 0, 0, w, h, glColorBufferBit, glNearest)
+	for _, r := range copies {
+		sy0, sy1 := int32(e.h-r.Max.Y), int32(e.h-r.Min.Y)
+		dy0, dy1 := int32(bh-r.Max.Y), int32(bh-r.Min.Y)
+		l.blitFramebuffer(int32(r.Min.X), sy0, int32(r.Max.X), sy1, int32(r.Min.X), dy0, int32(r.Max.X), dy1, glColorBufferBit, glNearest)
+	}
 	l.bindFramebuffer(glFramebuffer, e.fb)
 	if err := l.glGetError(); err != 0 {
+		e.blits.reset()
 		return fmt.Errorf("copying the frame failed (GL error %#x)", err)
 	}
-	if l.swapBuffers(e.display, e.surface) == 0 {
+	var swapped uint32
+	if e.bufferAge && e.swapWithDamage != nil {
+		rects := eglDamageRects(shown, bh)
+		swapped = e.swapWithDamage(e.display, e.surface, &rects[0], int32(len(shown)))
+	} else {
+		swapped = l.swapBuffers(e.display, e.surface)
+	}
+	if swapped == 0 {
+		e.blits.reset()
 		return fmt.Errorf("eglSwapBuffers failed (%#x)", l.getError())
+	}
+	if e.bufferAge {
+		e.blits.shown(damage, whole)
 	}
 	return nil
 }

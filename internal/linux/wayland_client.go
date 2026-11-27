@@ -365,7 +365,9 @@ func (g *waylandGlobals) String() string {
 
 // findWaylandGlobals binds the globals a subsurface needs on display.
 // compositor is a wl_compositor already bound (GDK's), used in place of a
-// second one; 0 binds one. The registry is read on a queue of its own, from
+// second one if its surfaces take damage in their buffers' pixels
+// (wl_surface.damage_buffer), which EGL's swaps with damage send: else,
+// or for 0, one is bound. The registry is read on a queue of its own, from
 // a wrapper of the display, so that GDK's handlers see none of its events
 // and no other queue is dispatched; the globals then move to the default
 // queue, which GDK dispatches on the main thread.
@@ -423,6 +425,9 @@ func (c *waylandClient) findWaylandGlobals(display, compositor ptr) (*waylandGlo
 		if *out = c.marshal(registry, wlRegistryBind, iface, v, 0, &args[0]); *out != 0 {
 			*version = v
 		}
+	}
+	if compositor != 0 && c.proxyGetVersion(compositor) < wlSurfaceDamageBufferSince {
+		compositor = 0 // GDK 3 binds version 3
 	}
 	if compositor != 0 {
 		g.compositor, g.compositorVersion = compositor, c.proxyGetVersion(compositor)

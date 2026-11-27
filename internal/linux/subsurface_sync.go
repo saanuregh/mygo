@@ -39,6 +39,10 @@ type subsurfaceToplevel struct {
 	// requestLayout asks the frame clock for a layout, another if it lays
 	// out now.
 	requestLayout func()
+	// frameCallbacks has GDK ask for the toplevel's frame callbacks on
+	// surface too, or no more, and reports whether it does; nil where GDK
+	// cannot (subsurface_opaque.go).
+	frameCallbacks func(surface ptr, add bool) bool
 }
 
 var (
@@ -46,6 +50,9 @@ var (
 	// cbSubsurfaceLayout follows the layout of a toplevel's frame clock.
 	cbSubsurfaceLayout        ptr
 	gdkFrameClockRequestPhase func(clock ptr, phase uint32)
+	// GDK 3.24.25's.
+	gdkWaylandWindowAddFrameCallbackSurface    func(window, surface ptr)
+	gdkWaylandWindowRemoveFrameCallbackSurface func(window, surface ptr)
 )
 
 // gdkFrameClockPhaseLayout is GDK_FRAME_CLOCK_PHASE_LAYOUT.
@@ -54,6 +61,10 @@ const gdkFrameClockPhaseLayout = 1 << 3
 func loadSubsurfaceGTK() {
 	subsurfaceGTKOnce.Do(func() {
 		mustBind(libGDK, &gdkFrameClockRequestPhase, "gdk_frame_clock_request_phase")
+		if !bind(libGDK, &gdkWaylandWindowAddFrameCallbackSurface, "gdk_wayland_window_add_frame_callback_surface") ||
+			!bind(libGDK, &gdkWaylandWindowRemoveFrameCallbackSurface, "gdk_wayland_window_remove_frame_callback_surface") {
+			gdkWaylandWindowAddFrameCallbackSurface, gdkWaylandWindowRemoveFrameCallbackSurface = nil, nil
+		}
 		cbSubsurfaceLayout = purego.NewCallback(func(clock, data ptr) {
 			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
 				s.sub.layout()
@@ -101,6 +112,19 @@ func gtkToplevel(s *surface) subsurfaceToplevel {
 				loadSubsurfaceGTK()
 				gdkFrameClockRequestPhase(clock, gdkFrameClockPhaseLayout)
 			}
+		},
+		frameCallbacks: func(surface ptr, add bool) bool {
+			loadSubsurfaceGTK()
+			win := gtkWidgetGetWindow(s.w.win)
+			if gdkWaylandWindowAddFrameCallbackSurface == nil || win == 0 {
+				return false
+			}
+			if add {
+				gdkWaylandWindowAddFrameCallbackSurface(win, surface)
+			} else {
+				gdkWaylandWindowRemoveFrameCallbackSurface(win, surface)
+			}
+			return true
 		},
 	}
 }
@@ -167,6 +191,10 @@ func (u *subsurface) syncOnce(draw func()) {
 		return
 	}
 	u.sync.begin()
+	// The compositor may apply the frame with others held with it: it
+	// shows whole, and frames copy whole into each back buffer until it
+	// holds one shown since.
+	u.egl.blits.reset()
 	draw()
 }
 
@@ -222,10 +250,11 @@ func (u *subsurface) layout() {
 // draws a frame (PlaceWebViews): GTK moves them as it next lays out and
 // paints the toplevel, which GDK then commits, and the frame, whose holes
 // show them at their new places, commits synchronized to show with that
-// commit. The frame draws already: syncOnce's draw is the rest of it.
-// One drawn in a paint shows with this paint's commit, a frame before the
-// web views move.
+// commit, with the opaque region less those holes. The frame draws
+// already: syncOnce's draw is the rest of it. One drawn in a paint shows
+// with this paint's commit, a frame before the web views move.
 func (u *subsurface) webViewsPlaced() {
+	u.setOpaque()
 	u.syncOnce(func() {})
 }
 
@@ -233,5 +262,6 @@ func (u *subsurface) webViewsPlaced() {
 func (u *subsurface) afterPaint() {
 	if u.mapped && !u.failed {
 		u.sync.afterPaint()
+		u.commitFrameRequest()
 	}
 }

@@ -39,26 +39,27 @@ import (
 
 // Requests' opcodes, their order in wayland.xml.
 const (
-	wlCompositorCreateSurface = 0
-	wlCompositorCreateRegion  = 1
-	wlSurfaceDestroy          = 0
-	wlSurfaceFrame            = 3
-	wlSurfaceSetInputRegion   = 5
-	wlSurfaceSetBufferScale   = 8
-	wlRegionDestroy           = 0
-	wlSubcompositorGetSubsurf = 1
-	wlSubsurfaceDestroy       = 0
-	wlSubsurfaceSetPosition   = 1
-	wlSubsurfaceSetSync       = 4
-	wlSubsurfaceSetDesync     = 5
-	wpViewporterGetViewport   = 1
-	wpViewportDestroy         = 0
-	wpViewportSetDestination  = 2
-	wpFractionManagerGetScale = 1
-	wpFractionalScaleDestroy  = 0
-	wlMarshalFlagDestroy      = 1 << 0 // WL_MARSHAL_FLAG_DESTROY
-	wlSurfaceBufferScaleSince = 3
-	gPriorityHighIdle         = 100 // G_PRIORITY_HIGH_IDLE
+	wlCompositorCreateSurface  = 0
+	wlCompositorCreateRegion   = 1
+	wlSurfaceDestroy           = 0
+	wlSurfaceFrame             = 3
+	wlSurfaceSetInputRegion    = 5
+	wlSurfaceSetBufferScale    = 8
+	wlRegionDestroy            = 0
+	wlSubcompositorGetSubsurf  = 1
+	wlSubsurfaceDestroy        = 0
+	wlSubsurfaceSetPosition    = 1
+	wlSubsurfaceSetSync        = 4
+	wlSubsurfaceSetDesync      = 5
+	wpViewporterGetViewport    = 1
+	wpViewportDestroy          = 0
+	wpViewportSetDestination   = 2
+	wpFractionManagerGetScale  = 1
+	wpFractionalScaleDestroy   = 0
+	wlMarshalFlagDestroy       = 1 << 0 // WL_MARSHAL_FLAG_DESTROY
+	wlSurfaceBufferScaleSince  = 3
+	wlSurfaceDamageBufferSince = 4
+	gPriorityHighIdle          = 100 // G_PRIORITY_HIGH_IDLE
 )
 
 // subsurface is the Wayland subsurface of a window's surface.
@@ -78,6 +79,11 @@ type subsurface struct {
 	// the buffers are at a fractional scale; buffer the size of the
 	// buffers, in pixels.
 	destination, buffer image.Point
+	// opaque is the opaque region as last sent, nil for none;
+	// frameCallbacks tells that GDK asks for the toplevel's frame
+	// callbacks on the wlSurface too (subsurface_opaque.go).
+	opaque         []image.Rectangle
+	frameCallbacks bool
 	// scale120 is the compositor's preferred scale for the subsurface, in
 	// 120ths, 0 until it sends one: kept as the subsurface is made anew,
 	// as the best guess until the new one is sent.
@@ -91,9 +97,10 @@ type subsurface struct {
 	pacer   framePacer
 	frameCB ptr
 	// drew tells that the frame drawing changed the framebuffer (DrewGL),
-	// show that the next frame shows even if it changes nothing, as the
-	// first on a new wl_surface.
-	drew, show bool
+	// within damage, or all of it when whole; show that the next frame
+	// shows even if it changes nothing, as the first on a new wl_surface.
+	drew, show, whole bool
+	damage            []image.Rectangle
 	// top is the toplevel; sync follows whether the subsurface is
 	// synchronized with it, resync tells that the next frame draws as GTK
 	// paints the area, in step with it (subsurface_sync.go); stopWatch
@@ -246,12 +253,14 @@ func (u *subsurface) create() {
 		u.scale120 = 0
 	}
 	u.mapped = true
+	u.frameCallbacks = u.top.frameCallbacks != nil && u.top.frameCallbacks(u.wlSurface, true)
 	u.sync.reset(true)
 	u.stopWatch = u.top.watchPaints()
 	r, scale := u.placement()
 	u.x, u.y = r.Min.X, r.Min.Y
 	u.request(u.sub, wlSubsurfaceSetPosition, wlInt(u.x), wlInt(u.y))
 	u.setSize(r.Dx(), r.Dy(), scale)
+	u.setOpaque()
 	bw, bh := u.bufferSize()
 	u.buffer = image.Pt(bw, bh)
 	if err := u.egl.attach(u.wlSurface, bw, bh); err != nil {
@@ -308,12 +317,17 @@ func (u *subsurface) destroy() {
 		u.sub = 0
 	}
 	if u.wlSurface != 0 {
+		if u.frameCallbacks {
+			u.top.frameCallbacks(u.wlSurface, false)
+			u.frameCallbacks = false
+		}
 		u.destroyProxy(u.wlSurface, wlSurfaceDestroy)
 		u.wlSurface = 0
 	}
 	u.mapped = false
 	u.x, u.y, u.logicalW, u.logicalH, u.scale = 0, 0, 0, 0, 0
 	u.destination, u.buffer = image.Point{}, image.Point{}
+	u.opaque = nil
 }
 
 // release lets go of the subsurface and its context, as the window goes.
@@ -374,6 +388,7 @@ func (u *subsurface) place() {
 		u.request(u.sub, wlSubsurfaceSetPosition, wlInt(u.x), wlInt(u.y))
 	}
 	u.setSize(r.Dx(), r.Dy(), scale)
+	u.setOpaque()
 	resized := r != was
 	if b := image.Pt(u.bufferSize()); b != u.buffer {
 		u.buffer = b
@@ -382,6 +397,7 @@ func (u *subsurface) place() {
 	}
 	if resized {
 		u.show = true
+		u.egl.blits.reset()
 		u.resyncNext()
 	}
 }
@@ -397,9 +413,13 @@ func (u *subsurface) MakeGLCurrent() bool {
 	return u.egl.target(fw, fh)
 }
 
-// DrewGL tells that the frame drawing changed the framebuffer, which then
-// shows (platform.GLTarget). All of it is copied for now.
-func (u *subsurface) DrewGL(damage []image.Rectangle, whole bool) { u.drew = true }
+// DrewGL tells that the frame drawing changed the framebuffer within
+// damage, or all of it, which then shows (platform.GLTarget).
+func (u *subsurface) DrewGL(damage []image.Rectangle, whole bool) {
+	u.drew = true
+	u.whole = u.whole || whole
+	u.damage = append(u.damage, damage...)
+}
 
 var _ platform.GLTarget = (*subsurface)(nil)
 
@@ -416,7 +436,7 @@ func (u *subsurface) frame() bool {
 		u.broke("EGL cannot make the context current with a framebuffer")
 		return false
 	}
-	u.drew = false
+	u.drew, u.whole, u.damage = false, false, u.damage[:0]
 	s.rendering = true
 	s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
 	s.rendering = false
@@ -443,7 +463,9 @@ func (u *subsurface) present() bool {
 	}
 	u.c.addListener(cb, subsurfaceFrameListener, ptr(u.s.w.id))
 	u.frameCB = cb
-	if err := u.egl.present(u.bufferSize()); err != nil {
+	// A frame that drew nothing shows as the first after a change, whole.
+	bw, bh := u.bufferSize()
+	if err := u.egl.present(bw, bh, u.damage, u.whole || !u.drew); err != nil {
 		u.broke(err.Error())
 		return false
 	}
@@ -461,71 +483,6 @@ func (u *subsurface) frameDone(cb ptr) {
 	u.frameCB = 0
 	u.pacer.done()
 }
-
-// framePacer paces a subsurface's frames by its frame callbacks. A frame
-// asked for (request) while none is due draws at once, from soon; one
-// asked for while a callback is due, as many as are asked meanwhile, draws
-// once it comes (done). A frame that showed nothing asks for no callback:
-// the next waits about a refresh (later), rather than spin.
-type framePacer struct {
-	// soon has run called at once from the main loop, later after about a
-	// refresh; draw draws a frame and reports whether it showed one, with
-	// a frame callback asked for.
-	soon, later func()
-	draw        func() bool
-	// wanted tells that a frame is asked for, queued that run is, drawing
-	// that draw runs, and waiting that a frame callback is due.
-	wanted, queued, drawing, waiting bool
-}
-
-// request asks for a frame.
-func (p *framePacer) request() {
-	p.wanted = true
-	if !p.queued && !p.drawing && !p.waiting {
-		p.queued = true
-		p.soon()
-	}
-}
-
-// run draws the frame asked for, unless a frame callback is due.
-func (p *framePacer) run() {
-	p.queued = false
-	if p.waiting || !p.wanted {
-		return
-	}
-	p.now()
-}
-
-// now draws a frame at once, even with a frame callback due, as one in
-// step with the toplevel does: the callback of the frame it shows paces
-// the next.
-func (p *framePacer) now() {
-	p.wanted, p.drawing = false, true
-	shown := p.draw()
-	p.drawing = false
-	switch {
-	case shown:
-		p.waiting = true
-	case p.wanted && !p.queued && !p.waiting:
-		// The frame asked for another as it drew.
-		p.queued = true
-		p.later()
-	}
-}
-
-// done tells that the frame callback came: a frame asked for meanwhile
-// draws now.
-func (p *framePacer) done() {
-	p.waiting = false
-	if p.wanted && !p.queued {
-		p.queued = true
-		p.soon()
-	}
-}
-
-// stop tells that no frame callback is coming, as the subsurface went: the
-// next frame asked for draws at once.
-func (p *framePacer) stop() { p.waiting = false }
 
 var (
 	subsurfaceCallbacksOnce            sync.Once

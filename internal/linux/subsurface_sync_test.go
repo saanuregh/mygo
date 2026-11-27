@@ -102,8 +102,8 @@ type fakeWayland struct {
 // Requests' names by the kind of proxy and opcode.
 var fakeRequests = map[string][]string{
 	"compositor":    {"create_surface", "create_region"},
-	"surface":       {"destroy", "", "", "frame", "", "set_input_region", "", "", "set_buffer_scale"},
-	"region":        {"destroy"},
+	"surface":       {"destroy", "", "", "frame", "set_opaque_region", "set_input_region", "commit", "", "set_buffer_scale"},
+	"region":        {"destroy", "add"},
 	"subcompositor": {"", "get_subsurface"},
 	"subsurface":    {"destroy", "set_position", "", "", "set_sync", "set_desync"},
 	"viewporter":    {"", "get_viewport"},
@@ -166,8 +166,10 @@ func (f *fakeWayland) client() *waylandClient {
 					shown = append(shown, f.name(ptr(v)))
 				}
 			}
-		case op == "set_input_region":
+		case op == "set_input_region" || op == "set_opaque_region":
 			shown = append(shown, f.name(ptr(a[0])))
+		case op == "add":
+			shown = append(shown, fmt.Sprint(int32(a[0])), fmt.Sprint(int32(a[1])), fmt.Sprint(int32(a[2])), fmt.Sprint(int32(a[3])))
 		case op == "set_position" || op == "set_destination":
 			shown = append(shown, fmt.Sprint(int32(a[0])), fmt.Sprint(int32(a[1])))
 		case op == "set_buffer_scale":
