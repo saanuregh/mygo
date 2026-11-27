@@ -418,6 +418,10 @@ type SurfaceNative struct {
 	// GtkGLArea while its render signal draws a frame with OpenGL, in the
 	// context it made current (Linux).
 	Widget, GLArea uintptr
+	// GLTarget is the framebuffer of a context of the backend's own, which
+	// keeps the last frame drawn, while a frame draws with OpenGL into it,
+	// with the context current (Linux's Wayland subsurface).
+	GLTarget GLTarget
 	// Canvas is the number of the canvas's WebGL 2 context (package gl's
 	// Context.ID), current while SurfaceFrame events are handled
 	// (browsers).
@@ -425,6 +429,20 @@ type SurfaceNative struct {
 	// Window is the surface's ANativeWindow, which an EGL context draws
 	// into (Android); Layer is its CAMetalLayer on iOS.
 	Window uintptr
+}
+
+// GLTarget is a framebuffer of the backend's own that a GPU renderer draws
+// frames into with OpenGL, which keeps the last frame drawn, and which the
+// backend shows (SurfaceNative.GLTarget).
+type GLTarget interface {
+	// MakeGLCurrent makes the target's context current with its
+	// framebuffer bound, as a frame's actions may have left another
+	// current, and reports whether it did.
+	MakeGLCurrent() bool
+	// DrewGL tells that the frame changed the framebuffer within damage,
+	// in device pixels from the top left, or all of it when whole: the
+	// backend shows it once the frame returns.
+	DrewGL(damage []image.Rectangle, whole bool)
 }
 
 // RectF is a rectangle in DIPs with fractional coordinates.

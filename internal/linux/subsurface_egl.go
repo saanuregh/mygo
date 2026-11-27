@@ -13,7 +13,11 @@ import (
 
 // EGL on the Wayland subsurface (subsurface.go): a context of mygo's own,
 // on the EGLDisplay of GDK's wl_display, drawing into a wl_egl_window of
-// the subsurface's wl_surface.
+// the subsurface's wl_surface. mygo's renderer draws only what changed
+// since the last frame, and Mesa's window surfaces keep no frame from one
+// swap to the next: frames are drawn into a framebuffer of the context's
+// own, a texture as large as the subsurface's buffers, which keeps the
+// last, and copied whole into the window's for each swap.
 
 // EGL's and GL's enumerations.
 const (
@@ -35,11 +39,24 @@ const (
 	eglContextProfileMask    = 0x30FD
 	eglContextCoreProfileBit = 0x1
 	glColorBufferBit         = 0x4000
+	glFramebuffer            = 0x8D40
+	glReadFramebuffer        = 0x8CA8
+	glDrawFramebuffer        = 0x8CA9
+	glFramebufferComplete    = 0x8CD5
+	glColorAttachment0       = 0x8CE0
+	glTexture2D              = 0x0DE1
+	glTextureMinFilter       = 0x2801
+	glTextureMagFilter       = 0x2800
+	glNearest                = 0x2600
+	glRGBA8                  = 0x8058
+	glRGBA                   = 0x1908
+	glUnsignedByte           = 0x1401
+	glScissorTest            = 0x0C11
 )
 
-// eglLib is libEGL, libwayland-egl, the GL functions of a clear through
-// libepoxy, as mygo's renderer calls GL, and GDK's
-// gdk_gl_context_clear_current.
+// eglLib is libEGL, libwayland-egl, the GL functions of the framebuffer
+// frames are drawn into, through libepoxy, as mygo's renderer calls GL,
+// and GDK's gdk_gl_context_clear_current.
 type eglLib struct {
 	getPlatformDisplay  func(platform uint32, native, attribs ptr) ptr
 	getDisplay          func(native ptr) ptr
@@ -62,9 +79,20 @@ type eglLib struct {
 	windowResize  func(window ptr, width, height, dx, dy int32)
 	windowDestroy func(window ptr)
 
-	viewport   func(x, y, width, height int32)
-	clearColor func(r, g, b, a float32)
-	clear      func(mask uint32)
+	clearColor           func(r, g, b, a float32)
+	clear                func(mask uint32)
+	disable              func(cap uint32)
+	genTextures          func(n int32, out *uint32)
+	deleteTextures       func(n int32, textures *uint32)
+	bindTexture          func(target, texture uint32)
+	texImage2D           func(target uint32, level, internalFormat, w, h, border int32, format, typ uint32, pix ptr)
+	texParameteri        func(target, name uint32, v int32)
+	genFramebuffers      func(n int32, out *uint32)
+	bindFramebuffer      func(target, fb uint32)
+	framebufferTexture2D func(target, attachment, texTarget, texture uint32, level int32)
+	checkFramebuffer     func(target uint32) uint32
+	blitFramebuffer      func(sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1 int32, mask, filter uint32)
+	glGetError           func() uint32
 
 	// clearCurrent is gdk_gl_context_clear_current: GDK remembers the
 	// context it made current last and makes it current again only when it
@@ -128,7 +156,14 @@ var loadEGL = sync.OnceValues(func() (*eglLib, error) {
 	for _, f := range []struct {
 		fn   any
 		name string
-	}{{&l.viewport, "glViewport"}, {&l.clearColor, "glClearColor"}, {&l.clear, "glClear"}} {
+	}{
+		{&l.clearColor, "glClearColor"}, {&l.clear, "glClear"}, {&l.disable, "glDisable"},
+		{&l.genTextures, "glGenTextures"}, {&l.deleteTextures, "glDeleteTextures"}, {&l.bindTexture, "glBindTexture"},
+		{&l.texImage2D, "glTexImage2D"}, {&l.texParameteri, "glTexParameteri"},
+		{&l.genFramebuffers, "glGenFramebuffers"}, {&l.bindFramebuffer, "glBindFramebuffer"},
+		{&l.framebufferTexture2D, "glFramebufferTexture2D"}, {&l.checkFramebuffer, "glCheckFramebufferStatus"},
+		{&l.blitFramebuffer, "glBlitFramebuffer"}, {&l.glGetError, "glGetError"},
+	} {
 		sym, err := purego.Dlsym(epoxy, "epoxy_"+f.name)
 		if err != nil || sym == 0 {
 			return nil, fmt.Errorf("libepoxy has no %s", f.name)
@@ -151,6 +186,10 @@ type subsurfaceEGL struct {
 	window, surface ptr
 	// unsynced tells that the surface's swaps wait for no frame callback.
 	unsynced bool
+	// fb is the framebuffer frames are drawn into, of tex, w×h pixels;
+	// 0 until the first.
+	fb, tex uint32
+	w, h    int
 }
 
 // newSubsurfaceEGL makes a context on the EGLDisplay of wlDisplay, which
@@ -260,13 +299,15 @@ func (e *subsurfaceEGL) detach() {
 	}
 }
 
-// release lets go of the window surface and the context.
+// release lets go of the window surface and the context, which takes the
+// framebuffer frames are drawn into with it.
 func (e *subsurfaceEGL) release() {
 	e.detach()
 	if e.context != 0 {
 		e.l.destroyContext(e.display, e.context)
 		e.context = 0
 	}
+	e.fb, e.tex, e.w, e.h = 0, 0, 0, 0
 }
 
 // makeCurrent makes the context current on the window surface, past GDK's
@@ -288,16 +329,64 @@ func (e *subsurfaceEGL) makeCurrent() bool {
 	return true
 }
 
-// fill shows a buffer of bw×bh pixels of one colour, premultiplied.
-func (e *subsurfaceEGL) fill(c [4]float32, bw, bh int) error {
+// target makes the context current with the framebuffer frames are drawn
+// into bound, bw×bh pixels, the size of the window's buffers: made anew,
+// transparent, when it is another size, as the renderer then draws a
+// frame whole (it does after every SurfaceResize).
+func (e *subsurfaceEGL) target(bw, bh int) bool {
 	if !e.makeCurrent() {
+		return false
+	}
+	l := e.l
+	if e.fb == 0 {
+		l.genFramebuffers(1, &e.fb)
+	}
+	l.bindFramebuffer(glFramebuffer, e.fb)
+	if e.tex != 0 && e.w == bw && e.h == bh {
+		return true
+	}
+	if e.tex != 0 {
+		l.deleteTextures(1, &e.tex)
+	}
+	l.genTextures(1, &e.tex)
+	l.bindTexture(glTexture2D, e.tex)
+	l.texParameteri(glTexture2D, glTextureMinFilter, glNearest)
+	l.texParameteri(glTexture2D, glTextureMagFilter, glNearest)
+	l.texImage2D(glTexture2D, 0, glRGBA8, int32(bw), int32(bh), 0, glRGBA, glUnsignedByte, 0)
+	l.bindTexture(glTexture2D, 0)
+	l.framebufferTexture2D(glFramebuffer, glColorAttachment0, glTexture2D, e.tex, 0)
+	e.w, e.h = bw, bh
+	if l.checkFramebuffer(glFramebuffer) != glFramebufferComplete {
+		l.deleteTextures(1, &e.tex)
+		e.tex, e.w, e.h = 0, 0, 0
+		return false
+	}
+	l.disable(glScissorTest)
+	l.clearColor(0, 0, 0, 0)
+	l.clear(glColorBufferBit)
+	return true
+}
+
+// present copies the framebuffer frames are drawn into, whole, into the
+// window surface's, and swaps: the swap attaches the buffer and commits
+// the wl_surface. Both keep GL's rows, which go up, as a GtkGLArea's
+// framebuffer does.
+func (e *subsurfaceEGL) present() error {
+	if e.tex == 0 || !e.makeCurrent() {
 		return fmt.Errorf("EGL cannot make the context current (%#x)", e.l.getError())
 	}
-	e.l.viewport(0, 0, int32(bw), int32(bh))
-	e.l.clearColor(c[0], c[1], c[2], c[3])
-	e.l.clear(glColorBufferBit)
-	if e.l.swapBuffers(e.display, e.surface) == 0 {
-		return fmt.Errorf("eglSwapBuffers failed (%#x)", e.l.getError())
+	l := e.l
+	w, h := int32(e.w), int32(e.h)
+	l.bindFramebuffer(glReadFramebuffer, e.fb)
+	l.bindFramebuffer(glDrawFramebuffer, 0)
+	l.disable(glScissorTest)
+	l.blitFramebuffer(0, 0, w, h, 0, 0, w, h, glColorBufferBit, glNearest)
+	l.bindFramebuffer(glFramebuffer, e.fb)
+	if err := l.glGetError(); err != 0 {
+		return fmt.Errorf("copying the frame failed (GL error %#x)", err)
+	}
+	if l.swapBuffers(e.display, e.surface) == 0 {
+		return fmt.Errorf("eglSwapBuffers failed (%#x)", l.getError())
 	}
 	return nil
 }

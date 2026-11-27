@@ -3,6 +3,8 @@
 package ui
 
 import (
+	"errors"
+
 	"github.com/egoist/mygo/internal/gpu/gl"
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/internal/scene"
@@ -10,9 +12,13 @@ import (
 )
 
 // newGPURenderer returns an OpenGL renderer for a surface drawing in a
-// GtkGLArea's render signal. Surfaces draw in memory where OpenGL does
-// not run on a GPU, which the backend tells.
+// GtkGLArea's render signal, or into the framebuffer of a Wayland
+// subsurface. Surfaces draw in memory where OpenGL does not run on a GPU,
+// which the backend tells.
 func newGPURenderer(n platform.SurfaceNative) (gpuRenderer, error) {
+	if n.GLTarget != nil {
+		return newTargetRenderer(n.GLTarget)
+	}
 	if n.GLArea == 0 {
 		return nil, nil
 	}
@@ -49,4 +55,51 @@ func (r *areaRenderer) Prepare(s *scene.Scene) ([]image.Rectangle, bool, error) 
 func (r *areaRenderer) DrawPrepared() error {
 	gl.MakeAreaCurrent(r.area)
 	return r.Renderer.DrawPrepared()
+}
+
+// newTargetRenderer returns an OpenGL renderer drawing into t, which keeps
+// the last frame (partial redraws) but as the surface resizes.
+func newTargetRenderer(t platform.GLTarget) (gpuRenderer, error) {
+	if !t.MakeGLCurrent() {
+		return nil, errors.New("ui: the surface's OpenGL context cannot be made current")
+	}
+	r, err := gl.New()
+	if err != nil {
+		return nil, err
+	}
+	r.Partial = true
+	return &targetRenderer{Renderer: r, target: t}, nil
+}
+
+// targetRenderer draws into a GLTarget, made current again for each frame
+// as areaRenderer's area is, and tells the target what each frame drew,
+// which it shows. Frames are paced by the backend, which sends them only
+// once the display can take one (no displayWaiter).
+type targetRenderer struct {
+	*gl.Renderer
+	target platform.GLTarget
+}
+
+func (r *targetRenderer) Render(s *scene.Scene) error {
+	if !r.target.MakeGLCurrent() {
+		return errors.New("ui: the surface's OpenGL context cannot be made current")
+	}
+	damage, whole, err := r.Renderer.Prepare(s)
+	if err != nil {
+		return err
+	}
+	if err := r.Renderer.DrawPrepared(); err != nil {
+		return err
+	}
+	if whole || len(damage) > 0 {
+		r.target.DrewGL(damage, whole)
+	}
+	return nil
+}
+
+// Release deletes the renderer's objects with its context current, when
+// it can be.
+func (r *targetRenderer) Release() {
+	r.target.MakeGLCurrent()
+	r.Renderer.Release()
 }

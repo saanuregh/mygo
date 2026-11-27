@@ -241,10 +241,10 @@ func (w *window) createSurface() {
 	s.im = gtkIMMulticontextNew()
 	// With a Wayland subsurface, the area is the drawing area of
 	// MYGO_GPU=0, which keeps the input, the input method and assistive
-	// technology; for now its frames are still painted there, under the
-	// subsurface (stage 3 draws them on the subsurface).
-	s.sub = newSubsurface(s)
-	s.newArea(s.sub == nil && gtkGLAreaNew != nil && os.Getenv("MYGO_GPU") != "0" && gpuGL())
+	// technology, and paints nothing: frames draw on the subsurface.
+	gpu := gtkGLAreaNew != nil && os.Getenv("MYGO_GPU") != "0" && gpuGL()
+	s.sub = newSubsurface(s, gpu)
+	s.newArea(gpu && s.sub == nil)
 	if s.sub != nil {
 		s.sub.connect()
 	}
@@ -426,7 +426,11 @@ func (w *window) Surface() platform.Surface {
 
 func (s *surface) Native() platform.SurfaceNative {
 	n := platform.SurfaceNative{Widget: s.area}
-	if s.rendering {
+	switch {
+	case !s.rendering:
+	case s.sub.active():
+		n.GLTarget = s.sub
+	default:
 		n.GLArea = s.area
 	}
 	return n
@@ -463,6 +467,8 @@ func (s *surface) RequestFrame() {
 	}
 	switch {
 	case s.w.closed:
+	case s.sub.active():
+		s.sub.pacer.request()
 	case s.drawsGL() && s.staging:
 		s.glAgain = true
 	case s.drawsGL():
@@ -499,7 +505,7 @@ func (s *surface) drawHidden() {
 	}
 	gtkWidgetRealize(s.w.win)
 	s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
-	if s.gl && s.drawn {
+	if (s.gl || s.sub.active()) && s.drawn {
 		s.send(platform.SurfaceEvent{Kind: platform.SurfaceRenew})
 	}
 }
@@ -722,6 +728,17 @@ func setRefreshInterval(t ptr, us int64, get func(t ptr) int64) bool {
 
 func (s *surface) PresentPixels(pix []byte, stride, width, height int) {
 	if s.cr == 0 {
+		if s.rendering && s.sub.active() {
+			// Into the subsurface's framebuffer, which then shows.
+			if s.sub.MakeGLCurrent() {
+				if err := s.present.Present(pix, stride, width, height); err != nil && !s.presentFailed {
+					s.presentFailed = true
+					log.Printf("mygo: native UI shows nothing: %v", err)
+				}
+				s.sub.drew = true
+			}
+			return
+		}
 		if s.rendering {
 			// The content draws in memory after all, as when its GL
 			// renderer fails: GTK shows only what OpenGL draws.
@@ -1179,9 +1196,13 @@ func initSurfaceCallbacks() {
 			return true
 		}
 		// A GtkGLArea draws in its render signal, unless it has no context:
-		// then, as a drawing area, in this one.
+		// then, as a drawing area, in this one. Under a subsurface, which
+		// shows the frames, the area paints nothing.
 		if s.drawsGL() {
 			return false
+		}
+		if s.sub.active() {
+			return true
 		}
 		s.paceFrameClock()
 		s.cr = cr

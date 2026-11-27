@@ -7,8 +7,11 @@ import (
 	"log"
 	"os"
 	"sync"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
+
+	"github.com/egoist/mygo/internal/platform"
 )
 
 // The Wayland subsurface of a window's surface (MYGO_WAYLAND_SUBSURFACE=1):
@@ -19,26 +22,30 @@ import (
 // as it hides: the subsurface is made as the toplevel maps, and goes as it
 // unmaps.
 //
-// For now (stage 2) it shows one colour, transparent, or with
-// MYGO_WAYLAND_SUBSURFACE_TEST_COLOR set a translucent magenta that shows
-// where it is: mygo's frames are still drawn in memory and painted into
-// the drawing area, under it, as with MYGO_GPU=0. Stage 3 draws them here.
+// mygo's frames draw on it with OpenGL (subsurface_egl.go), paced by its
+// own frame callbacks rather than GTK's frame clock, which then drives only
+// GTK's widgets: a frame asked for while no callback is due draws at once,
+// from an idle callback, and one asked for while a callback is due draws
+// as it comes (framePacer). The drawing area under it paints nothing.
+// Where the subsurface fails, the window draws as with MYGO_GPU=0, into
+// the drawing area.
 
 // Requests' opcodes, their order in wayland.xml.
 const (
-	wlCompositorCreateSurface  = 0
-	wlCompositorCreateRegion   = 1
-	wlSurfaceDestroy           = 0
-	wlSurfaceSetInputRegion    = 5
-	wlSurfaceSetBufferScale    = 8
-	wlRegionDestroy            = 0
-	wlSubcompositorGetSubsurf  = 1
-	wlSubsurfaceDestroy        = 0
-	wlSubsurfaceSetPosition    = 1
-	wlSubsurfaceSetDesync      = 5
-	wlMarshalFlagDestroy       = 1 << 0 // WL_MARSHAL_FLAG_DESTROY
-	wlSurfaceBufferScaleSince  = 3
-	subsurfaceTestColorEnvName = "MYGO_WAYLAND_SUBSURFACE_TEST_COLOR"
+	wlCompositorCreateSurface = 0
+	wlCompositorCreateRegion  = 1
+	wlSurfaceDestroy          = 0
+	wlSurfaceFrame            = 3
+	wlSurfaceSetInputRegion   = 5
+	wlSurfaceSetBufferScale   = 8
+	wlRegionDestroy           = 0
+	wlSubcompositorGetSubsurf = 1
+	wlSubsurfaceDestroy       = 0
+	wlSubsurfaceSetPosition   = 1
+	wlSubsurfaceSetDesync     = 5
+	wlMarshalFlagDestroy      = 1 << 0 // WL_MARSHAL_FLAG_DESTROY
+	wlSurfaceBufferScaleSince = 3
+	gPriorityHighIdle         = 100 // G_PRIORITY_HIGH_IDLE
 )
 
 // subsurface is the Wayland subsurface of a window's surface.
@@ -53,16 +60,23 @@ type subsurface struct {
 	// in logical pixels, and the scale of its buffers, as last sent.
 	x, y, logicalW, logicalH, scale int
 	mapped                          bool
-	// color is what it shows, premultiplied.
-	color [4]float32
-	// failed tells that making it failed once, which is logged once.
+	// failed tells that it failed, which is logged once: the window draws
+	// into the drawing area from then on.
 	failed bool
+	// pacer paces its frames; frameCB is the wl_callback of the last frame
+	// presented, until done, 0 for none.
+	pacer   framePacer
+	frameCB ptr
+	// drew tells that the frame drawing changed the framebuffer (DrewGL),
+	// show that the next frame shows even if it changes nothing, as the
+	// first on a new wl_surface.
+	drew, show bool
 }
 
 // newSubsurface returns the subsurface of s, with its EGL context, when
-// MYGO_WAYLAND_SUBSURFACE=1 asked for one, or nil, saying once why it
-// makes none.
-func newSubsurface(s *surface) *subsurface {
+// MYGO_WAYLAND_SUBSURFACE=1 asked for one and OpenGL draws on a GPU
+// (gpu: gpuGL, as for a GtkGLArea), or nil, saying once why it makes none.
+func newSubsurface(s *surface, gpu bool) *subsurface {
 	b := s.w.b
 	if !waylandSubsurfaceAsked() || b.waylandSurface == nil {
 		return nil
@@ -71,6 +85,8 @@ func newSubsurface(s *surface) *subsurface {
 	switch {
 	case os.Getenv("MYGO_GPU") == "0":
 		why = "MYGO_GPU=0"
+	case !gpu:
+		why = "OpenGL does not draw on a GPU"
 	case b.wayland == nil:
 		why = "the globals it needs were not bound"
 	case !b.wayland.complete():
@@ -91,9 +107,23 @@ func newSubsurface(s *surface) *subsurface {
 		return nil
 	}
 	initSubsurfaceCallbacks()
+	if subsurfaceFrameListener == 0 {
+		logSubsurfaceUnused("no memory for the frame callbacks' listener")
+		e.release()
+		return nil
+	}
 	u := &subsurface{s: s, c: c, g: b.wayland, egl: e}
-	if os.Getenv(subsurfaceTestColorEnvName) != "" {
-		u.color = [4]float32{0.5, 0, 0.5, 0.5}
+	data := ptr(s.w.id)
+	u.pacer = framePacer{
+		soon: func() { gIdleAddFull(gPriorityHighIdle, cbSubsurfaceFrame, data, 0) },
+		later: func() {
+			ms := uint32(16)
+			if mhz := s.refreshMilliHz(); mhz > 0 {
+				ms = uint32(max(1_000_000/int64(mhz), 1))
+			}
+			gTimeoutAdd(ms, cbSubsurfaceFrame, data)
+		},
+		draw: u.frame,
 	}
 	return u
 }
@@ -140,32 +170,30 @@ func (u *subsurface) destroyProxy(proxy ptr, opcode uint32) {
 func wlInt(v int) uint64 { return uint64(uint32(int32(v))) }
 
 // create makes the subsurface on the toplevel's wl_surface, places it and
-// shows its colour; a failure is logged once, and the content shows as it
-// is painted under it.
+// draws a frame there; a failure is logged once, and the content draws in
+// the drawing area under it from then on.
 func (u *subsurface) create() {
-	if u.mapped {
+	if u.mapped || u.failed {
 		return
 	}
 	toplevel := u.s.w.b.waylandSurface(gtkWidgetGetWindow(u.s.w.win))
 	if toplevel == 0 {
-		u.fail("the window has no wl_surface")
+		u.broke("the window has no wl_surface")
 		return
 	}
 	if u.wlSurface = u.newObject(u.g.compositor, wlCompositorCreateSurface, u.c.surfaceInterface, 0); u.wlSurface == 0 {
-		u.fail("wl_compositor.create_surface failed")
+		u.broke("wl_compositor.create_surface failed")
 		return
 	}
 	if u.sub = u.newObject(u.g.subcompositor, wlSubcompositorGetSubsurf, u.c.subsurfaceInterface, 0, uint64(u.wlSurface), uint64(toplevel)); u.sub == 0 {
-		u.fail("wl_subcompositor.get_subsurface failed")
-		u.destroy()
+		u.broke("wl_subcompositor.get_subsurface failed")
 		return
 	}
 	u.request(u.sub, wlSubsurfaceSetDesync)
 	// Every input reaches GTK's surface, under it.
 	region := u.newObject(u.g.compositor, wlCompositorCreateRegion, u.c.regionInterface, 0)
 	if region == 0 {
-		u.fail("wl_compositor.create_region failed")
-		u.destroy()
+		u.broke("wl_compositor.create_region failed")
 		return
 	}
 	u.request(u.wlSurface, wlSurfaceSetInputRegion, uint64(region))
@@ -176,24 +204,39 @@ func (u *subsurface) create() {
 	u.request(u.sub, wlSubsurfaceSetPosition, wlInt(u.x), wlInt(u.y))
 	u.setSize(r.Dx(), r.Dy(), scale)
 	if err := u.egl.attach(u.wlSurface, u.logicalW*u.scale, u.logicalH*u.scale); err != nil {
-		u.fail(err.Error())
-		u.destroy()
+		u.broke(err.Error())
 		return
 	}
-	u.draw()
+	// The framebuffer keeps the last frame, which the new wl_surface shows
+	// even if the frame changes nothing.
+	u.show = true
+	u.pacer.request()
 }
 
-// fail says, once, why the subsurface shows nothing.
-func (u *subsurface) fail(why string) {
-	if !u.failed {
-		u.failed = true
-		log.Printf("mygo: Wayland subsurface shows nothing: %s", why)
+// broke says why the subsurface failed and lets go of it: the window draws
+// into the drawing area under it from then on, with a renderer made anew.
+func (u *subsurface) broke(why string) {
+	if u.failed {
+		return
 	}
+	u.failed = true
+	log.Printf("mygo: Wayland subsurface failed, drawing under it: %s", why)
+	u.destroy()
+	u.s.send(platform.SurfaceEvent{Kind: platform.SurfaceRenew})
 }
+
+// active tells that frames draw on the subsurface.
+func (u *subsurface) active() bool { return u != nil && !u.failed }
 
 // destroy lets go of the subsurface, as the toplevel's wl_surface goes;
-// its context stays for the next.
+// its context stays for the next, with the last frame. No frame callback
+// comes for it any more.
 func (u *subsurface) destroy() {
+	if u.frameCB != 0 {
+		u.c.proxyDestroy(u.frameCB)
+		u.frameCB = 0
+	}
+	u.pacer.stop()
 	u.egl.detach()
 	if u.sub != 0 {
 		u.destroyProxy(u.sub, wlSubsurfaceDestroy)
@@ -254,8 +297,8 @@ func (u *subsurface) setSize(w, h, scale int) {
 }
 
 // place moves and sizes the subsurface to the area, as it is allocated or
-// its scale changes, and shows its colour at the new size. The position
-// applies as GDK commits the toplevel next.
+// its scale changes; the SurfaceResize that follows asks for a frame of the
+// new size. The position applies as GDK commits the toplevel next.
 func (u *subsurface) place() {
 	if !u.mapped {
 		return
@@ -270,20 +313,134 @@ func (u *subsurface) place() {
 	}
 	u.setSize(r.Dx(), r.Dy(), scale)
 	u.egl.resize(u.logicalW*u.scale, u.logicalH*u.scale)
-	u.draw()
 }
 
-// draw shows the subsurface's colour: the swap attaches and commits its
-// buffer.
-func (u *subsurface) draw() {
-	if err := u.egl.fill(u.color, u.logicalW*u.scale, u.logicalH*u.scale); err != nil {
-		u.fail(err.Error())
+// MakeGLCurrent makes the subsurface's context current with the
+// framebuffer frames are drawn into bound, as large as its buffers
+// (platform.GLTarget).
+func (u *subsurface) MakeGLCurrent() bool {
+	return u.mapped && !u.failed && u.egl.target(u.logicalW*u.scale, u.logicalH*u.scale)
+}
+
+// DrewGL tells that the frame drawing changed the framebuffer, which then
+// shows (platform.GLTarget). All of it is copied for now.
+func (u *subsurface) DrewGL(damage []image.Rectangle, whole bool) { u.drew = true }
+
+var _ platform.GLTarget = (*subsurface)(nil)
+
+// frame draws the frame asked for into the framebuffer, with the context
+// current, the GPU renderer drawing into it (Native), and shows it, asking
+// for the frame callback that paces the next; it reports whether it showed
+// one. A frame that changed nothing shows none.
+func (u *subsurface) frame() bool {
+	s := u.s
+	if !u.mapped || u.failed || s.w.closed {
+		return false
+	}
+	if !u.MakeGLCurrent() {
+		u.broke("EGL cannot make the context current with a framebuffer")
+		return false
+	}
+	u.drew = false
+	s.rendering = true
+	s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
+	s.rendering = false
+	if !u.mapped || u.failed || !u.drew && !u.show {
+		return false
+	}
+	// The request goes in the commit of the swap.
+	cb := u.newObject(u.wlSurface, wlSurfaceFrame, u.c.callbackInterface, 0)
+	if cb == 0 {
+		u.broke("wl_surface.frame failed")
+		return false
+	}
+	u.c.addListener(cb, subsurfaceFrameListener, ptr(s.w.id))
+	u.frameCB = cb
+	if err := u.egl.present(); err != nil {
+		u.broke(err.Error())
+		return false
+	}
+	u.show = false
+	return true
+}
+
+// frameDone is the frame callback of the last frame shown: the compositor
+// can take the next.
+func (u *subsurface) frameDone(cb ptr) {
+	if cb != u.frameCB {
+		return
+	}
+	u.c.proxyDestroy(cb)
+	u.frameCB = 0
+	u.pacer.done()
+}
+
+// framePacer paces a subsurface's frames by its frame callbacks. A frame
+// asked for (request) while none is due draws at once, from soon; one
+// asked for while a callback is due, as many as are asked meanwhile, draws
+// once it comes (done). A frame that showed nothing asks for no callback:
+// the next waits about a refresh (later), rather than spin.
+type framePacer struct {
+	// soon has run called at once from the main loop, later after about a
+	// refresh; draw draws a frame and reports whether it showed one, with
+	// a frame callback asked for.
+	soon, later func()
+	draw        func() bool
+	// wanted tells that a frame is asked for, queued that run is, drawing
+	// that draw runs, and waiting that a frame callback is due.
+	wanted, queued, drawing, waiting bool
+}
+
+// request asks for a frame.
+func (p *framePacer) request() {
+	p.wanted = true
+	if !p.queued && !p.drawing && !p.waiting {
+		p.queued = true
+		p.soon()
 	}
 }
+
+// run draws the frame asked for, unless a frame callback is due.
+func (p *framePacer) run() {
+	p.queued = false
+	if p.waiting || !p.wanted {
+		return
+	}
+	p.wanted, p.drawing = false, true
+	shown := p.draw()
+	p.drawing = false
+	switch {
+	case shown:
+		p.waiting = true
+	case p.wanted:
+		// The frame asked for another as it drew.
+		p.queued = true
+		p.later()
+	}
+}
+
+// done tells that the frame callback came: a frame asked for meanwhile
+// draws now.
+func (p *framePacer) done() {
+	p.waiting = false
+	if p.wanted && !p.queued {
+		p.queued = true
+		p.soon()
+	}
+}
+
+// stop tells that no frame callback is coming, as the subsurface went: the
+// next frame asked for draws at once.
+func (p *framePacer) stop() { p.waiting = false }
 
 var (
 	subsurfaceCallbacksOnce            sync.Once
 	cbSubsurfaceMap, cbSubsurfaceUnmap ptr
+	// cbSubsurfaceFrame runs the frame asked for, from an idle callback or
+	// a timeout; subsurfaceFrameListener is the wl_callback_listener of the
+	// frame callbacks.
+	cbSubsurfaceFrame       ptr
+	subsurfaceFrameListener ptr
 )
 
 func initSubsurfaceCallbacks() {
@@ -302,5 +459,22 @@ func initSubsurfaceCallbacks() {
 				s.sub.destroy()
 			}
 		})
+		cbSubsurfaceFrame = purego.NewCallback(func(data ptr) int32 {
+			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
+				s.sub.pacer.run()
+			}
+			return 0 // G_SOURCE_REMOVE
+		})
+		done := purego.NewCallback(func(data, callback ptr, time uint32) {
+			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
+				s.sub.frameDone(callback)
+			}
+		})
+		// struct wl_callback_listener: done. In C memory, which libwayland
+		// keeps a pointer to.
+		if l, err := cAlloc(unsafe.Sizeof(ptr(0))); err == nil {
+			*(*ptr)(cAt(l)) = done
+			subsurfaceFrameListener = l
+		}
 	})
 }

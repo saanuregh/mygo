@@ -20,6 +20,7 @@ var (
 	epoxyIsDesktopGL  func() bool
 	epoxyHasExtension func(name string) bool
 	currentGDKContext func() uintptr // gdk_gl_context_get_current, when GDK is loaded
+	currentEGLContext func() uintptr // eglGetCurrentContext, when libEGL is loaded
 
 	// GTK's functions of a GtkGLArea's context, when GTK is loaded
 	// (MakeAreaCurrent).
@@ -188,6 +189,9 @@ func load() error {
 		// realized the area again; tests make contexts of their own.
 		if sym, err := purego.Dlsym(purego.RTLD_DEFAULT, "gdk_gl_context_get_current"); err == nil && sym != 0 {
 			purego.RegisterFunc(&currentGDKContext, sym)
+			if sym, err := purego.Dlsym(purego.RTLD_DEFAULT, "eglGetCurrentContext"); err == nil && sym != 0 {
+				purego.RegisterFunc(&currentEGLContext, sym)
+			}
 		}
 		gtk := map[string]any{
 			"gdk_gl_context_clear_current": &gdkClearCurrent, "gtk_gl_area_get_context": &gtkAreaContext,
@@ -300,11 +304,17 @@ func needsRestore(area, current uintptr, has bool) bool {
 	return area != 0 && (current != area || !has)
 }
 
+// currentContext identifies the current context: GDK's, or where GDK has
+// none current, EGL's, as a context of the backend's own that it made
+// current past GDK (a Wayland subsurface's) is.
 func currentContext() uintptr {
 	if currentGDKContext == nil {
 		return 0
 	}
-	return currentGDKContext()
+	if c := currentGDKContext(); c != 0 || currentEGLContext == nil {
+		return c
+	}
+	return currentEGLContext()
 }
 
 func goString(p uintptr) string {

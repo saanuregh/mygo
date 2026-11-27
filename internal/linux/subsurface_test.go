@@ -56,3 +56,101 @@ func TestSubsurfacePlacement(t *testing.T) {
 		}
 	}
 }
+
+// A subsurface's frames are paced by its frame callbacks, faked here: a
+// frame asked for while no callback is due draws at once, from the idle
+// callback (soon); those asked for while one is due draw once, as it comes;
+// one that showed nothing asks for none, and the next waits a refresh
+// (later) rather than spin; a subsurface gone stops the wait.
+func TestSubsurfaceFramesWaitForTheCallback(t *testing.T) {
+	var soon, later []func()
+	frames, show := 0, true
+	var p *framePacer
+	p = &framePacer{
+		soon:  func() { soon = append(soon, p.run) },
+		later: func() { later = append(later, p.run) },
+		draw:  func() bool { frames++; return show },
+	}
+	runSoon := func() {
+		t.Helper()
+		if len(later) != 0 {
+			t.Fatalf("%d frames wait a refresh", len(later))
+		}
+		q := soon
+		soon = nil
+		for _, run := range q {
+			run()
+		}
+	}
+	want := func(n int) {
+		t.Helper()
+		if frames != n {
+			t.Fatalf("%d frames drawn, want %d", frames, n)
+		}
+	}
+
+	p.request()
+	if len(soon) != 1 {
+		t.Fatalf("a frame asked for with no callback due queued %d runs, want 1", len(soon))
+	}
+	runSoon()
+	want(1)
+
+	// A callback is due: frames asked for meanwhile wait for it.
+	p.request()
+	p.request()
+	if len(soon) != 0 {
+		t.Fatalf("frames asked for while a callback is due queued %d runs", len(soon))
+	}
+	runSoon()
+	want(1)
+	p.done()
+	runSoon()
+	want(2)
+
+	// Done with no frame asked for draws none; the next draws at once.
+	p.done()
+	runSoon()
+	want(2)
+	p.request()
+	runSoon()
+	want(3)
+
+	// A frame asked for as one draws waits for that one's callback.
+	p.done()
+	p.draw = func() bool { frames++; p.request(); return true }
+	p.request()
+	runSoon()
+	want(4)
+	runSoon()
+	want(4)
+	p.draw = func() bool { frames++; return show }
+	p.done()
+	runSoon()
+	want(5)
+
+	// A frame that showed nothing, and asked for another: no callback
+	// comes, the next waits a refresh.
+	p.done()
+	show = false
+	p.draw = func() bool { frames++; p.request(); return show }
+	p.request()
+	q := soon
+	soon = nil
+	q[0]()
+	want(6)
+	if len(soon) != 0 || len(later) != 1 {
+		t.Fatalf("after a frame that showed nothing: %d runs at once, %d after a refresh, want 0 and 1", len(soon), len(later))
+	}
+	p.draw = func() bool { frames++; return true }
+	later[0]()
+	later = nil
+	want(7)
+
+	// The subsurface goes with a callback due, which never comes: the next
+	// frame draws at once.
+	p.stop()
+	p.request()
+	runSoon()
+	want(8)
+}
