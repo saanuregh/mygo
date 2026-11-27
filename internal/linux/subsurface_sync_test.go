@@ -430,3 +430,139 @@ func TestSubsurfaceRebuiltOnRemap(t *testing.T) {
 type fakeSurfaceHandler struct{ platform.WindowHandler }
 
 func (fakeSurfaceHandler) SurfaceEvent(platform.SurfaceEvent) bool { return false }
+
+// A frame that places web views anew shows with GDK's commit of the
+// toplevel that moves them: exactly one sync transaction, whether the
+// frame draws by itself, its callback come, or for a resize, in a layout
+// of the frame clock's after GTK allocated the window, so that GTK moves
+// the web views in a layout more, before it paints. A frame that moves
+// none commits desynchronized; without web views, a resize's frame draws
+// as GTK paints, as before.
+func TestPlacementChangeSyncsOnce(t *testing.T) {
+	f := newFakeWayland()
+	f.names[0xA00] = "toplevel"
+	area := gdkRectangle{Width: 2058, Height: 1400}
+	var soon []func()
+	// moves tells that the content's next frame places its web views anew.
+	moves := false
+	u := &subsurface{
+		s:   &surface{w: &window{id: 7, h: fakeSurfaceHandler{}}, layers: 1},
+		c:   f.client(),
+		g:   &waylandGlobals{compositor: 1, subcompositor: 2, viewporter: 3, fractionManager: 4, compositorVersion: 4},
+		egl: f.egl(),
+		top: subsurfaceToplevel{
+			surface: func() ptr { return 0xA00 },
+			allocation: func() (image.Point, gdkRectangle, gdkRectangle, int) {
+				return image.Point{}, area, area, 2
+			},
+			queuePaint:    func() { f.log = append(f.log, "queue_paint") },
+			watchPaints:   func() func() { return func() {} },
+			requestLayout: func() { f.log = append(f.log, "request_layout") },
+		},
+	}
+	u.sync = subsurfaceSync{
+		setSync:    func() { u.request(u.sub, wlSubsurfaceSetSync) },
+		setDesync:  func() { u.request(u.sub, wlSubsurfaceSetDesync) },
+		queuePaint: func() { u.top.queuePaint() },
+	}
+	u.pacer = framePacer{
+		soon:  func() { soon = append(soon, u.pacer.run) },
+		later: func() { t.Fatal("a frame waits a refresh") },
+		draw: func() bool {
+			if moves {
+				moves = false
+				u.webViewsPlaced() // PlaceWebViews
+			}
+			return u.present()
+		},
+	}
+	frameClock := func() {
+		u.paint()
+		f.log = append(f.log, "commit toplevel")
+		u.afterPaint()
+	}
+	runSoon := func() {
+		for len(soon) > 0 {
+			run := soon[0]
+			soon = soon[1:]
+			run()
+		}
+	}
+	want := func(steps ...string) {
+		t.Helper()
+		got := f.take()
+		if !slices.Equal(got, steps) {
+			t.Fatalf("requests:\n  %s\nwant:\n  %s", strings.Join(got, "\n  "), strings.Join(steps, "\n  "))
+		}
+	}
+	u.create()
+	frameClock()
+	u.frameDone(u.frameCB)
+	f.take()
+
+	// A frame drawn by itself moves a web view: synchronized as it
+	// commits, desynchronized after the toplevel's commit that follows
+	// GTK's paint, which it asks for.
+	moves = true
+	u.pacer.request()
+	runSoon()
+	want(
+		"subsurface#1.set_sync()",
+		"queue_paint",
+		"callback#2 = surface#1.frame()",
+		"commit surface#1",
+	)
+	frameClock()
+	want("commit toplevel", "subsurface#1.set_desync()")
+
+	// One moving none commits desynchronized.
+	u.frameDone(u.frameCB)
+	u.pacer.request()
+	runSoon()
+	want("callback#2 let go of", "callback#3 = surface#1.frame()", "commit surface#1")
+	frameClock()
+	want("commit toplevel")
+
+	// A resize, the frame moving the web views: drawn in the layout asked
+	// for after GTK's allocation, in one transaction with the toplevel's
+	// next commit.
+	area = gdkRectangle{Width: 1600, Height: 1000}
+	u.place()
+	u.allocated()
+	want("wl_egl_window_resize(egl_window#1, 3200, 2000)", "queue_paint", "request_layout")
+	moves = true
+	u.layout()
+	want(
+		"subsurface#1.set_sync()",
+		"queue_paint",
+		"queue_paint",
+		"callback#3 let go of",
+		"callback#4 = surface#1.frame()",
+		"commit surface#1",
+	)
+	frameClock()
+	want("commit toplevel", "subsurface#1.set_desync()")
+	if moves || len(soon) != 0 || u.resync || u.sync.synced {
+		t.Fatalf("after the resize: moves %v, %d frames queued, resync %v, synchronized %v", moves, len(soon), u.resync, u.sync.synced)
+	}
+	// A layout with nothing asked for draws nothing.
+	u.layout()
+	want()
+
+	// Without web views, a resize's frame draws as GTK paints.
+	u.s.layers = 0
+	area = gdkRectangle{Width: 1200, Height: 800}
+	u.place()
+	u.allocated()
+	u.layout()
+	want("wl_egl_window_resize(egl_window#1, 2400, 1600)", "queue_paint")
+	frameClock()
+	want(
+		"subsurface#1.set_sync()",
+		"callback#4 let go of",
+		"callback#5 = surface#1.frame()",
+		"commit surface#1",
+		"commit toplevel",
+		"subsurface#1.set_desync()",
+	)
+}

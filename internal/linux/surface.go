@@ -1342,6 +1342,7 @@ func initSurfaceCallbacks() {
 			}
 			if s.sub != nil {
 				s.sub.place()
+				s.sub.allocated()
 			}
 			s.send(platform.SurfaceEvent{Kind: platform.SurfaceResize})
 		}

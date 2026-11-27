@@ -2,7 +2,12 @@
 
 package linux
 
-import "image"
+import (
+	"image"
+	"sync"
+
+	"github.com/ebitengine/purego"
+)
 
 // A Wayland subsurface in step with its toplevel (subsurface.go). A
 // desynchronized subsurface shows each of its commits at once, while what
@@ -28,8 +33,33 @@ type subsurfaceToplevel struct {
 	// queuePaint asks GTK to paint the area, which GDK then commits.
 	queuePaint func()
 	// watchPaints calls the subsurface's afterPaint after GDK's own in each
-	// after-paint of the toplevel's frame clock, until stop.
+	// after-paint of the toplevel's frame clock, and its layout in each of
+	// the clock's layouts, until stop.
 	watchPaints func() (stop func())
+	// requestLayout asks the frame clock for a layout, another if it lays
+	// out now.
+	requestLayout func()
+}
+
+var (
+	subsurfaceGTKOnce sync.Once
+	// cbSubsurfaceLayout follows the layout of a toplevel's frame clock.
+	cbSubsurfaceLayout        ptr
+	gdkFrameClockRequestPhase func(clock ptr, phase uint32)
+)
+
+// gdkFrameClockPhaseLayout is GDK_FRAME_CLOCK_PHASE_LAYOUT.
+const gdkFrameClockPhaseLayout = 1 << 3
+
+func loadSubsurfaceGTK() {
+	subsurfaceGTKOnce.Do(func() {
+		mustBind(libGDK, &gdkFrameClockRequestPhase, "gdk_frame_clock_request_phase")
+		cbSubsurfaceLayout = purego.NewCallback(func(clock, data ptr) {
+			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
+				s.sub.layout()
+			}
+		})
+	})
 }
 
 // gtkToplevel returns the subsurfaceToplevel of the surface s.
@@ -56,11 +86,20 @@ func gtkToplevel(s *surface) subsurfaceToplevel {
 			if clock == 0 {
 				return func() {}
 			}
+			loadSubsurfaceGTK()
 			gObjectRef(clock)
 			id := connect(clock, "after-paint", cbSubsurfaceAfterPaint, ptr(s.w.id))
+			layout := connect(clock, "layout", cbSubsurfaceLayout, ptr(s.w.id))
 			return func() {
 				gSignalHandlerDisconnect(clock, id)
+				gSignalHandlerDisconnect(clock, layout)
 				gObjectUnref(clock)
+			}
+		},
+		requestLayout: func() {
+			if clock := gtkWidgetGetFrameClock(s.w.win); clock != 0 {
+				loadSubsurfaceGTK()
+				gdkFrameClockRequestPhase(clock, gdkFrameClockPhaseLayout)
 			}
 		},
 	}
@@ -150,6 +189,44 @@ func (u *subsurface) paint() {
 			u.syncOnce(u.pacer.now)
 		}
 	})
+}
+
+// allocated follows GTK allocating the area, after place, in the frame
+// clock's layout. In a window with web views, a frame asked for in step
+// with the toplevel, as a resize asks, draws in a layout of the clock's
+// once GTK allocated the window (layout), rather than as GTK paints the
+// area: GTK then moves the web views the frame places (webViewsPlaced) in
+// a layout more, which the clock runs before it paints, and paints them
+// there for the commit that shows the frame. Drawn in the paint, the
+// frame would show with the web views where they were, GTK moving them
+// only for the next commit; drawn in the area's allocation, GTK would not
+// move them at all, as an allocation forgets what asks for one in it.
+func (u *subsurface) allocated() {
+	if u.mapped && !u.failed && u.resync && u.s.layers != 0 {
+		u.top.requestLayout()
+	}
+}
+
+// layout follows the layout of the toplevel's frame clock, which runs
+// again for as long as GTK asks for one, up to 4 times: a frame asked for
+// in step with the toplevel, in a window with web views, draws now.
+func (u *subsurface) layout() {
+	if !u.mapped || u.failed || !u.resync || u.s.layers == 0 {
+		return
+	}
+	u.resync = false
+	u.syncOnce(u.pacer.now)
+}
+
+// webViewsPlaced follows the content placing its web views anew, as it
+// draws a frame (PlaceWebViews): GTK moves them as it next lays out and
+// paints the toplevel, which GDK then commits, and the frame, whose holes
+// show them at their new places, commits synchronized to show with that
+// commit. The frame draws already: syncOnce's draw is the rest of it.
+// One drawn in a paint shows with this paint's commit, a frame before the
+// web views move.
+func (u *subsurface) webViewsPlaced() {
+	u.syncOnce(func() {})
 }
 
 // afterPaint follows GDK's after-paint of the toplevel.

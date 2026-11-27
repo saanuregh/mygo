@@ -23,8 +23,13 @@ import (
 // input shape lets the pointer through to the page there. A drawing area
 // (frames drawn in memory) has a GdkWindow of its own, which X11 shows
 // over the page whatever its frames leave transparent: the same region
-// shapes it, so that the page shows in the holes. Its signals find it by
-// its id in Backend.webViews, apart from the windows.
+// shapes it, so that the page shows in the holes. Under a Wayland
+// subsurface (subsurface.go), the frames' holes are transparent in its
+// buffers, which the compositor blends over the toplevel's, where GTK
+// paints the page; the drawing area under it is shaped as without it, and
+// a frame that moves a hole shows with GDK's commit of the toplevel that
+// moves the page (webViewsPlaced). Its signals find it by its id in
+// Backend.webViews, apart from the windows.
 //
 // GTK 3 has no transforms of widgets: a page the content shows scaled has
 // its view at the size it shows, and WebKit zooms the page by the scale
@@ -273,6 +278,9 @@ func (s *surface) PlaceWebViews(views []platform.WebViewPlacement) {
 		}
 	}
 	s.shape()
+	if s.sub != nil {
+		s.sub.webViewsPlaced()
+	}
 }
 
 // present zooms the page of the web view w by the scale its placement p
@@ -301,8 +309,9 @@ func (w *window) present(p *platform.WebViewPlacement, width int32) {
 
 // shape lets the pointer through the area where the web views take it:
 // in their clips but where the content painted over them. A drawing area
-// (frames drawn in memory) is shaped by the same region, as only its
-// shape lets the pages show through its own GdkWindow (#693). A GtkGLArea
+// (frames drawn in memory, or none under a Wayland subsurface) is shaped
+// by the same region, as only its shape lets the pages show through its
+// own GdkWindow (#693). A GtkGLArea
 // has no window of its own: it draws in its parent's, with an alpha
 // channel whose holes show the pages, and is left unshaped. The shapes
 // follow the area's size (cbSurfaceSize) and new windows
