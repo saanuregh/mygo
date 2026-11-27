@@ -224,3 +224,67 @@ func TestOpaqueRegionKeepsGDKsFrameCallbacks(t *testing.T) {
 		t.Fatalf("committed after the after-paint without an opaque region:\n  %s", strings.Join(got, "\n  "))
 	}
 }
+
+// A subsurface synchronized for a frame while GTK cannot paint the area (it
+// has no size, say) goes back to desynchronized after GDK's next commit of
+// the toplevel, before it commits GDK's request for the toplevel's frame
+// callback on it: held synchronized, that request would wait for a commit
+// of the toplevel, which GDK makes only once that callback came, and GTK's
+// frame clock would stop. With nothing painted, GDK commits nothing, and
+// it stays synchronized.
+func TestSubsurfaceLeavesSyncAfterAnyToplevelCommit(t *testing.T) {
+	f := newFakeWayland()
+	f.names[0xA00] = "toplevel"
+	area := gdkRectangle{Width: 2058, Height: 1400}
+	u := &subsurface{
+		s:   &surface{w: &window{id: 7, h: fakeSurfaceHandler{}}},
+		c:   f.client(),
+		g:   &waylandGlobals{compositor: 1, subcompositor: 2, viewporter: 3, fractionManager: 4, compositorVersion: 4},
+		egl: f.egl(),
+		top: subsurfaceToplevel{
+			surface: func() ptr { return 0xA00 },
+			allocation: func() (image.Point, gdkRectangle, gdkRectangle, int) {
+				return image.Point{}, area, area, 2
+			},
+			queuePaint:     func() { f.log = append(f.log, "queue_paint") },
+			watchPaints:    func() func() { return func() {} },
+			frameCallbacks: func(surface ptr, add bool) bool { return true },
+		},
+	}
+	u.sync = subsurfaceSync{
+		setSync:    func() { u.request(u.sub, wlSubsurfaceSetSync) },
+		setDesync:  func() { u.request(u.sub, wlSubsurfaceSetDesync) },
+		queuePaint: func() { u.top.queuePaint() },
+	}
+	u.pacer = framePacer{soon: func() {}, later: func() {}, draw: u.present}
+	want := func(steps ...string) {
+		t.Helper()
+		got := f.take()
+		if !slices.Equal(got, steps) {
+			t.Fatalf("requests:\n  %s\nwant:\n  %s", strings.Join(got, "\n  "), strings.Join(steps, "\n  "))
+		}
+	}
+	u.create()
+	f.take()
+
+	// Made synchronized; GTK paints the toplevel, not the area.
+	u.toplevelPainted()
+	f.log = append(f.log, "commit toplevel")
+	u.afterPaint()
+	want("commit toplevel", "subsurface#1.set_desync()", "surface#1.commit()")
+
+	// A frame that places web views, held for the toplevel's commit: an
+	// after-paint with nothing painted keeps it held; the next, after a
+	// paint of the toplevel alone, lets it go.
+	u.webViewsPlaced()
+	f.take()
+	u.afterPaint()
+	want("surface#1.commit()")
+	if !u.sync.synced {
+		t.Fatal("desynchronized without a commit of the toplevel")
+	}
+	u.toplevelPainted()
+	f.log = append(f.log, "commit toplevel")
+	u.afterPaint()
+	want("commit toplevel", "subsurface#1.set_desync()", "surface#1.commit()")
+}

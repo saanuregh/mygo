@@ -225,8 +225,8 @@ type surface struct {
 	layers, web ptr
 	placed      []platform.WebViewPlacement
 	// sub is the Wayland subsurface over the area, a GtkDrawingArea then,
-	// with MYGO_WAYLAND_SUBSURFACE=1 (subsurface.go).
-	sub *subsurface
+	// where it is linked and MYGO_WAYLAND_SUBSURFACE=1 (subsurface_link.go).
+	sub waylandSubsurface
 }
 
 // GDK event masks of the drawing area: pointer motion, button press and
@@ -243,7 +243,9 @@ func (w *window) createSurface() {
 	// MYGO_GPU=0, which keeps the input, the input method and assistive
 	// technology, and paints nothing: frames draw on the subsurface.
 	gpu := gtkGLAreaNew != nil && os.Getenv("MYGO_GPU") != "0" && gpuGL()
-	s.sub = newSubsurface(s, gpu)
+	if waylandSubsurfaces.make != nil {
+		s.sub = waylandSubsurfaces.make(s, gpu)
+	}
 	s.newArea(gpu && s.sub == nil)
 	if s.sub != nil {
 		s.sub.connect()
@@ -428,7 +430,7 @@ func (s *surface) Native() platform.SurfaceNative {
 	n := platform.SurfaceNative{Widget: s.area}
 	switch {
 	case !s.rendering:
-	case s.sub.active():
+	case s.subActive():
 		n.GLTarget = s.sub
 	default:
 		n.GLArea = s.area
@@ -462,8 +464,10 @@ func (s *surface) eventWindow() ptr {
 // scale for it, fractional, once it sent one.
 func (s *surface) Size() (float64, float64, float64) {
 	scale := float64(max(gtkWidgetGetScaleFactor(s.area), 1))
-	if f := s.sub.drawScale(); f > 0 {
-		scale = f
+	if s.sub != nil {
+		if f := s.sub.drawScale(); f > 0 {
+			scale = f
+		}
 	}
 	return float64(gtkWidgetGetAllocatedWidth(s.area)), float64(gtkWidgetGetAllocatedHeight(s.area)), scale
 }
@@ -475,8 +479,8 @@ func (s *surface) RequestFrame() {
 	}
 	switch {
 	case s.w.closed:
-	case s.sub.active():
-		s.sub.pacer.request()
+	case s.subActive():
+		s.sub.requestFrame()
 	case s.drawsGL() && s.staging:
 		s.glAgain = true
 	case s.drawsGL():
@@ -513,7 +517,7 @@ func (s *surface) drawHidden() {
 	}
 	gtkWidgetRealize(s.w.win)
 	s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
-	if (s.gl || s.sub.active()) && s.drawn {
+	if (s.gl || s.subActive()) && s.drawn {
 		s.send(platform.SurfaceEvent{Kind: platform.SurfaceRenew})
 	}
 }
@@ -736,15 +740,14 @@ func setRefreshInterval(t ptr, us int64, get func(t ptr) int64) bool {
 
 func (s *surface) PresentPixels(pix []byte, stride, width, height int) {
 	if s.cr == 0 {
-		if s.rendering && s.sub.active() {
+		if s.rendering && s.subActive() {
 			// Into the subsurface's framebuffer, which then shows.
-			if s.sub.MakeGLCurrent() {
+			s.sub.drewPixels(func() {
 				if err := s.present.Present(pix, stride, width, height); err != nil && !s.presentFailed {
 					s.presentFailed = true
 					log.Printf("mygo: native UI shows nothing: %v", err)
 				}
-				s.sub.drew = true
-			}
+			})
 			return
 		}
 		if s.rendering {
@@ -1209,7 +1212,7 @@ func initSurfaceCallbacks() {
 		if s.drawsGL() {
 			return false
 		}
-		if s.sub.active() {
+		if s.subActive() {
 			s.sub.paint()
 			return true
 		}

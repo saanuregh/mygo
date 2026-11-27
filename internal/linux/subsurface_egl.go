@@ -112,8 +112,8 @@ type eglLib struct {
 	clearCurrent func()
 }
 
-// loadEGL loads what the subsurface's EGL calls, once.
-var loadEGL = sync.OnceValues(func() (*eglLib, error) {
+// openEGL loads what the subsurface's EGL calls (loadEGL, once).
+func openEGL() (*eglLib, error) {
 	l := &eglLib{}
 	egl, err := open("libEGL.so.1")
 	if err != nil {
@@ -185,7 +185,21 @@ var loadEGL = sync.OnceValues(func() (*eglLib, error) {
 		return nil, errors.New("GDK has no gdk_gl_context_clear_current")
 	}
 	return l, nil
-})
+}
+
+// eglLoaded is what the subsurface's EGL calls, as loaded once (as
+// waylandClientLoaded is).
+var eglLoaded struct {
+	once sync.Once
+	l    *eglLib
+	err  error
+}
+
+func loadEGL() (*eglLib, error) {
+	e := &eglLoaded
+	e.once.Do(func() { e.l, e.err = openEGL() })
+	return e.l, e.err
+}
 
 // subsurfaceEGL is the subsurface's context, and the window surface it
 // draws into while the subsurface's wl_surface exists.

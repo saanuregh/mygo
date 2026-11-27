@@ -8,6 +8,8 @@ import (
 	"slices"
 	"testing"
 	"unsafe"
+
+	"github.com/egoist/mygo/internal/platform"
 )
 
 // A frame copies into a back buffer what changed since that buffer last
@@ -15,7 +17,7 @@ import (
 // buffer. A buffer of unknown age (0), one older than the frames
 // remembered, a frame or one of those changing all of it, and any frame
 // before one shows after the history started over (a new window surface,
-// a resize, a new scale, a sync transaction) copy all of it (nil).
+// a resize, a new scale) copy all of it (nil).
 func TestBlitRegionsByBufferAge(t *testing.T) {
 	bounds := image.Rect(0, 0, 3087, 2100)
 	key := []image.Rectangle{image.Rect(100, 200, 120, 240)}
@@ -161,5 +163,113 @@ func TestPresentCopiesByBufferAge(t *testing.T) {
 	present(key, false)
 	if len(blits) != 1 || !slices.Equal(swapped, []int32{0, 0, 3087, 2100}) {
 		t.Fatalf("after a resize: blits %v, damage %v", blits, swapped)
+	}
+}
+
+// frameHandler draws the content's frames with draw.
+type frameHandler struct {
+	platform.WindowHandler
+	draw func()
+}
+
+func (h *frameHandler) SurfaceEvent(ev platform.SurfaceEvent) bool {
+	if ev.Kind == platform.SurfaceFrame && h.draw != nil {
+		h.draw()
+	}
+	return false
+}
+
+// Each frame a subsurface shows copies what changed into the back buffer
+// by its age, whichever renderer drew it: a frame the software renderer
+// draws after the GPU renderer failed, all of the framebuffer, copies
+// whole into a buffer of age 2, which would otherwise keep what the GPU
+// frame before left there. A move, and a frame held for the toplevel's
+// commit, change nothing a back buffer holds: the next frames still copy
+// only what changed.
+func TestSubsurfaceFramesCopyWhatChangedByAge(t *testing.T) {
+	f := newFakeWayland()
+	f.names[0xA00] = "toplevel"
+	area := gdkRectangle{Width: 1000, Height: 750}
+	at := image.Point{}
+	h := &frameHandler{}
+	u := &subsurface{
+		s:   &surface{w: &window{id: 7, h: h}},
+		c:   f.client(),
+		g:   &waylandGlobals{compositor: 1, subcompositor: 2, viewporter: 3, fractionManager: 4, compositorVersion: 4},
+		egl: f.egl(),
+		top: subsurfaceToplevel{
+			surface: func() ptr { return 0xA00 },
+			allocation: func() (image.Point, gdkRectangle, gdkRectangle, int) {
+				return at, area, area, 2
+			},
+			queuePaint:  func() {},
+			watchPaints: func() func() { return func() {} },
+		},
+	}
+	u.sync = subsurfaceSync{setSync: func() {}, setDesync: func() {}, queuePaint: func() {}}
+	u.pacer = framePacer{soon: func() {}, later: func() {}, draw: u.frame}
+	e := u.egl
+	age := int32(0)
+	e.bufferAge = true
+	e.l.querySurface = func(display, surface ptr, attrib int32, value *int32) uint32 {
+		*value = age
+		return 1
+	}
+	e.swapWithDamage = func(display, surface ptr, rects *int32, n int32) uint32 { return 1 }
+	var blits []image.Rectangle
+	e.l.blitFramebuffer = func(sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1 int32, mask, filter uint32) {
+		blits = append(blits, image.Rect(int(dx0), 1500-int(dy1), int(dx1), 1500-int(dy0)))
+	}
+	u.create()
+	e.w, e.h = u.frameSize()
+	whole := []image.Rectangle{image.Rect(0, 0, 2000, 1500)}
+	key := image.Rect(100, 200, 120, 240)
+	frame := func(n int32, draw func()) []image.Rectangle {
+		t.Helper()
+		age, blits, h.draw = n, nil, draw
+		if !u.frame() {
+			t.Fatal("the frame showed nothing")
+		}
+		return blits
+	}
+	gpu := func(damage ...image.Rectangle) func() {
+		return func() { u.DrewGL(damage, false) }
+	}
+	software := func() { u.drewPixels(func() {}) }
+
+	if got := frame(0, gpu(whole[0])); !slices.Equal(got, whole) {
+		t.Fatalf("first frame: copies %v", got)
+	}
+	if got := frame(1, gpu(key)); !slices.Equal(got, []image.Rectangle{key}) {
+		t.Fatalf("a key, age 1: copies %v", got)
+	}
+	if got := frame(2, software); !slices.Equal(got, whole) {
+		t.Fatalf("the software renderer's frame, age 2: copies %v, want all of it", got)
+	}
+	if got := frame(2, gpu(key)); !slices.Equal(got, whole) {
+		t.Fatalf("a key after the software frame, age 2: copies %v, want all of it", got)
+	}
+	if got := frame(1, gpu(key)); !slices.Equal(got, []image.Rectangle{key}) {
+		t.Fatalf("a key, age 1: copies %v", got)
+	}
+
+	// Moved, the same size.
+	at = image.Pt(0, 40)
+	u.place()
+	if got := frame(1, gpu(key)); !slices.Equal(got, []image.Rectangle{key}) {
+		t.Fatalf("a key after a move, age 1: copies %v", got)
+	}
+	// Held for the toplevel's commit.
+	var held []image.Rectangle
+	u.syncOnce(func() { held = frame(1, gpu(key)) })
+	if !slices.Equal(held, []image.Rectangle{key}) {
+		t.Fatalf("a key held for the toplevel's commit, age 1: copies %v", held)
+	}
+	// Resized: all of it.
+	area = gdkRectangle{Width: 800, Height: 600}
+	u.place()
+	e.w, e.h = u.frameSize()
+	if got := frame(1, gpu(key)); len(got) != 1 || got[0].Dx() != 1600 {
+		t.Fatalf("a key after a resize: copies %v, want all of it", got)
 	}
 }

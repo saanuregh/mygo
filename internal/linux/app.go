@@ -5,7 +5,6 @@ package linux
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -82,9 +81,6 @@ type Backend struct {
 	// waylandSurface returns a GdkWindow's wl_surface on Wayland
 	// (gdk_wayland_window_get_wl_surface; see damageGLPaint).
 	waylandSurface func(window ptr) ptr
-	// wayland are the globals of the Wayland subsurface (wayland_client.go),
-	// nil unless MYGO_WAYLAND_SUBSURFACE=1 and found.
-	wayland *waylandGlobals
 
 	// What the launcher entry shows (Window.SetProgressBar, badges).
 	launcher struct {
@@ -169,8 +165,8 @@ func (b *Backend) Init(h platform.AppHandler, opts platform.AppOptions) error {
 	if onWayland {
 		bind(libGDK, &b.announceCSD, "gdk_wayland_window_announce_csd")
 		bind(libGDK, &b.waylandSurface, "gdk_wayland_window_get_wl_surface")
-		if waylandSubsurfaceAsked() {
-			b.findWaylandGlobals()
+		if waylandSubsurfaces.find != nil && waylandSubsurfaceAsked() {
+			waylandSubsurfaces.find()
 		}
 	}
 	initCallbacks()
@@ -178,31 +174,6 @@ func (b *Backend) Init(h platform.AppHandler, opts platform.AppOptions) error {
 	b.signalable.Store(true)
 	b.Signal()
 	return nil
-}
-
-// findWaylandGlobals binds what the Wayland subsurface needs on GDK's
-// display, GDK's wl_compositor, or one of a later version, with the
-// globals GDK keeps to itself, and says what it found.
-func (b *Backend) findWaylandGlobals() {
-	var getDisplay, getCompositor func(display ptr) ptr
-	if !bind(libGDK, &getDisplay, "gdk_wayland_display_get_wl_display") ||
-		!bind(libGDK, &getCompositor, "gdk_wayland_display_get_wl_compositor") {
-		log.Print("mygo: Wayland subsurface: GDK has no gdk_wayland_display_get_wl_display or _get_wl_compositor")
-		return
-	}
-	c, err := loadWaylandClient()
-	if err != nil {
-		log.Printf("mygo: Wayland subsurface: %v", err)
-		return
-	}
-	display := gdkDisplayGetDefault()
-	g, err := c.findWaylandGlobals(getDisplay(display), getCompositor(display))
-	if err != nil {
-		log.Printf("mygo: Wayland subsurface: %v", err)
-		return
-	}
-	b.wayland = g
-	log.Printf("mygo: Wayland subsurface: %s", g)
 }
 
 func (b *Backend) Run() error {

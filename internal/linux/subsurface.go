@@ -11,13 +11,16 @@ import (
 
 	"github.com/ebitengine/purego"
 
+	"github.com/egoist/mygo/internal/gpu/gl"
 	"github.com/egoist/mygo/internal/platform"
 )
 
-// The Wayland subsurface of a window's surface (MYGO_WAYLAND_SUBSURFACE=1):
-// a wl_surface of mygo's own, a desynchronized wl_subsurface of the
-// toplevel's, placed over the surface's widget, a GtkDrawingArea, which
-// keeps every input, as the subsurface takes none (an empty input region).
+// The Wayland subsurface of a window's surface, in apps that link it
+// (plugins/waylandsubsurface, LinkWaylandSubsurface), with
+// MYGO_WAYLAND_SUBSURFACE=1: a wl_surface of mygo's own, a desynchronized
+// wl_subsurface of the toplevel's, placed over the surface's widget, a
+// GtkDrawingArea, which keeps every input, as the subsurface takes none
+// (an empty input region).
 // GDK makes the toplevel's wl_surface as the window shows and destroys it
 // as it hides: the subsurface is made as the toplevel maps, and goes as it
 // unmaps. A frame that moves or resizes it shows with the toplevel's
@@ -96,9 +99,11 @@ type subsurface struct {
 	// presented, until done, 0 for none.
 	pacer   framePacer
 	frameCB ptr
-	// drew tells that the frame drawing changed the framebuffer (DrewGL),
-	// within damage, or all of it when whole; show that the next frame
-	// shows even if it changes nothing, as the first on a new wl_surface.
+	// drew tells that the frame drawing changed the framebuffer, within
+	// damage, or all of it when whole: DrewGL, which every write into the
+	// framebuffer goes through, sets them together, so that a frame that
+	// drew has damage or is whole. show tells that the next frame shows
+	// even if it changes nothing, as the first on a new wl_surface.
 	drew, show, whole bool
 	damage            []image.Rectangle
 	// top is the toplevel; sync follows whether the subsurface is
@@ -125,10 +130,10 @@ func newSubsurface(s *surface, gpu bool) *subsurface {
 		why = "MYGO_GPU=0"
 	case !gpu:
 		why = "OpenGL does not draw on a GPU"
-	case b.wayland == nil:
+	case subsurfaceGlobals == nil:
 		why = "the globals it needs were not bound"
-	case !b.wayland.complete():
-		why = "the compositor lacks some globals (" + b.wayland.String() + ")"
+	case !subsurfaceGlobals.complete():
+		why = "the compositor lacks some globals (" + subsurfaceGlobals.String() + ")"
 	}
 	if why != "" {
 		logSubsurfaceUnused(why)
@@ -139,7 +144,7 @@ func newSubsurface(s *surface, gpu bool) *subsurface {
 		logSubsurfaceUnused(err.Error())
 		return nil
 	}
-	e, err := newSubsurfaceEGL(b.wayland.display)
+	e, err := newSubsurfaceEGL(subsurfaceGlobals.display)
 	if err != nil {
 		logSubsurfaceUnused(err.Error())
 		return nil
@@ -150,7 +155,9 @@ func newSubsurface(s *surface, gpu bool) *subsurface {
 		e.release()
 		return nil
 	}
-	u := &subsurface{s: s, c: c, g: b.wayland, egl: e, top: gtkToplevel(s)}
+	// The GPU renderer finds its context current by EGL's, past GDK's.
+	gl.FollowEGLContexts(e.l.getCurrentContext)
+	u := &subsurface{s: s, c: c, g: subsurfaceGlobals, egl: e, top: gtkToplevel(s)}
 	u.sync = subsurfaceSync{
 		setSync:    func() { u.request(u.sub, wlSubsurfaceSetSync) },
 		setDesync:  func() { u.request(u.sub, wlSubsurfaceSetDesync) },
@@ -397,7 +404,6 @@ func (u *subsurface) place() {
 	}
 	if resized {
 		u.show = true
-		u.egl.blits.reset()
 		u.resyncNext()
 	}
 }
@@ -414,14 +420,32 @@ func (u *subsurface) MakeGLCurrent() bool {
 }
 
 // DrewGL tells that the frame drawing changed the framebuffer within
-// damage, or all of it, which then shows (platform.GLTarget).
+// damage, or all of it, which then shows (platform.GLTarget); no damage,
+// and not whole, changes nothing.
 func (u *subsurface) DrewGL(damage []image.Rectangle, whole bool) {
+	if !whole && len(damage) == 0 {
+		return
+	}
 	u.drew = true
 	u.whole = u.whole || whole
 	u.damage = append(u.damage, damage...)
 }
 
 var _ platform.GLTarget = (*subsurface)(nil)
+
+// drewPixels runs present, which draws a frame drawn in memory into the
+// framebuffer, all of it, with the context current, as the software
+// renderer's frames draw when the GPU renderer fails.
+func (u *subsurface) drewPixels(present func()) {
+	if u.MakeGLCurrent() {
+		present()
+		u.DrewGL(nil, true)
+	}
+}
+
+// requestFrame asks for a frame, which draws once the compositor can take
+// one (framePacer).
+func (u *subsurface) requestFrame() { u.pacer.request() }
 
 // frame draws the frame asked for into the framebuffer, with the context
 // current, the GPU renderer drawing into it (Native), and shows it, asking
@@ -505,31 +529,31 @@ func initSubsurfaceCallbacks() {
 		// After GTK's own handler, which shows the GdkWindow, and GDK makes
 		// its wl_surface.
 		cbSubsurfaceMap = purego.NewCallback(func(widget, data ptr) {
-			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
-				s.sub.create()
+			if u := subsurfaceOf(data); u != nil {
+				u.create()
 			}
 		})
 		// GTK's handler runs first and GDK has destroyed the toplevel's
 		// wl_surface: the subsurface, inert since, goes too.
 		cbSubsurfaceUnmap = purego.NewCallback(func(widget, data ptr) {
-			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
-				s.sub.destroy()
+			if u := subsurfaceOf(data); u != nil {
+				u.destroy()
 			}
 		})
 		cbSubsurfaceAfterPaint = purego.NewCallback(func(clock, data ptr) {
-			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
-				s.sub.afterPaint()
+			if u := subsurfaceOf(data); u != nil {
+				u.afterPaint()
 			}
 		})
 		cbSubsurfaceFrame = purego.NewCallback(func(data ptr) int32 {
-			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
-				s.sub.pacer.run()
+			if u := subsurfaceOf(data); u != nil {
+				u.pacer.run()
 			}
 			return 0 // G_SOURCE_REMOVE
 		})
 		done := purego.NewCallback(func(data, callback ptr, time uint32) {
-			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
-				s.sub.frameDone(callback)
+			if u := subsurfaceOf(data); u != nil {
+				u.frameDone(callback)
 			}
 		})
 		// struct wl_callback_listener: done. In C memory, which libwayland
@@ -539,8 +563,8 @@ func initSubsurfaceCallbacks() {
 			subsurfaceFrameListener = l
 		}
 		scale := purego.NewCallback(func(data, fraction ptr, scale120 uint32) {
-			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
-				s.sub.preferredScale(fraction, scale120)
+			if u := subsurfaceOf(data); u != nil {
+				u.preferredScale(fraction, scale120)
 			}
 		})
 		// struct wp_fractional_scale_v1_listener: preferred_scale.

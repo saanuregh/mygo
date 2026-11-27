@@ -14,11 +14,12 @@ import (
 )
 
 // A subsurface synchronized for a frame shows that frame with GDK's next
-// commit of the toplevel after GTK painted the area: it stays synchronized
-// through an after-paint with nothing painted, as GDK then committed none
-// of the area, or none at all, and goes back to desynchronized after the
-// one following a paint. A frame asked for before the paint asks GTK for
-// one; a frame drawn in the paint, as resizes are, does not.
+// commit of the toplevel: it stays synchronized through an after-paint
+// with nothing painted, as GDK then committed nothing, and goes back to
+// desynchronized after the one following a paint of the toplevel, the
+// area painted or not, as that commit applied what it held. A frame asked
+// for before the paint asks GTK for one; a frame drawn in the paint, as
+// resizes are, does not.
 func TestSyncOnceShowsWithTheToplevelsCommit(t *testing.T) {
 	var log []string
 	sync := subsurfaceSync{
@@ -31,6 +32,7 @@ func TestSyncOnceShowsWithTheToplevelsCommit(t *testing.T) {
 	// subsurface's runs after it.
 	afterPaint := func(painted bool) {
 		if painted {
+			sync.toplevelPainted()
 			commit("toplevel")
 		}
 		sync.afterPaint()
@@ -62,6 +64,13 @@ func TestSyncOnceShowsWithTheToplevelsCommit(t *testing.T) {
 	sync.paint(func() {})
 	afterPaint(true)
 	want("set_sync", "queue_paint", "commit subsurface", "queue_paint", "commit subsurface", "commit toplevel", "set_desync")
+
+	// GTK paints the toplevel but not the area, which it cannot draw: the
+	// commit applied the frame, and the subsurface goes back.
+	sync.begin()
+	commit("subsurface")
+	afterPaint(true)
+	want("set_sync", "queue_paint", "commit subsurface", "commit toplevel", "set_desync")
 
 	// Desynchronized, a paint changes nothing.
 	sync.paint(func() {})

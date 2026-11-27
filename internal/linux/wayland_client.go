@@ -15,8 +15,9 @@ import (
 
 // The Wayland subsurface: mygo's frames drawn on a wl_subsurface of the
 // window's own, with EGL, in place of the GtkGLArea, which GTK 3 composites
-// through an image as large as what it repaints. Off unless
-// MYGO_WAYLAND_SUBSURFACE=1, and only on Wayland. This file has the
+// through an image as large as what it repaints. Linked only into apps
+// that import plugins/waylandsubsurface (LinkWaylandSubsurface), off
+// unless MYGO_WAYLAND_SUBSURFACE=1, and only on Wayland. This file has the
 // libwayland-client calls it needs and the globals it binds.
 
 // waylandSubsurfaceAsked reports MYGO_WAYLAND_SUBSURFACE=1, read once.
@@ -79,9 +80,9 @@ type waylandClient struct {
 	registryListener         ptr // struct wl_registry_listener
 }
 
-// loadWaylandClient loads libwayland-client, which GDK loaded already on
-// Wayland, once.
-var loadWaylandClient = sync.OnceValues(func() (*waylandClient, error) {
+// openWaylandClient loads libwayland-client, which GDK loaded already on
+// Wayland (loadWaylandClient, once).
+func openWaylandClient() (*waylandClient, error) {
 	lib, err := open("libwayland-client.so.0")
 	if err != nil {
 		return nil, err
@@ -129,7 +130,22 @@ var loadWaylandClient = sync.OnceValues(func() (*waylandClient, error) {
 		return nil, err
 	}
 	return c, nil
-})
+}
+
+// waylandClientLoaded is libwayland-client, as loaded once: no package
+// variable's initializer refers to the loading, so that apps without the
+// subsurface do not link it.
+var waylandClientLoaded struct {
+	once sync.Once
+	c    *waylandClient
+	err  error
+}
+
+func loadWaylandClient() (*waylandClient, error) {
+	w := &waylandClientLoaded
+	w.once.Do(func() { w.c, w.err = openWaylandClient() })
+	return w.c, w.err
+}
 
 // cAlloc returns n zeroed bytes of C memory, never freed. The protocols'
 // interfaces live in it because libwayland keeps pointers to them in every

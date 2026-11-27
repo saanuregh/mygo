@@ -20,7 +20,12 @@ import (
 // commit (syncOnce): a resize, a move, a new scale, and the first frame of
 // a new subsurface, which is made synchronized and shows with the first
 // commit after the toplevel's first configure, as GTK paints nothing
-// before it.
+// before it. It goes back after any commit of the toplevel's, which
+// applies what it holds, the area painted or not: one that stayed
+// synchronized would hold every commit of its own until GTK painted the
+// area, as GDK's request for the toplevel's frame callback on it
+// (subsurface_opaque.go), and GTK's frame clock, waiting for that
+// callback, would never paint it.
 
 // subsurfaceToplevel is what a subsurface reads of its toplevel and asks of
 // GTK; tests fake it.
@@ -32,9 +37,10 @@ type subsurfaceToplevel struct {
 	allocation func() (in image.Point, area, toplevel gdkRectangle, scale int)
 	// queuePaint asks GTK to paint the area, which GDK then commits.
 	queuePaint func()
-	// watchPaints calls the subsurface's afterPaint after GDK's own in each
-	// after-paint of the toplevel's frame clock, and its layout in each of
-	// the clock's layouts, until stop.
+	// watchPaints calls the subsurface's toplevelPainted as GTK paints the
+	// toplevel, which GDK then commits, its afterPaint after GDK's own in
+	// each after-paint of the toplevel's frame clock, and its layout in
+	// each of the clock's layouts, until stop.
 	watchPaints func() (stop func())
 	// requestLayout asks the frame clock for a layout, another if it lays
 	// out now.
@@ -47,9 +53,10 @@ type subsurfaceToplevel struct {
 
 var (
 	subsurfaceGTKOnce sync.Once
-	// cbSubsurfaceLayout follows the layout of a toplevel's frame clock.
-	cbSubsurfaceLayout        ptr
-	gdkFrameClockRequestPhase func(clock ptr, phase uint32)
+	// cbSubsurfaceLayout follows the layout of a toplevel's frame clock,
+	// cbSubsurfaceToplevelDraw GTK painting the toplevel.
+	cbSubsurfaceLayout, cbSubsurfaceToplevelDraw ptr
+	gdkFrameClockRequestPhase                    func(clock ptr, phase uint32)
 	// GDK 3.24.25's.
 	gdkWaylandWindowAddFrameCallbackSurface    func(window, surface ptr)
 	gdkWaylandWindowRemoveFrameCallbackSurface func(window, surface ptr)
@@ -66,9 +73,15 @@ func loadSubsurfaceGTK() {
 			gdkWaylandWindowAddFrameCallbackSurface, gdkWaylandWindowRemoveFrameCallbackSurface = nil, nil
 		}
 		cbSubsurfaceLayout = purego.NewCallback(func(clock, data ptr) {
-			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
-				s.sub.layout()
+			if u := subsurfaceOf(data); u != nil {
+				u.layout()
 			}
+		})
+		cbSubsurfaceToplevelDraw = purego.NewCallback(func(widget, cr, data ptr) bool {
+			if u := subsurfaceOf(data); u != nil {
+				u.toplevelPainted()
+			}
+			return false
 		})
 	})
 }
@@ -101,9 +114,12 @@ func gtkToplevel(s *surface) subsurfaceToplevel {
 			gObjectRef(clock)
 			id := connect(clock, "after-paint", cbSubsurfaceAfterPaint, ptr(s.w.id))
 			layout := connect(clock, "layout", cbSubsurfaceLayout, ptr(s.w.id))
+			// GTK paints every widget of the window in the toplevel's draw.
+			draw := connect(s.w.win, "draw", cbSubsurfaceToplevelDraw, ptr(s.w.id))
 			return func() {
 				gSignalHandlerDisconnect(clock, id)
 				gSignalHandlerDisconnect(clock, layout)
+				gSignalHandlerDisconnect(s.w.win, draw)
 				gObjectUnref(clock)
 			}
 		},
@@ -137,8 +153,10 @@ type subsurfaceSync struct {
 	setSync, setDesync, queuePaint func()
 	// synced tells that the subsurface is synchronized, painted that GTK
 	// painted the area since, which GDK commits in the frame's after-paint,
-	// and inPaint that GTK paints it now.
-	synced, painted, inPaint bool
+	// and inPaint that GTK paints it now; committed that GTK painted the
+	// toplevel in this frame, which GDK commits in its after-paint, whether
+	// the area was painted or not.
+	synced, painted, inPaint, committed bool
 }
 
 // begin synchronizes the subsurface until GDK next commits the toplevel
@@ -166,19 +184,24 @@ func (t *subsurfaceSync) paint(f func()) {
 	t.inPaint = false
 }
 
+// toplevelPainted follows GTK painting the toplevel, the area or not.
+func (t *subsurfaceSync) toplevelPainted() { t.committed = true }
+
 // afterPaint follows GDK's after-paint, where it committed the toplevel if
-// GTK painted it: a subsurface synchronized and painted since goes back to
-// desynchronized, its frames showing at once again.
+// GTK painted it: a subsurface synchronized goes back to desynchronized,
+// its frames showing at once again, after a commit that applied what it
+// held.
 func (t *subsurfaceSync) afterPaint() {
-	if t.synced && t.painted {
+	if t.synced && (t.painted || t.committed) {
 		t.setDesync()
 		t.synced, t.painted = false, false
 	}
+	t.committed = false
 }
 
 // reset starts over with a new subsurface, synchronized as made, or none.
 func (t *subsurfaceSync) reset(synced bool) {
-	t.synced, t.painted, t.inPaint = synced, false, false
+	t.synced, t.painted, t.inPaint, t.committed = synced, false, false, false
 }
 
 // syncOnce runs draw, which commits a frame, with the subsurface
@@ -191,10 +214,6 @@ func (u *subsurface) syncOnce(draw func()) {
 		return
 	}
 	u.sync.begin()
-	// The compositor may apply the frame with others held with it: it
-	// shows whole, and frames copy whole into each back buffer until it
-	// holds one shown since.
-	u.egl.blits.reset()
 	draw()
 }
 
@@ -256,6 +275,14 @@ func (u *subsurface) layout() {
 func (u *subsurface) webViewsPlaced() {
 	u.setOpaque()
 	u.syncOnce(func() {})
+}
+
+// toplevelPainted follows GTK painting the toplevel, in the frame clock's
+// paint.
+func (u *subsurface) toplevelPainted() {
+	if u.mapped && !u.failed {
+		u.sync.toplevelPainted()
+	}
 }
 
 // afterPaint follows GDK's after-paint of the toplevel.

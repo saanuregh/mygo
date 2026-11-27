@@ -33,10 +33,12 @@ type blitHistory struct {
 	fresh bool
 }
 
-// reset starts over, as the window surface, its size, the frames' size or
-// how the compositor applies its commits changed: no back buffer is
-// known to hold a frame of the framebuffer's, and the next frame shows
-// whole.
+// reset starts over, as the window surface, its size or the frames' size
+// changed: no back buffer is known to hold a frame of the framebuffer's,
+// and the next frame shows whole. Neither a move nor a frame held for the
+// toplevel's commit (subsurface_sync.go) changes what a back buffer holds:
+// EGL counts its age by swaps, and the compositor adds up the damage of
+// the commits it applies together.
 func (h *blitHistory) reset() {
 	h.frames = h.frames[:0]
 	h.fresh = true
@@ -44,7 +46,9 @@ func (h *blitHistory) reset() {
 
 // copies returns what a frame with damage, or changing all of it when
 // whole or nil, copies into a back buffer of age, within bounds: nil for
-// all of it. Rectangles overlap at most where the damage did.
+// all of it. Empty damage, not nil, is a frame that changed nothing: the
+// copy is what earlier frames changed. Rectangles overlap at most where
+// the damage did.
 func (h *blitHistory) copies(damage []image.Rectangle, whole bool, age int, bounds image.Rectangle) []image.Rectangle {
 	if whole || h.fresh || age <= 0 || age > len(h.frames) {
 		return nil
