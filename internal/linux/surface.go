@@ -224,6 +224,9 @@ type surface struct {
 	// (webview.go), once the window has some.
 	layers, web ptr
 	placed      []platform.WebViewPlacement
+	// sub is the Wayland subsurface over the area, a GtkDrawingArea then,
+	// with MYGO_WAYLAND_SUBSURFACE=1 (subsurface.go).
+	sub *subsurface
 }
 
 // GDK event masks of the drawing area: pointer motion, button press and
@@ -236,7 +239,15 @@ func (w *window) createSurface() {
 	data := ptr(w.id)
 	s := &surface{w: w}
 	s.im = gtkIMMulticontextNew()
-	s.newArea(gtkGLAreaNew != nil && os.Getenv("MYGO_GPU") != "0" && gpuGL())
+	// With a Wayland subsurface, the area is the drawing area of
+	// MYGO_GPU=0, which keeps the input, the input method and assistive
+	// technology; for now its frames are still painted there, under the
+	// subsurface (stage 3 draws them on the subsurface).
+	s.sub = newSubsurface(s)
+	s.newArea(s.sub == nil && gtkGLAreaNew != nil && os.Getenv("MYGO_GPU") != "0" && gpuGL())
+	if s.sub != nil {
+		s.sub.connect()
+	}
 	connect(s.im, "commit", cbIMCommit, data)
 	connect(s.im, "preedit-changed", cbIMPreedit, data)
 	connect(s.im, "preedit-end", cbIMPreeditEnd, data)
@@ -371,6 +382,10 @@ func (w *window) contentWindow() ptr {
 }
 
 func (s *surface) destroy() {
+	if s.sub != nil {
+		s.sub.release()
+		s.sub = nil
+	}
 	s.cancelPendingDrop()
 	s.CancelDataDrag()
 	if s.lastPointer != 0 {
@@ -1295,11 +1310,17 @@ func initSurfaceCallbacks() {
 			if s.layers != 0 {
 				s.shape() // to the new size
 			}
+			if s.sub != nil {
+				s.sub.place()
+			}
 			s.send(platform.SurfaceEvent{Kind: platform.SurfaceResize})
 		}
 	})
 	cbSurfaceScale = purego.NewCallback(func(widget, pspec, data ptr) {
 		if s := b().surfaceOf(data); s != nil {
+			if s.sub != nil {
+				s.sub.place()
+			}
 			s.send(platform.SurfaceEvent{Kind: platform.SurfaceResize})
 			s.queueDraw()
 		}

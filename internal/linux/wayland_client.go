@@ -322,6 +322,8 @@ func initWaylandCallbacks() {
 // waylandGlobals are the globals a subsurface needs, bound on a display's
 // default queue: 0 where the compositor has none.
 type waylandGlobals struct {
+	// display is GDK's wl_display, which they are bound on.
+	display                                                ptr
 	compositor, subcompositor, viewporter, fractionManager ptr
 	// Their versions as bound.
 	compositorVersion, subcompositorVersion, viewporterVersion, fractionManagerVersion uint32
@@ -407,7 +409,7 @@ func (c *waylandClient) findWaylandGlobals(display, compositor ptr) (*waylandGlo
 		return nil, fmt.Errorf("reading the registry: error %d", c.displayGetError(display))
 	}
 
-	g := &waylandGlobals{}
+	g := &waylandGlobals{display: display}
 	bindGlobal := func(iface ptr, out *ptr, version *uint32) {
 		name := goStr((*wlInterface)(cAt(iface)).name)
 		advertised, ok := scan.versions[name]
