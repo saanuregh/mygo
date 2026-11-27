@@ -1210,6 +1210,7 @@ func initSurfaceCallbacks() {
 			return false
 		}
 		if s.sub.active() {
+			s.sub.paint()
 			return true
 		}
 		s.paceFrameClock()

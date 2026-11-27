@@ -20,7 +20,8 @@ import (
 // keeps every input, as the subsurface takes none (an empty input region).
 // GDK makes the toplevel's wl_surface as the window shows and destroys it
 // as it hides: the subsurface is made as the toplevel maps, and goes as it
-// unmaps.
+// unmaps. A frame that moves or resizes it shows with the toplevel's
+// commit, the subsurface synchronized for it (subsurface_sync.go).
 //
 // mygo's frames draw on it with OpenGL (subsurface_egl.go), paced by its
 // own frame callbacks rather than GTK's frame clock, which then drives only
@@ -48,6 +49,7 @@ const (
 	wlSubcompositorGetSubsurf = 1
 	wlSubsurfaceDestroy       = 0
 	wlSubsurfaceSetPosition   = 1
+	wlSubsurfaceSetSync       = 4
 	wlSubsurfaceSetDesync     = 5
 	wpViewporterGetViewport   = 1
 	wpViewportDestroy         = 0
@@ -92,6 +94,14 @@ type subsurface struct {
 	// show that the next frame shows even if it changes nothing, as the
 	// first on a new wl_surface.
 	drew, show bool
+	// top is the toplevel; sync follows whether the subsurface is
+	// synchronized with it, resync tells that the next frame draws as GTK
+	// paints the area, in step with it (subsurface_sync.go); stopWatch
+	// stops following its after-paint, nil while unmapped.
+	top       subsurfaceToplevel
+	sync      subsurfaceSync
+	resync    bool
+	stopWatch func()
 }
 
 // newSubsurface returns the subsurface of s, with its EGL context, when
@@ -133,7 +143,12 @@ func newSubsurface(s *surface, gpu bool) *subsurface {
 		e.release()
 		return nil
 	}
-	u := &subsurface{s: s, c: c, g: b.wayland, egl: e}
+	u := &subsurface{s: s, c: c, g: b.wayland, egl: e, top: gtkToplevel(s)}
+	u.sync = subsurfaceSync{
+		setSync:    func() { u.request(u.sub, wlSubsurfaceSetSync) },
+		setDesync:  func() { u.request(u.sub, wlSubsurfaceSetDesync) },
+		queuePaint: func() { u.top.queuePaint() },
+	}
 	data := ptr(s.w.id)
 	u.pacer = framePacer{
 		soon: func() { gIdleAddFull(gPriorityHighIdle, cbSubsurfaceFrame, data, 0) },
@@ -190,14 +205,17 @@ func (u *subsurface) destroyProxy(proxy ptr, opcode uint32) {
 // wlInt is an int32 in its union wl_argument.
 func wlInt(v int) uint64 { return uint64(uint32(int32(v))) }
 
-// create makes the subsurface on the toplevel's wl_surface, places it and
-// draws a frame there; a failure is logged once, and the content draws in
-// the drawing area under it from then on.
+// create makes the subsurface on the toplevel's wl_surface and places it;
+// its first frame draws as GTK first paints the toplevel, which it does
+// once the compositor configured it, and shows with GDK's commit of that
+// paint, the subsurface synchronized until then, as made. A failure is
+// logged once, and the content draws in the drawing area under it from
+// then on.
 func (u *subsurface) create() {
 	if u.mapped || u.failed {
 		return
 	}
-	toplevel := u.s.w.b.waylandSurface(gtkWidgetGetWindow(u.s.w.win))
+	toplevel := u.top.surface()
 	if toplevel == 0 {
 		u.broke("the window has no wl_surface")
 		return
@@ -210,7 +228,6 @@ func (u *subsurface) create() {
 		u.broke("wl_subcompositor.get_subsurface failed")
 		return
 	}
-	u.request(u.sub, wlSubsurfaceSetDesync)
 	// Every input reaches GTK's surface, under it.
 	region := u.newObject(u.g.compositor, wlCompositorCreateRegion, u.c.regionInterface, 0)
 	if region == 0 {
@@ -229,6 +246,8 @@ func (u *subsurface) create() {
 		u.scale120 = 0
 	}
 	u.mapped = true
+	u.sync.reset(true)
+	u.stopWatch = u.top.watchPaints()
 	r, scale := u.placement()
 	u.x, u.y = r.Min.X, r.Min.Y
 	u.request(u.sub, wlSubsurfaceSetPosition, wlInt(u.x), wlInt(u.y))
@@ -242,7 +261,7 @@ func (u *subsurface) create() {
 	// The framebuffer keeps the last frame, which the new wl_surface shows
 	// even if the frame changes nothing.
 	u.show = true
-	u.pacer.request()
+	u.resyncNext()
 }
 
 // broke says why the subsurface failed and lets go of it: the window draws
@@ -264,6 +283,12 @@ func (u *subsurface) active() bool { return u != nil && !u.failed }
 // its context stays for the next, with the last frame. No frame callback
 // comes for it any more.
 func (u *subsurface) destroy() {
+	if u.stopWatch != nil {
+		u.stopWatch()
+		u.stopWatch = nil
+	}
+	u.sync.reset(false)
+	u.resync = false
 	if u.frameCB != 0 {
 		u.c.proxyDestroy(u.frameCB)
 		u.frameCB = 0
@@ -300,19 +325,10 @@ func (u *subsurface) release() {
 // placement returns where the area is on the toplevel's wl_surface, and
 // the buffers' scale: 1 at a fractional scale, else GTK's.
 func (u *subsurface) placement() (image.Rectangle, int) {
-	loadFlyouts() // binds gtk_widget_translate_coordinates
-	w := u.s.w
-	var in image.Point
-	var x, y int32
-	if gtkWidgetTranslateCoordinates(u.s.area, w.win, 0, 0, &x, &y) {
-		in = image.Pt(int(x), int(y))
-	}
-	var area, toplevel gdkRectangle
-	gtkWidgetGetAllocation(u.s.area, &area)
-	gtkWidgetGetAllocation(w.win, &toplevel)
+	in, area, toplevel, gtkScale := u.top.allocation()
 	scale := 1
 	if !u.fractional() && u.g.compositorVersion >= wlSurfaceBufferScaleSince {
-		scale = max(int(gtkWidgetGetScaleFactor(u.s.area)), 1)
+		scale = gtkScale
 	}
 	return subsurfacePlacement(in, area, toplevel), scale
 }
@@ -344,21 +360,29 @@ func (u *subsurface) setSize(w, h, scale int) {
 }
 
 // place moves and sizes the subsurface to the area, as it is allocated or
-// its scale changes; the SurfaceResize that follows asks for a frame of the
-// new size. The position applies as GDK commits the toplevel next.
+// its scale changes. The position applies as GDK commits the toplevel next,
+// and the size with the next frame: one moved or of another size draws as
+// GTK paints the area, in step with that commit (resyncNext).
 func (u *subsurface) place() {
 	if !u.mapped {
 		return
 	}
 	r, scale := u.placement()
+	was := image.Rect(u.x, u.y, u.x+u.logicalW, u.y+u.logicalH)
 	if r.Min.X != u.x || r.Min.Y != u.y {
 		u.x, u.y = r.Min.X, r.Min.Y
 		u.request(u.sub, wlSubsurfaceSetPosition, wlInt(u.x), wlInt(u.y))
 	}
 	u.setSize(r.Dx(), r.Dy(), scale)
+	resized := r != was
 	if b := image.Pt(u.bufferSize()); b != u.buffer {
 		u.buffer = b
 		u.egl.resize(b.X, b.Y)
+		resized = true
+	}
+	if resized {
+		u.show = true
+		u.resyncNext()
 	}
 }
 
@@ -399,13 +423,25 @@ func (u *subsurface) frame() bool {
 	if !u.mapped || u.failed || !u.drew && !u.show {
 		return false
 	}
+	return u.present()
+}
+
+// present shows the frame drawn into the framebuffer, asking for the frame
+// callback that paces the next; it reports whether it did.
+func (u *subsurface) present() bool {
+	// A frame drawn in step with the toplevel may draw with a callback
+	// due, which then paces nothing: its done is let go of.
+	if u.frameCB != 0 {
+		u.c.proxyDestroy(u.frameCB)
+		u.frameCB = 0
+	}
 	// The request goes in the commit of the swap.
 	cb := u.newObject(u.wlSurface, wlSurfaceFrame, u.c.callbackInterface, 0)
 	if cb == 0 {
 		u.broke("wl_surface.frame failed")
 		return false
 	}
-	u.c.addListener(cb, subsurfaceFrameListener, ptr(s.w.id))
+	u.c.addListener(cb, subsurfaceFrameListener, ptr(u.s.w.id))
 	u.frameCB = cb
 	if err := u.egl.present(u.bufferSize()); err != nil {
 		u.broke(err.Error())
@@ -457,13 +493,20 @@ func (p *framePacer) run() {
 	if p.waiting || !p.wanted {
 		return
 	}
+	p.now()
+}
+
+// now draws a frame at once, even with a frame callback due, as one in
+// step with the toplevel does: the callback of the frame it shows paces
+// the next.
+func (p *framePacer) now() {
 	p.wanted, p.drawing = false, true
 	shown := p.draw()
 	p.drawing = false
 	switch {
 	case shown:
 		p.waiting = true
-	case p.wanted:
+	case p.wanted && !p.queued && !p.waiting:
 		// The frame asked for another as it drew.
 		p.queued = true
 		p.later()
@@ -487,6 +530,9 @@ func (p *framePacer) stop() { p.waiting = false }
 var (
 	subsurfaceCallbacksOnce            sync.Once
 	cbSubsurfaceMap, cbSubsurfaceUnmap ptr
+	// cbSubsurfaceAfterPaint follows the after-paint of a toplevel's frame
+	// clock (subsurface_sync.go).
+	cbSubsurfaceAfterPaint ptr
 	// cbSubsurfaceFrame runs the frame asked for, from an idle callback or
 	// a timeout; subsurfaceFrameListener is the wl_callback_listener of the
 	// frame callbacks.
@@ -511,6 +557,11 @@ func initSubsurfaceCallbacks() {
 		cbSubsurfaceUnmap = purego.NewCallback(func(widget, data ptr) {
 			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
 				s.sub.destroy()
+			}
+		})
+		cbSubsurfaceAfterPaint = purego.NewCallback(func(clock, data ptr) {
+			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
+				s.sub.afterPaint()
 			}
 		})
 		cbSubsurfaceFrame = purego.NewCallback(func(data ptr) int32 {
