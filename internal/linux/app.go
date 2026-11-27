@@ -22,6 +22,9 @@ type Backend struct {
 	h       platform.AppHandler
 	name    string
 	running bool
+	// keepsFreedMemory: glibc keeps what C code frees (keepFreedMemory), so
+	// Idle leaves it for the next frame's paint.
+	keepsFreedMemory bool
 
 	windows map[int]*window
 	// flyouts are the flyouts that show on Wayland, in the order they
@@ -120,6 +123,8 @@ func (b *Backend) Init(h platform.AppHandler, opts platform.AppOptions) error {
 	b.h = h
 	b.name = opts.Name
 	theBackend = b
+	// Before GTK allocates.
+	b.keepsFreedMemory = keepFreedMemory()
 	if err := load(); err != nil {
 		return err
 	}

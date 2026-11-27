@@ -580,9 +580,11 @@ var mallocTrim, _ = purego.Dlsym(purego.RTLD_DEFAULT, "malloc_trim")
 // frames, which glibc keeps for later: GTK paints a window it composites
 // with OpenGL into an image as large as the window each frame, and glibc
 // raises its threshold for giving large blocks back as they are freed.
+// Not when the backend has glibc keep freed memory on purpose: the next
+// paint would fault on every page of its image again.
 func (s *surface) Idle() {
 	s.staged.pix = nil // the host freed it
-	if mallocTrim != 0 {
+	if mallocTrim != 0 && !s.w.b.keepsFreedMemory {
 		purego.SyscallN(mallocTrim, 0)
 	}
 }
