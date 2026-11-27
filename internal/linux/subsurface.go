@@ -27,6 +27,12 @@ import (
 // GTK's widgets: a frame asked for while no callback is due draws at once,
 // from an idle callback, and one asked for while a callback is due draws
 // as it comes (framePacer). The drawing area under it paints nothing.
+//
+// Its buffers are at the compositor's preferred scale for it, fractional
+// (wp_fractional_scale_v1), shown at its logical size (wp_viewport), and
+// mygo draws at that scale (surface.Size); until the compositor sends one,
+// as it does once the subsurface shows on an output, they are at GTK's
+// integer scale, set as the buffers' (wl_surface.set_buffer_scale).
 // Where the subsurface fails, the window draws as with MYGO_GPU=0, into
 // the drawing area.
 
@@ -43,6 +49,11 @@ const (
 	wlSubsurfaceDestroy       = 0
 	wlSubsurfaceSetPosition   = 1
 	wlSubsurfaceSetDesync     = 5
+	wpViewporterGetViewport   = 1
+	wpViewportDestroy         = 0
+	wpViewportSetDestination  = 2
+	wpFractionManagerGetScale = 1
+	wpFractionalScaleDestroy  = 0
 	wlMarshalFlagDestroy      = 1 << 0 // WL_MARSHAL_FLAG_DESTROY
 	wlSurfaceBufferScaleSince = 3
 	gPriorityHighIdle         = 100 // G_PRIORITY_HIGH_IDLE
@@ -53,13 +64,23 @@ type subsurface struct {
 	s *surface
 	c *waylandClient
 	g *waylandGlobals
-	// wlSurface and sub exist while the toplevel is mapped.
-	wlSurface, sub ptr
-	egl            *subsurfaceEGL
+	// wlSurface and sub exist while the toplevel is mapped, with the
+	// wlSurface's viewport and fractional scale, 0 where they failed.
+	wlSurface, sub, viewport, fraction ptr
+	egl                                *subsurfaceEGL
 	// Where the subsurface is on the toplevel's wl_surface, and its size,
-	// in logical pixels, and the scale of its buffers, as last sent.
+	// in logical pixels, and the buffers' scale, as last sent: 1 at a
+	// fractional scale.
 	x, y, logicalW, logicalH, scale int
-	mapped                          bool
+	// destination is the viewport's destination as last sent, none until
+	// the buffers are at a fractional scale; buffer the size of the
+	// buffers, in pixels.
+	destination, buffer image.Point
+	// scale120 is the compositor's preferred scale for the subsurface, in
+	// 120ths, 0 until it sends one: kept as the subsurface is made anew,
+	// as the best guess until the new one is sent.
+	scale120 uint32
+	mapped   bool
 	// failed tells that it failed, which is logged once: the window draws
 	// into the drawing area from then on.
 	failed bool
@@ -107,8 +128,8 @@ func newSubsurface(s *surface, gpu bool) *subsurface {
 		return nil
 	}
 	initSubsurfaceCallbacks()
-	if subsurfaceFrameListener == 0 {
-		logSubsurfaceUnused("no memory for the frame callbacks' listener")
+	if subsurfaceFrameListener == 0 || subsurfaceScaleListener == 0 {
+		logSubsurfaceUnused("no memory for the listeners")
 		e.release()
 		return nil
 	}
@@ -198,12 +219,23 @@ func (u *subsurface) create() {
 	}
 	u.request(u.wlSurface, wlSurfaceSetInputRegion, uint64(region))
 	u.destroyProxy(region, wlRegionDestroy)
+	// Without either, buffers stay at GTK's integer scale.
+	if u.viewport = u.newObject(u.g.viewporter, wpViewporterGetViewport, u.c.viewportInterface, 0, uint64(u.wlSurface)); u.viewport != 0 {
+		if u.fraction = u.newObject(u.g.fractionManager, wpFractionManagerGetScale, u.c.fractionInterface, 0, uint64(u.wlSurface)); u.fraction != 0 {
+			u.c.addListener(u.fraction, subsurfaceScaleListener, ptr(u.s.w.id))
+		}
+	}
+	if u.fraction == 0 {
+		u.scale120 = 0
+	}
 	u.mapped = true
 	r, scale := u.placement()
 	u.x, u.y = r.Min.X, r.Min.Y
 	u.request(u.sub, wlSubsurfaceSetPosition, wlInt(u.x), wlInt(u.y))
 	u.setSize(r.Dx(), r.Dy(), scale)
-	if err := u.egl.attach(u.wlSurface, u.logicalW*u.scale, u.logicalH*u.scale); err != nil {
+	bw, bh := u.bufferSize()
+	u.buffer = image.Pt(bw, bh)
+	if err := u.egl.attach(u.wlSurface, bw, bh); err != nil {
 		u.broke(err.Error())
 		return
 	}
@@ -238,6 +270,14 @@ func (u *subsurface) destroy() {
 	}
 	u.pacer.stop()
 	u.egl.detach()
+	if u.fraction != 0 {
+		u.destroyProxy(u.fraction, wpFractionalScaleDestroy)
+		u.fraction = 0
+	}
+	if u.viewport != 0 {
+		u.destroyProxy(u.viewport, wpViewportDestroy)
+		u.viewport = 0
+	}
 	if u.sub != 0 {
 		u.destroyProxy(u.sub, wlSubsurfaceDestroy)
 		u.sub = 0
@@ -248,6 +288,7 @@ func (u *subsurface) destroy() {
 	}
 	u.mapped = false
 	u.x, u.y, u.logicalW, u.logicalH, u.scale = 0, 0, 0, 0, 0
+	u.destination, u.buffer = image.Point{}, image.Point{}
 }
 
 // release lets go of the subsurface and its context, as the window goes.
@@ -257,7 +298,7 @@ func (u *subsurface) release() {
 }
 
 // placement returns where the area is on the toplevel's wl_surface, and
-// the scale of its buffers.
+// the buffers' scale: 1 at a fractional scale, else GTK's.
 func (u *subsurface) placement() (image.Rectangle, int) {
 	loadFlyouts() // binds gtk_widget_translate_coordinates
 	w := u.s.w
@@ -270,7 +311,7 @@ func (u *subsurface) placement() (image.Rectangle, int) {
 	gtkWidgetGetAllocation(u.s.area, &area)
 	gtkWidgetGetAllocation(w.win, &toplevel)
 	scale := 1
-	if u.g.compositorVersion >= wlSurfaceBufferScaleSince {
+	if !u.fractional() && u.g.compositorVersion >= wlSurfaceBufferScaleSince {
 		scale = max(int(gtkWidgetGetScaleFactor(u.s.area)), 1)
 	}
 	return subsurfacePlacement(in, area, toplevel), scale
@@ -287,13 +328,19 @@ func subsurfacePlacement(inToplevel image.Point, area, toplevel gdkRectangle) im
 	return image.Rectangle{Min: at, Max: at.Add(image.Pt(max(int(area.Width), 1), max(int(area.Height), 1)))}
 }
 
-// setSize keeps the subsurface's logical size and scale, telling the
-// compositor a new scale.
+// setSize keeps the subsurface's logical size and the buffers' scale,
+// telling the compositor a new scale, and at a fractional scale the
+// viewport's destination, the logical size. Both apply with the next
+// buffer, which the next swap commits.
 func (u *subsurface) setSize(w, h, scale int) {
 	if scale != u.scale && u.g.compositorVersion >= wlSurfaceBufferScaleSince {
 		u.request(u.wlSurface, wlSurfaceSetBufferScale, wlInt(scale))
 	}
 	u.logicalW, u.logicalH, u.scale = w, h, scale
+	if _, d := fractionalSizes(image.Pt(w, h), u.scale120); u.fractional() && d != u.destination {
+		u.request(u.viewport, wpViewportSetDestination, wlInt(d.X), wlInt(d.Y))
+		u.destination = d
+	}
 }
 
 // place moves and sizes the subsurface to the area, as it is allocated or
@@ -308,18 +355,22 @@ func (u *subsurface) place() {
 		u.x, u.y = r.Min.X, r.Min.Y
 		u.request(u.sub, wlSubsurfaceSetPosition, wlInt(u.x), wlInt(u.y))
 	}
-	if r.Dx() == u.logicalW && r.Dy() == u.logicalH && scale == u.scale {
-		return
-	}
 	u.setSize(r.Dx(), r.Dy(), scale)
-	u.egl.resize(u.logicalW*u.scale, u.logicalH*u.scale)
+	if b := image.Pt(u.bufferSize()); b != u.buffer {
+		u.buffer = b
+		u.egl.resize(b.X, b.Y)
+	}
 }
 
 // MakeGLCurrent makes the subsurface's context current with the
-// framebuffer frames are drawn into bound, as large as its buffers
+// framebuffer frames are drawn into bound, as large as mygo's frames
 // (platform.GLTarget).
 func (u *subsurface) MakeGLCurrent() bool {
-	return u.mapped && !u.failed && u.egl.target(u.logicalW*u.scale, u.logicalH*u.scale)
+	if !u.mapped || u.failed {
+		return false
+	}
+	fw, fh := u.frameSize()
+	return u.egl.target(fw, fh)
 }
 
 // DrewGL tells that the frame drawing changed the framebuffer, which then
@@ -356,7 +407,7 @@ func (u *subsurface) frame() bool {
 	}
 	u.c.addListener(cb, subsurfaceFrameListener, ptr(s.w.id))
 	u.frameCB = cb
-	if err := u.egl.present(); err != nil {
+	if err := u.egl.present(u.bufferSize()); err != nil {
 		u.broke(err.Error())
 		return false
 	}
@@ -441,6 +492,9 @@ var (
 	// frame callbacks.
 	cbSubsurfaceFrame       ptr
 	subsurfaceFrameListener ptr
+	// subsurfaceScaleListener is the wp_fractional_scale_v1_listener of
+	// the subsurfaces' fractional scales.
+	subsurfaceScaleListener ptr
 )
 
 func initSubsurfaceCallbacks() {
@@ -475,6 +529,16 @@ func initSubsurfaceCallbacks() {
 		if l, err := cAlloc(unsafe.Sizeof(ptr(0))); err == nil {
 			*(*ptr)(cAt(l)) = done
 			subsurfaceFrameListener = l
+		}
+		scale := purego.NewCallback(func(data, fraction ptr, scale120 uint32) {
+			if s := theBackend.surfaceOf(data); s != nil && s.sub != nil {
+				s.sub.preferredScale(fraction, scale120)
+			}
+		})
+		// struct wp_fractional_scale_v1_listener: preferred_scale.
+		if l, err := cAlloc(unsafe.Sizeof(ptr(0))); err == nil {
+			*(*ptr)(cAt(l)) = scale
+			subsurfaceScaleListener = l
 		}
 	})
 }

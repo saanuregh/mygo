@@ -17,7 +17,9 @@ import (
 // since the last frame, and Mesa's window surfaces keep no frame from one
 // swap to the next: frames are drawn into a framebuffer of the context's
 // own, a texture as large as the subsurface's buffers, which keeps the
-// last, and copied whole into the window's for each swap.
+// last, and copied whole into the window's for each swap. At a fractional
+// scale, the framebuffer is mygo's frame, which may be a pixel larger than
+// the window's buffers: its top left is copied.
 
 // EGL's and GL's enumerations.
 const (
@@ -330,7 +332,7 @@ func (e *subsurfaceEGL) makeCurrent() bool {
 }
 
 // target makes the context current with the framebuffer frames are drawn
-// into bound, bw×bh pixels, the size of the window's buffers: made anew,
+// into bound, bw×bh pixels, the size of mygo's frames: made anew,
 // transparent, when it is another size, as the renderer then draws a
 // frame whole (it does after every SurfaceResize).
 func (e *subsurfaceEGL) target(bw, bh int) bool {
@@ -368,19 +370,21 @@ func (e *subsurfaceEGL) target(bw, bh int) bool {
 }
 
 // present copies the framebuffer frames are drawn into, whole, into the
-// window surface's, and swaps: the swap attaches the buffer and commits
-// the wl_surface. Both keep GL's rows, which go up, as a GtkGLArea's
-// framebuffer does.
-func (e *subsurfaceEGL) present() error {
+// window surface's, of bw×bh pixels, and swaps: the swap attaches the
+// buffer and commits the wl_surface. Both keep GL's rows, which go up, as
+// a GtkGLArea's framebuffer does: where the window's is smaller, the
+// framebuffer's top rows are copied, from the left.
+func (e *subsurfaceEGL) present(bw, bh int) error {
 	if e.tex == 0 || !e.makeCurrent() {
 		return fmt.Errorf("EGL cannot make the context current (%#x)", e.l.getError())
 	}
 	l := e.l
-	w, h := int32(e.w), int32(e.h)
+	w, h := int32(min(bw, e.w)), int32(min(bh, e.h))
+	top := int32(e.h)
 	l.bindFramebuffer(glReadFramebuffer, e.fb)
 	l.bindFramebuffer(glDrawFramebuffer, 0)
 	l.disable(glScissorTest)
-	l.blitFramebuffer(0, 0, w, h, 0, 0, w, h, glColorBufferBit, glNearest)
+	l.blitFramebuffer(0, top-h, w, top, 0, 0, w, h, glColorBufferBit, glNearest)
 	l.bindFramebuffer(glFramebuffer, e.fb)
 	if err := l.glGetError(); err != 0 {
 		return fmt.Errorf("copying the frame failed (GL error %#x)", err)

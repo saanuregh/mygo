@@ -456,8 +456,16 @@ func (s *surface) eventWindow() ptr {
 	return win
 }
 
+// Size returns the area's size in DIPs, GTK's logical pixels, in which its
+// input and its input method's caret are too, and the scale frames draw at:
+// GTK's, an integer, or on a Wayland subsurface the compositor's preferred
+// scale for it, fractional, once it sent one.
 func (s *surface) Size() (float64, float64, float64) {
-	return float64(gtkWidgetGetAllocatedWidth(s.area)), float64(gtkWidgetGetAllocatedHeight(s.area)), float64(max(gtkWidgetGetScaleFactor(s.area), 1))
+	scale := float64(max(gtkWidgetGetScaleFactor(s.area), 1))
+	if f := s.sub.drawScale(); f > 0 {
+		scale = f
+	}
+	return float64(gtkWidgetGetAllocatedWidth(s.area)), float64(gtkWidgetGetAllocatedHeight(s.area)), scale
 }
 
 func (s *surface) RequestFrame() {

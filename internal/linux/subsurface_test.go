@@ -154,3 +154,41 @@ func TestSubsurfaceFramesWaitForTheCallback(t *testing.T) {
 	runSoon()
 	want(8)
 }
+
+// At the compositor's preferred fractional scale, a subsurface's buffers
+// are its logical size times the scale, rounded half away from zero as
+// fractional-scale-v1 has it for toplevels (for subsurfaces it defines
+// none), shown at the logical size (the viewport's destination); mygo's
+// frames, rounded up as package ui rounds them, are as large or a pixel
+// larger.
+func TestBufferSizeAtFractionalScale(t *testing.T) {
+	cases := []struct {
+		name     string
+		logical  image.Point
+		scale120 uint32
+		buffer   image.Point
+	}{
+		{"1.0", image.Pt(2058, 1400), 120, image.Pt(2058, 1400)},
+		{"1.25", image.Pt(2058, 1400), 150, image.Pt(2573, 1750)},
+		{"1.5, the rig's window", image.Pt(2058, 1400), 180, image.Pt(3087, 2100)},
+		{"1.75", image.Pt(2058, 1400), 210, image.Pt(3602, 2450)},
+		{"2.0", image.Pt(2058, 1400), 240, image.Pt(4116, 2800)},
+		{"the protocol's example", image.Pt(100, 50), 180, image.Pt(150, 75)},
+		{"odd sizes at 1.5: halves round up", image.Pt(1013, 7), 180, image.Pt(1520, 11)},
+		{"odd sizes at 1.25", image.Pt(1013, 6), 150, image.Pt(1266, 8)},
+		{"odd sizes at 1.75", image.Pt(333, 1), 210, image.Pt(583, 2)},
+		{"a third", image.Pt(1000, 3), 160, image.Pt(1333, 4)},
+		{"1×1 at 1.25", image.Pt(1, 1), 150, image.Pt(1, 1)},
+	}
+	for _, c := range cases {
+		buffer, destination := fractionalSizes(c.logical, c.scale120)
+		if buffer != c.buffer || destination != c.logical {
+			t.Errorf("%s: fractionalSizes(%v, %d) = %v, %v; want %v, %v", c.name, c.logical, c.scale120, buffer, destination, c.buffer, c.logical)
+		}
+		scale := float64(c.scale120) / 120
+		frame := image.Pt(framePixels(c.logical.X, scale), framePixels(c.logical.Y, scale))
+		if d := frame.Sub(buffer); d.X < 0 || d.Y < 0 || d.X > 1 || d.Y > 1 {
+			t.Errorf("%s: frames of %v pixels for buffers of %v", c.name, frame, buffer)
+		}
+	}
+}
